@@ -1,0 +1,5 @@
+CYCLE_COUNT = "cycleCount"
+CYCLE_CAPACITY = "cycleCapacity"
+DRAWER_FULL_CYCLES = "cyclesAfterDrawerFull"
+ID = "litterRobotId"
+NAME = "litterRobotNickname"

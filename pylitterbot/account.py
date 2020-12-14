@@ -2,6 +2,7 @@
 
 import logging
 
+from .const import ID, NAME
 from .exceptions import LitterRobotException
 from .litterrobot import LitterRobot
 from .robot import Robot
@@ -20,6 +21,7 @@ class Account:
         self._session = OAuthSession(
             vendor=LitterRobot(), username=username, password=password
         )
+        self.user_id = self._session._user_id
         self._robots = set()
 
     @property
@@ -42,20 +44,20 @@ class Account:
         """
         robots = set()
         try:
-            resp = self._session.get("users")
+            resp = self._session.get(f"users/{self.user_id}/robots")
 
-            for robot in resp.json()["litterRobots"]:
+            for robot in resp.json():
                 try:
-                    robot_object = [
-                        r for r in self._robots if r.id == robot["litterRobotId"]
-                    ].pop()
+                    robot_object = [r for r in self._robots if r.id == robot[ID]].pop()
+                    robot_object.refresh_robot_info(robot)
                 except:
                     robot_object = Robot(
-                        id=robot["litterRobotId"],
+                        id=robot[ID],
                         serial=robot["litterRobotSerial"],
-                        user_id=robot["userId"],
-                        name=robot["litterRobotNickname"],
+                        user_id=self.user_id,
+                        name=robot[NAME],
                         session=self._session,
+                        data=robot,
                     )
                 robots.add(robot_object)
 

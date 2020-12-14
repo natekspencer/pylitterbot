@@ -6,18 +6,13 @@ from typing import Iterable, Optional
 
 import requests
 
+from .const import CYCLE_CAPACITY, CYCLE_COUNT, DRAWER_FULL_CYCLES, NAME
 from .exceptions import InvalidCommandException, LitterRobotException
 from .session import Session
 
 _LOGGER = logging.getLogger(__name__)
 
 _SLEEP_DURATION = 8
-
-# Litter-Robot attribute names that are re-used
-_CYCLE_COUNT = "cycleCount"
-_CYCLE_CAPACITY = "cycleCapacity"
-_DRAWER_FULL_CYCLES = "cyclesAfterDrawerFull"
-_NAME = "litterRobotNickname"
 
 
 class Robot:
@@ -71,7 +66,7 @@ class Robot:
         SLEEP_MODE_ON = "S1"  # this command is invalid on its own and must be combined with a time component so that it forms the syntax S1HH:MI:SS - turn on sleep mode: sleepModeActive = 1HH:MI:SS; HH:MI:SS is a 24 hour clock that enters sleep mode from 00:00:00-08:00:00, so if at midnight you set sleep mode to 122:30:00, then sleep mode will being in 1.5 hours or 1:30am; when coming out of sleep state, a clean cycle is performed (see details on "C" command above)
         WAIT_TIME = "W"  # set wait time to [3, 7 or 15] minutes: cleanCycleWaitTimeMinutes = [3, 7 or F] (hexadecimal representation of minutes)
 
-    def __init__(self, id, serial, user_id, name, session: Session):
+    def __init__(self, id, serial, user_id, name, session: Session, data: dict = None):
         """Initialize an instance of a robot
 
         :param id: Litter-Robot id
@@ -79,6 +74,7 @@ class Robot:
         :param user_id: user id that has access to this Litter-Robot
         :param name: Litter-Robot name
         :param session: user's session to interact with this Litter-Robot
+        :param data: optional data to pre-populate Litter-Robot's attributes
         """
         self.id = id
         self.serial = serial
@@ -88,7 +84,7 @@ class Robot:
 
         self.is_loaded = False
 
-        self.refresh_robot_info()
+        self.refresh_robot_info(data)
 
     def __str__(self):
         return f"Name: {self.name}, Serial: {self.serial}, id: {self.id}"
@@ -132,11 +128,11 @@ class Robot:
         self.unit_status = self.UnitStatus[data["unitStatus"]]
         self.is_onboarded = data["isOnboarded"]
         self.device_type = data["deviceType"]
-        self.name = data[_NAME]
-        self.cycle_count = int(data[_CYCLE_COUNT])
+        self.name = data[NAME]
+        self.cycle_count = int(data[CYCLE_COUNT])
         self.panel_lock_active = data["panelLockActive"] != "0"
-        self.cycles_after_drawer_full = int(data[_DRAWER_FULL_CYCLES])
-        self.cycle_capacity = int(data[_CYCLE_CAPACITY])
+        self.cycles_after_drawer_full = int(data[DRAWER_FULL_CYCLES])
+        self.cycle_capacity = int(data[CYCLE_CAPACITY])
         self.night_light_active = data["nightLightActive"] != "0"
         self.did_notify_offline = data["didNotifyOffline"]
         self.is_dfi_triggered = data["isDFITriggered"] != "0"
@@ -209,13 +205,11 @@ class Robot:
         return self._dispatch_command(f"{self.Commands.WAIT_TIME}{wait_time.value}")
 
     def set_robot_name(self, name: str):
-        data = self._patch({_NAME: name})
+        data = self._patch({NAME: name})
         self.refresh_robot_info(data)
 
     def reset_waste_drawer(self):
-        data = self._patch(
-            {_CYCLE_COUNT: 0, _CYCLE_CAPACITY: 30, _DRAWER_FULL_CYCLES: 0}
-        )
+        data = self._patch({CYCLE_COUNT: 0, CYCLE_CAPACITY: 30, DRAWER_FULL_CYCLES: 0})
         self.refresh_robot_info(data)
 
     def get_robot_activity(self, limit: int = 100):
