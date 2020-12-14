@@ -136,7 +136,7 @@ class Robot:
         self.cycle_count = int(data[_CYCLE_COUNT])
         self.panel_lock_active = data["panelLockActive"] != "0"
         self.cycles_after_drawer_full = int(data[_DRAWER_FULL_CYCLES])
-        self.cycle_capacity = data[_CYCLE_CAPACITY]
+        self.cycle_capacity = int(data[_CYCLE_CAPACITY])
         self.night_light_active = data["nightLightActive"] != "0"
         self.did_notify_offline = data["didNotifyOffline"]
         self.is_dfi_triggered = data["isDFITriggered"] != "0"
@@ -164,6 +164,10 @@ class Robot:
             self.is_sleeping = False
             self.sleep_mode_start_time = None
             self.sleep_mode_end_time = None
+
+    @property
+    def waste_drawer_gauge(self):
+        return round(self.cycle_count * 100 / self.cycle_capacity)
 
     def start_cleaning(self):
         return self._dispatch_command(self.Commands.CLEAN)
