@@ -4,8 +4,6 @@ from datetime import datetime, time, timedelta, timezone
 from enum import Enum
 from typing import Iterable, Optional
 
-import requests
-
 from .const import CYCLE_CAPACITY, CYCLE_COUNT, DRAWER_FULL_CYCLES, NAME
 from .exceptions import InvalidCommandException, LitterRobotException
 from .session import Session
@@ -17,6 +15,8 @@ _SLEEP_DURATION = 8
 
 class Robot:
     """Data and methods for interacting with a Litter-Robot Connect self-cleaning litter box"""
+
+    VALID_WAIT_TIMES = [3, 7, 15]
 
     class UnitStatus(Enum):
         BR = "Bonnet Removed"
@@ -41,11 +41,6 @@ class Robot:
         SCF = "Cat Sensor Fault Startup"
         SDF = "Drawer Full (0 cycles left)"
         SPF = "Pinch Detect Startup"
-
-    class WaitTime(Enum):
-        THREE_MINUTES = "3"
-        SEVEN_MINUTES = "7"
-        FIFTEEN_MINUTES = "F"
 
     class Commands:
         """Known commands that can be sent to trigger an action or setting for a Litter-Robot Connect self-cleaning litter box"""
@@ -122,9 +117,7 @@ class Robot:
         self.auto_offline_disabled = data["autoOfflineDisabled"]
         self.setup_date = self.from_litter_robot_timestamp(data["setupDate"])
         self.dfi_cycle_count = int(data["DFICycleCount"])
-        self.clean_cycle_wait_time_minutes = self.WaitTime(
-            data["cleanCycleWaitTimeMinutes"]
-        )
+        self.clean_cycle_wait_time_minutes = int(data["cleanCycleWaitTimeMinutes"], 16)
         self.unit_status = self.UnitStatus[data["unitStatus"]]
         self.is_onboarded = data["isOnboarded"]
         self.device_type = data["deviceType"]
@@ -192,17 +185,17 @@ class Robot:
                 f"An attempt to turn on sleep mode was received with an invalid time. Check the time and try again."
             )
         return self._dispatch_command(
-            f"{self.Commands.SLEEP_MODE_ON}{(datetime(2, 1, 1) - (datetime.combine(datetime.now(timezone.utc),sleep_time,sleep_time.tzinfo if sleep_time.tzinfo else timezone.utc,)- datetime.now(timezone.utc))).strftime('%H:%M:%S')}"
+            f"{self.Commands.SLEEP_MODE_ON}{(datetime(2, 1, 1) - (datetime.combine(datetime.now(timezone.utc),sleep_time,sleep_time.tzinfo if sleep_time.tzinfo else timezone.utc)- datetime.now(timezone.utc))).strftime('%H:%M:%S')}"
             if value
             else self.Commands.SLEEP_MODE_OFF
         )
 
-    def set_wait_time(self, wait_time: WaitTime):
-        if not isinstance(wait_time, Robot.WaitTime):
+    def set_wait_time(self, wait_time: int):
+        if wait_time not in self.VALID_WAIT_TIMES:
             raise InvalidCommandException(
-                f"Attempt to send an invalid wait time to Litter-Robot. Wait time must be one of: [3, 7, F], but received {wait_time}"
+                f"Attempt to send an invalid wait time to Litter-Robot. Wait time must be one of: {self.VALID_WAIT_TIMES}, but received {wait_time}"
             )
-        return self._dispatch_command(f"{self.Commands.WAIT_TIME}{wait_time.value}")
+        return self._dispatch_command(f"{self.Commands.WAIT_TIME}{f'{wait_time:X}'}")
 
     def set_robot_name(self, name: str):
         data = self._patch({NAME: name})
