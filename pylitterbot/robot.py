@@ -202,7 +202,9 @@ class Robot:
         self.refresh_robot_info(data)
 
     def reset_waste_drawer(self):
-        data = self._patch({CYCLE_COUNT: 0, CYCLE_CAPACITY: 30, DRAWER_FULL_CYCLES: 0})
+        data = self._patch(
+            {CYCLE_COUNT: 0, CYCLE_CAPACITY: self.cycle_capacity, DRAWER_FULL_CYCLES: 0}
+        )
         self.refresh_robot_info(data)
 
     def get_robot_activity(self, limit: int = 100):
