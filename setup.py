@@ -5,8 +5,8 @@ with open("README.md", "r") as f:
 
 setup(
     name="pylitterbot",
-    version="0.1.2",
-    description="Python package for controlling a Litter-Robot Connect self-cleaning litter box",
+    version="2021.1.1",
+    description="Python package for controlling a Litter-Robot Connect self-cleaning litter box.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Nathan Spencer",
@@ -15,5 +15,5 @@ setup(
     license="Licensed under the MIT license. See LICENSE file for details",
     packages=["pylitterbot"],
     package_dir={"pylitterbot": "pylitterbot"},
-    install_requires=["requests", "requests_oauthlib", "PyJWT"],
+    install_requires=["Authlib", "httpx"],
 )

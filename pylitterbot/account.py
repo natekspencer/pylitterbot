@@ -1,55 +1,81 @@
 """Account access and data handling for Litter-Robot endpoint."""
-
 import logging
 
+from httpx import ConnectError, HTTPStatusError
+
 from .const import ID, NAME
-from .exceptions import LitterRobotException
+from .exceptions import LitterRobotException, LitterRobotLoginException
 from .litterrobot import LitterRobot
 from .robot import Robot
-from .session import OAuthSession
+from .session import OAuth2Session
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class Account:
-    """
-    Class with data and methods for interacting with a user's Litter-Robots.
-    """
+    """Class with data and methods for interacting with a user's Litter-Robots."""
 
-    def __init__(self, username: str, password: str):
+    def __init__(self, token: dict = None):
         """Initialize the account data."""
-        self._session = OAuthSession(
-            vendor=LitterRobot(), username=username, password=password
-        )
-        self.user_id = self._session._user_id
+        self._session = OAuth2Session(vendor=LitterRobot(), token=token)
+        self._user = None
         self._robots = set()
 
     @property
+    def user_id(self):
+        """Returns the logged in user's id."""
+        return self._user.get("userId") if self._user else None
+
+    @property
     def robots(self):
-        """
-        Return set of robots for logged in account.
-
-        :return:
-        """
-        if not self._robots:
-            self.refresh_robots()
-
+        """Return set of robots for logged in account."""
         return self._robots
 
-    def refresh_robots(self):
-        """
-        Get information about robots connected to account.
+    async def connect(
+        self, username: str = None, password: str = None, load_robots: bool = False
+    ):
+        """Authenticates with the Litter-Robot API."""
+        try:
+            if not self._session._client.token:
+                if username and password:
+                    await self._session.fetch_token(
+                        username=username, password=password
+                    )
+                else:
+                    raise LitterRobotLoginException(
+                        "Username and password are required to login to Litter-Robot."
+                    )
 
-        :return:
-        """
+            if load_robots:
+                await self.refresh_user()
+                await self.refresh_robots()
+        except HTTPStatusError as ex:
+            if ex.response.status_code == 401:
+                raise LitterRobotLoginException(
+                    "Unable to login to Litter-Robot with the supplied credentials."
+                ) from ex
+            else:
+                raise LitterRobotException("Unable to login to Litter-Robot.") from ex
+        except ConnectError as ex:
+            raise LitterRobotException(
+                "Unable to communicate with the Litter-Robot API."
+            ) from ex
+
+    async def refresh_user(self):
+        """Refresh the logged in user's info."""
+        resp = await self._session.get("users")
+        self._user = resp.json().get("user")
+
+    async def refresh_robots(self):
+        """Get information about robots connected to account."""
         robots = set()
         try:
-            resp = self._session.get(f"users/{self.user_id}/robots")
+            resp = await self._session.get(f"users/{self.user_id}/robots")
 
             for robot in resp.json():
                 try:
                     robot_object = [r for r in self._robots if r.id == robot[ID]].pop()
-                    robot_object.refresh_robot_info(robot)
+                    robot_object.save_robot_info(robot)
                 except:
                     robot_object = Robot(
                         id=robot[ID],

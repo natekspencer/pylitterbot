@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Iterable, Optional
 
 from .const import CYCLE_CAPACITY, CYCLE_COUNT, DRAWER_FULL_CYCLES, NAME
-from .exceptions import InvalidCommandException, LitterRobotException
+from .exceptions import InvalidCommandException
 from .session import Session
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,39 +79,14 @@ class Robot:
 
         self.is_loaded = False
 
-        self.refresh_robot_info(data)
+        if data:
+            self.save_robot_info(data)
 
     def __str__(self):
         return f"Name: {self.name}, Serial: {self.serial}, id: {self.id}"
 
-    def _get(self, subpath: str = "", **kwargs):
-        return self._session.get(self._path + subpath, **kwargs).json()
-
-    def _patch(self, json):
-        return self._send(
-            json=json,
-            headers={"x-http-method-override": "PATCH"},
-        )
-
-    def _send(self, subpath: str = "", json=None, **kwargs):
-        return self._session.post(self._path + subpath, json=json, **kwargs).json()
-
-    def _dispatch_command(self, command: str):
-        try:
-            self._send(
-                self.Commands._ENDPOINT,
-                {"command": f"{self.Commands._PREFIX}{command}"},
-            )
-            return True
-        except InvalidCommandException as ex:
-            _LOGGER.error(f"{ex}")
-            return False
-
-    def refresh_robot_info(self, data: dict = None):
-        """Refresh the robots attributes, optionally passing already retrieved robot data."""
-        if not data:
-            data = self._get()
-
+    def save_robot_info(self, data: dict):
+        """Saves the robot info from a data dictionary."""
         self.power_status = data["powerStatus"]
         self.last_seen = self.from_litter_robot_timestamp(data["lastSeen"])
         self.auto_offline_disabled = data["autoOfflineDisabled"]
@@ -134,6 +109,7 @@ class Robot:
         self.is_loaded = True
 
     def calculate_sleep_info(self, sleep_mode_data):
+        """Calculates the sleep info of a robot."""
         self.sleep_mode_active = sleep_mode_data != "0"
         if self.sleep_mode_active:
             self.is_sleeping = int(sleep_mode_data[1:3]) < _SLEEP_DURATION
@@ -154,72 +130,103 @@ class Robot:
             self.sleep_mode_start_time = None
             self.sleep_mode_end_time = None
 
+    async def _get(self, subpath: str = "", **kwargs):
+        return (await self._session.get(self._path + subpath, **kwargs)).json()
+
+    async def _patch(self, subpath: str = "", json=None, **kwargs):
+        return (
+            await self._session.patch(self._path + subpath, json=json, **kwargs)
+        ).json()
+
+    async def _send(self, subpath: str = "", json=None, **kwargs):
+        return (
+            await self._session.post(self._path + subpath, json=json, **kwargs)
+        ).json()
+
+    async def _dispatch_command(self, command: str):
+        try:
+            await self._send(
+                self.Commands._ENDPOINT,
+                {"command": f"{self.Commands._PREFIX}{command}"},
+            )
+            return True
+        except InvalidCommandException as ex:
+            _LOGGER.error(f"{ex}")
+            return False
+
+    async def refresh_robot_info(self):
+        """Refresh the robots attributes from the Litter-Robot API."""
+        data = await self._get()
+        self.save_robot_info(data)
+
     @property
     def waste_drawer_gauge(self):
         return round(self.cycle_count * 100 / self.cycle_capacity)
 
-    def start_cleaning(self):
-        return self._dispatch_command(self.Commands.CLEAN)
+    async def start_cleaning(self):
+        return await self._dispatch_command(self.Commands.CLEAN)
 
-    def reset_settings(self):
-        return self._dispatch_command(self.Commands.DEFAULT_SETTINGS)
+    async def reset_settings(self):
+        return await self._dispatch_command(self.Commands.DEFAULT_SETTINGS)
 
-    def set_panel_lockout(self, value: bool):
-        return self._dispatch_command(
+    async def set_panel_lockout(self, value: bool):
+        return await self._dispatch_command(
             self.Commands.LOCK_ON if value else self.Commands.LOCK_OFF
         )
 
-    def set_night_light(self, value: bool):
-        return self._dispatch_command(
+    async def set_night_light(self, value: bool):
+        return await self._dispatch_command(
             self.Commands.NIGHT_LIGHT_ON if value else self.Commands.NIGHT_LIGHT_OFF
         )
 
-    def set_power_status(self, value: bool):
-        return self._dispatch_command(
+    async def set_power_status(self, value: bool):
+        return await self._dispatch_command(
             self.Commands.POWER_ON if value else self.Commands.POWER_OFF
         )
 
-    def set_sleep_mode(self, value: bool, sleep_time: time = None):
+    async def set_sleep_mode(self, value: bool, sleep_time: time = None):
         if value and not isinstance(sleep_time, time):
             raise InvalidCommandException(
                 f"An attempt to turn on sleep mode was received with an invalid time. Check the time and try again."
             )
-        return self._dispatch_command(
+        return await self._dispatch_command(
             f"{self.Commands.SLEEP_MODE_ON}{(datetime(2, 1, 1) - (datetime.combine(datetime.now(timezone.utc),sleep_time,sleep_time.tzinfo if sleep_time.tzinfo else timezone.utc)- datetime.now(timezone.utc))).strftime('%H:%M:%S')}"
             if value
             else self.Commands.SLEEP_MODE_OFF
         )
 
-    def set_wait_time(self, wait_time: int):
+    async def set_wait_time(self, wait_time: int):
         if wait_time not in self.VALID_WAIT_TIMES:
             raise InvalidCommandException(
                 f"Attempt to send an invalid wait time to Litter-Robot. Wait time must be one of: {self.VALID_WAIT_TIMES}, but received {wait_time}"
             )
-        return self._dispatch_command(f"{self.Commands.WAIT_TIME}{f'{wait_time:X}'}")
+        return await self._dispatch_command(
+            f"{self.Commands.WAIT_TIME}{f'{wait_time:X}'}"
+        )
 
-    def set_robot_name(self, name: str):
-        data = self._patch({NAME: name})
-        self.refresh_robot_info(data)
+    async def set_robot_name(self, name: str):
+        data = await self._patch({NAME: name})
+        self.save_robot_info(data)
 
-    def reset_waste_drawer(self):
-        data = self._patch(
+    async def reset_waste_drawer(self):
+        data = await self._patch(
             {CYCLE_COUNT: 0, CYCLE_CAPACITY: self.cycle_capacity, DRAWER_FULL_CYCLES: 0}
         )
-        self.refresh_robot_info(data)
+        self.save_robot_info(data)
 
-    def get_robot_activity(self, limit: int = 100):
+    async def get_robot_activity(self, limit: int = 100):
         return [
             Activity(
                 self.from_litter_robot_timestamp(activity["timestamp"]),
                 self.UnitStatus[activity["unitStatus"]],
             )
-            for activity in self._get("/activity", params={"limit": limit})[
+            for activity in await self._get("/activity", params={"limit": limit})[
                 "activities"
             ]
         ]
 
-    def get_robot_insights(self, days: int = 30, timezoneOffset: int = None):
-        insights = self._get(
+    async def get_robot_insights(self, days: int = 30, timezoneOffset: int = None):
+        insights = await self._get(
             "/insights", params={"days": days, "timezoneOffset": timezoneOffset}
         )
         return Insight(
