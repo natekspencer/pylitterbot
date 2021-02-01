@@ -205,12 +205,16 @@ class Robot:
         )
 
     async def set_robot_name(self, name: str):
-        data = await self._patch({NAME: name})
+        data = await self._patch(json={NAME: name})
         self.save_robot_info(data)
 
     async def reset_waste_drawer(self):
         data = await self._patch(
-            {CYCLE_COUNT: 0, CYCLE_CAPACITY: self.cycle_capacity, DRAWER_FULL_CYCLES: 0}
+            json={
+                CYCLE_COUNT: 0,
+                CYCLE_CAPACITY: self.cycle_capacity,
+                DRAWER_FULL_CYCLES: 0,
+            }
         )
         self.save_robot_info(data)
 
