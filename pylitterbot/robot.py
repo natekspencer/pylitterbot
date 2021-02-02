@@ -4,8 +4,8 @@ from datetime import datetime, time, timedelta, timezone
 from enum import Enum
 from typing import Iterable, Optional
 
-from .const import CYCLE_CAPACITY, CYCLE_COUNT, DRAWER_FULL_CYCLES, NAME
-from .exceptions import InvalidCommandException
+from .const import CYCLE_CAPACITY, CYCLE_COUNT, DRAWER_FULL_CYCLES, ID, NAME, SERIAL
+from .exceptions import InvalidCommandException, LitterRobotException
 from .session import Session
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,20 +61,33 @@ class Robot:
         SLEEP_MODE_ON = "S1"  # this command is invalid on its own and must be combined with a time component so that it forms the syntax S1HH:MI:SS - turn on sleep mode: sleepModeActive = 1HH:MI:SS; HH:MI:SS is a 24 hour clock that enters sleep mode from 00:00:00-08:00:00, so if at midnight you set sleep mode to 122:30:00, then sleep mode will being in 1.5 hours or 1:30am; when coming out of sleep state, a clean cycle is performed (see details on "C" command above)
         WAIT_TIME = "W"  # set wait time to [3, 7 or 15] minutes: cleanCycleWaitTimeMinutes = [3, 7 or F] (hexadecimal representation of minutes)
 
-    def __init__(self, id, serial, user_id, name, session: Session, data: dict = None):
-        """Initialize an instance of a robot
+    def __init__(
+        self,
+        id: str = None,
+        serial: str = None,
+        user_id: str = None,
+        name: str = None,
+        session: Session = None,
+        data: dict = None,
+    ):
+        """Initialize an instance of a robot with individual attributes or a data dictionary.
 
-        :param id: Litter-Robot id
-        :param serial: Litter-Robot serial
-        :param user_id: user id that has access to this Litter-Robot
-        :param name: Litter-Robot name
-        :param session: user's session to interact with this Litter-Robot
-        :param data: optional data to pre-populate Litter-Robot's attributes
+        :param id: Litter-Robot id (optional)
+        :param serial: Litter-Robot serial (optional)
+        :param user_id: user id that has access to this Litter-Robot (optional)
+        :param name: Litter-Robot name (optional)
+        :param session: user's session to interact with this Litter-Robot (optional)
+        :param data: optional data to pre-populate Litter-Robot's attributes (optional)
         """
-        self.id = id
-        self.serial = serial
-        self.name = name
-        self._path = f"/users/{user_id}/robots/{id}"
+        if not id and not data:
+            raise LitterRobotException(
+                "An id or data dictionary is required to initilize a Litter-Robot."
+            )
+
+        self.id = id or data.get(ID)
+        self.serial = serial or data.get(SERIAL)
+        self.name = name or data.get(NAME)
+        self._path = f"/users/{user_id}/robots/{self.id}"
         self._session = session
 
         self.is_loaded = False
@@ -87,30 +100,35 @@ class Robot:
 
     def save_robot_info(self, data: dict):
         """Saves the robot info from a data dictionary."""
-        self.power_status = data["powerStatus"]
-        self.last_seen = self.from_litter_robot_timestamp(data["lastSeen"])
-        self.auto_offline_disabled = data["autoOfflineDisabled"]
-        self.setup_date = self.from_litter_robot_timestamp(data["setupDate"])
-        self.dfi_cycle_count = int(data["DFICycleCount"])
-        self.clean_cycle_wait_time_minutes = int(data["cleanCycleWaitTimeMinutes"], 16)
-        self.unit_status = self.UnitStatus[data["unitStatus"]]
-        self.is_onboarded = data["isOnboarded"]
-        self.device_type = data["deviceType"]
-        self.name = data[NAME]
-        self.cycle_count = int(data[CYCLE_COUNT])
-        self.panel_lock_active = data["panelLockActive"] != "0"
-        self.cycles_after_drawer_full = int(data[DRAWER_FULL_CYCLES])
-        self.cycle_capacity = int(data[CYCLE_CAPACITY])
-        self.night_light_active = data["nightLightActive"] != "0"
-        self.did_notify_offline = data["didNotifyOffline"]
-        self.is_dfi_triggered = data["isDFITriggered"] != "0"
-        self.calculate_sleep_info(data["sleepModeActive"])
+        self.power_status = data.get("powerStatus")
+        self.last_seen = self.from_litter_robot_timestamp(data.get("lastSeen"))
+        self.auto_offline_disabled = data.get("autoOfflineDisabled")
+        self.setup_date = self.from_litter_robot_timestamp(data.get("setupDate"))
+        self.dfi_cycle_count = int(data.get("DFICycleCount") or 0)
+        self.clean_cycle_wait_time_minutes = int(
+            data.get("cleanCycleWaitTimeMinutes") or "0", 16
+        )
+        try:
+            self.unit_status = self.UnitStatus[data.get("unitStatus")]
+        except:
+            self.unit_status = self.UnitStatus.OFFLINE
+        self.is_onboarded = data.get("isOnboarded")
+        self.device_type = data.get("deviceType")
+        self.name = data.get(NAME)
+        self.cycle_count = int(data.get(CYCLE_COUNT) or 10)
+        self.panel_lock_active = data.get("panelLockActive") != "0"
+        self.cycles_after_drawer_full = int(data.get(DRAWER_FULL_CYCLES) or 0)
+        self.cycle_capacity = int(data.get(CYCLE_CAPACITY) or 0)
+        self.night_light_active = data.get("nightLightActive") != "0"
+        self.did_notify_offline = data.get("didNotifyOffline")
+        self.is_dfi_triggered = data.get("isDFITriggered") != "0"
+        self.calculate_sleep_info(data.get("sleepModeActive"))
 
         self.is_loaded = True
 
     def calculate_sleep_info(self, sleep_mode_data):
         """Calculates the sleep info of a robot."""
-        self.sleep_mode_active = sleep_mode_data != "0"
+        self.sleep_mode_active = sleep_mode_data not in ["0", None]
         if self.sleep_mode_active:
             self.is_sleeping = int(sleep_mode_data[1:3]) < _SLEEP_DURATION
             sleep_clock = datetime.strptime(sleep_mode_data[1:], "%H:%M:%S")
@@ -246,8 +264,10 @@ class Robot:
         )
 
     @staticmethod
-    def from_litter_robot_timestamp(timestamp: str):
+    def from_litter_robot_timestamp(timestamp: Optional[str]):
         """Construct a UTC offset-aware datetime from a Litter-Robot API timestamp."""
+        if not timestamp:
+            return timestamp
         return datetime.fromisoformat(timestamp + "+00:00")
 
 

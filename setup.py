@@ -5,7 +5,7 @@ with open("README.md", "r") as f:
 
 setup(
     name="pylitterbot",
-    version="2021.2.1",
+    version="2021.2.2",
     description="Python package for controlling a Litter-Robot Connect self-cleaning litter box.",
     long_description=long_description,
     long_description_content_type="text/markdown",

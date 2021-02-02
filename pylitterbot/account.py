@@ -3,7 +3,7 @@ import logging
 
 from httpx import ConnectError, HTTPStatusError
 
-from .const import ID, NAME
+from .const import ID
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .litterrobot import LitterRobot
 from .robot import Robot
@@ -74,14 +74,13 @@ class Account:
 
             for robot in resp.json():
                 try:
-                    robot_object = [r for r in self._robots if r.id == robot[ID]].pop()
+                    robot_object = [
+                        r for r in self._robots if r.id == robot.get(ID)
+                    ].pop()
                     robot_object.save_robot_info(robot)
                 except:
                     robot_object = Robot(
-                        id=robot[ID],
-                        serial=robot["litterRobotSerial"],
                         user_id=self.user_id,
-                        name=robot[NAME],
                         session=self._session,
                         data=robot,
                     )
