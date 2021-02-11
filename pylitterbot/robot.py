@@ -115,10 +115,10 @@ class Robot:
         self.is_onboarded = data.get("isOnboarded")
         self.device_type = data.get("deviceType")
         self.name = data.get(NAME)
-        self.cycle_count = int(data.get(CYCLE_COUNT) or 10)
+        self.cycle_count = int(data.get(CYCLE_COUNT) or 0)
         self.panel_lock_active = data.get("panelLockActive") != "0"
         self.cycles_after_drawer_full = int(data.get(DRAWER_FULL_CYCLES) or 0)
-        self.cycle_capacity = int(data.get(CYCLE_CAPACITY) or 0)
+        self.cycle_capacity = int(data.get(CYCLE_CAPACITY) or 10)
         self.night_light_active = data.get("nightLightActive") != "0"
         self.did_notify_offline = data.get("didNotifyOffline")
         self.is_dfi_triggered = data.get("isDFITriggered") != "0"
