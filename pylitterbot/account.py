@@ -1,7 +1,7 @@
 """Account access and data handling for Litter-Robot endpoint."""
 import logging
 
-from httpx import ConnectError, HTTPStatusError
+from httpx import ConnectError, ConnectTimeout, HTTPStatusError
 
 from .const import ID
 from .exceptions import LitterRobotException, LitterRobotLoginException
@@ -56,7 +56,7 @@ class Account:
                 ) from ex
             else:
                 raise LitterRobotException("Unable to login to Litter-Robot.") from ex
-        except ConnectError as ex:
+        except (ConnectError, ConnectTimeout) as ex:
             raise LitterRobotException(
                 "Unable to communicate with the Litter-Robot API."
             ) from ex
