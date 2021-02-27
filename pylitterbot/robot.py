@@ -6,13 +6,30 @@ from typing import Iterable, Optional
 
 import pytz
 
-from .const import CYCLE_CAPACITY, CYCLE_COUNT, DRAWER_FULL_CYCLES, ID, NAME, SERIAL
+from pylitterbot.utils import (
+    from_litter_robot_timestamp,
+    round_time,
+    today_at_time,
+    utcnow,
+)
+
+from .const import (
+    CYCLE_CAPACITY,
+    CYCLE_COUNT,
+    DRAWER_FULL_CYCLES,
+    ID,
+    NAME,
+    SERIAL,
+    SLEEP_MODE_TIME,
+    UNIT_STATUS,
+)
 from .exceptions import InvalidCommandException, LitterRobotException
 from .session import Session
 
 _LOGGER = logging.getLogger(__name__)
 
-SLEEP_DURATION = 8
+SLEEP_DURATION_HOURS = 8
+SLEEP_DURATION = timedelta(hours=SLEEP_DURATION_HOURS)
 
 
 class Robot:
@@ -105,6 +122,11 @@ class Robot:
 
         self.id = id or data.get(ID)
         self.serial = serial or data.get(SERIAL)
+        self.model = (
+            "Litter-Robot 3 Connect"
+            if self.serial and self.serial.startswith("LR3C")
+            else "Other Litter-Robot Connected Device"
+        )
         self.name = name or data.get(NAME)
         self._path = f"/users/{user_id}/robots/{self.id}"
         self._session = session
@@ -120,14 +142,14 @@ class Robot:
     def save_robot_info(self, data: dict):
         """Saves the robot info from a data dictionary."""
         self.power_status = data.get("powerStatus")
-        self.last_seen = self.from_litter_robot_timestamp(data.get("lastSeen"))
+        self.last_seen = from_litter_robot_timestamp(data.get("lastSeen"))
         self.auto_offline_disabled = data.get("autoOfflineDisabled")
-        self.setup_date = self.from_litter_robot_timestamp(data.get("setupDate"))
+        self.setup_date = from_litter_robot_timestamp(data.get("setupDate"))
         self.dfi_cycle_count = int(data.get("DFICycleCount") or 0)
         self.clean_cycle_wait_time_minutes = int(
             data.get("cleanCycleWaitTimeMinutes") or "0", 16
         )
-        self.unit_status = self.UnitStatus(data.get("unitStatus"))
+        self.unit_status = self.UnitStatus(data.get(UNIT_STATUS))
         self.is_onboarded = data.get("isOnboarded")
         self.device_type = data.get("deviceType")
         self.name = data.get(NAME)
@@ -139,7 +161,7 @@ class Robot:
         self.did_notify_offline = data.get("didNotifyOffline")
         self.is_dfi_triggered = data.get("isDFITriggered") != "0"
         self.calculate_sleep_info(
-            data.get("sleepModeActive"), data.get("sleepModeTime")
+            data.get("sleepModeActive"), data.get(SLEEP_MODE_TIME)
         )
 
         self.is_loaded = True
@@ -152,30 +174,37 @@ class Robot:
 
         [start_time, end_time] = [None, None]
 
-        # The newer API uses sleepModeTime to avoid "drift" in the reported sleep start time
+        # The newer API uses `sleepModeTime` to avoid "drift" in the reported sleep start time
         if sleep_mode_time:
-            start_time = datetime.fromtimestamp(sleep_mode_time, pytz.UTC)
+            start_time = today_at_time(
+                datetime.fromtimestamp(sleep_mode_time, pytz.UTC).timetz()
+            )
 
         self.is_sleeping = False
         if self.sleep_mode_active:
-            self.is_sleeping = int(sleep_mode_active[1:3]) < SLEEP_DURATION
+            self.is_sleeping = int(sleep_mode_active[1:3]) < SLEEP_DURATION_HOURS
 
             # Handle older API sleep start time
             if not start_time:
                 [hours, minutes, seconds] = list(
                     map(int, sleep_mode_active[1:].split(":"))
                 )
-                start_time = self.last_seen + (
-                    timedelta(hours=0 if self.is_sleeping else 24)
-                    - timedelta(hours=hours, minutes=minutes, seconds=seconds)
-                )
                 # Round to the nearest minute to reduce "drift"
-                start_time = datetime.fromtimestamp(
-                    (start_time.timestamp() + 30) // 60 * 60, start_time.tzinfo
+                start_time = round_time(
+                    today_at_time(self.last_seen.timetz())
+                    + (
+                        timedelta(hours=0 if self.is_sleeping else 24)
+                        - timedelta(hours=hours, minutes=minutes, seconds=seconds)
+                    )
                 )
 
         if start_time:
-            end_time = start_time + timedelta(hours=SLEEP_DURATION)
+            now = utcnow()
+            if start_time <= now - SLEEP_DURATION:
+                start_time += timedelta(hours=24)
+            end_time = start_time + (
+                SLEEP_DURATION if start_time <= now else (SLEEP_DURATION * -2)
+            )
 
         self.sleep_mode_start_time = start_time
         self.sleep_mode_end_time = end_time
@@ -236,19 +265,19 @@ class Robot:
 
     async def set_sleep_mode(self, value: bool, sleep_time: Optional[time] = None):
         if value and not isinstance(sleep_time, time):
-            raise InvalidCommandException(
-                f"An attempt to turn on sleep mode was received with an invalid time. Check the time and try again."
-            )
+            # Handle being able to set sleep mode by using previous start time or now.
+            if not sleep_time:
+                sleep_time = (self.sleep_mode_start_time or utcnow()).timetz()
+            else:
+                raise InvalidCommandException(
+                    f"An attempt to turn on sleep mode was received with an invalid time. Check the time and try again."
+                )
 
         return await self._patch(
             json={
                 "sleepModeEnable": value,
                 **(
-                    {
-                        "sleepModeTime": int(
-                            datetime.combine(datetime.now(), sleep_time).timestamp()
-                        )
-                    }
+                    {SLEEP_MODE_TIME: int(today_at_time(sleep_time).timestamp())}
                     if sleep_time
                     else {}
                 ),
@@ -281,8 +310,8 @@ class Robot:
     async def get_robot_activity(self, limit: int = 100):
         return [
             Activity(
-                self.from_litter_robot_timestamp(activity["timestamp"]),
-                self.UnitStatus(activity["unitStatus"]),
+                from_litter_robot_timestamp(activity["timestamp"]),
+                self.UnitStatus(activity[UNIT_STATUS]),
             )
             for activity in await self._get("/activity", params={"limit": limit})[
                 "activities"
@@ -304,17 +333,6 @@ class Robot:
                 for cycle in insights["cycleHistory"]
             ],
         )
-
-    @staticmethod
-    def from_litter_robot_timestamp(timestamp: Optional[str]) -> Optional[datetime]:
-        """Construct a UTC offset-aware datetime from a Litter-Robot API timestamp.
-
-        Litter-Robot timestamps are in the format `YYYY-MM-DDTHH:MM:SS.ffffff`,
-        so to get the UTC offset-aware datetime, we just append `+00:00` and
-        call the `datetime.fromisoformat` method.
-        """
-        if timestamp:
-            return datetime.fromisoformat(f"{timestamp}+00:00")
 
 
 @dataclass
