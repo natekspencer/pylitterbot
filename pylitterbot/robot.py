@@ -72,6 +72,7 @@ class Robot:
 
         @classmethod
         def _missing_(cls, _):
+            _LOGGER.error('Unknown status code "%s"', _)
             return cls.UNKNOWN
 
         @property
