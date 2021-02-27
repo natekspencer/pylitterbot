@@ -1,8 +1,10 @@
 import logging
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timedelta
 from enum import Enum
 from typing import Iterable, Optional
+
+import pytz
 
 from .const import CYCLE_CAPACITY, CYCLE_COUNT, DRAWER_FULL_CYCLES, ID, NAME, SERIAL
 from .exceptions import InvalidCommandException, LitterRobotException
@@ -10,7 +12,7 @@ from .session import Session
 
 _LOGGER = logging.getLogger(__name__)
 
-_SLEEP_DURATION = 8
+SLEEP_DURATION = 8
 
 
 class Robot:
@@ -19,28 +21,45 @@ class Robot:
     VALID_WAIT_TIMES = [3, 7, 15]
 
     class UnitStatus(Enum):
-        BR = "Bonnet Removed"
-        CCC = "Clean Cycle Complete"
-        CCP = "Clean Cycle In Progress"
-        CSF = "Cat Sensor Fault"
-        CSI = "Cat Sensor Interrupted"
-        CST = "Cat Sensor Timing"
-        DF1 = "Drawer Full (2 cycles left)"
-        DF2 = "Drawer Full (1 cycle left)"
-        DFS = "Drawer Full (0 cycles left)"
-        DHF = "Dump + Home Position Fault"
-        DPF = "Dump Position Fault"
-        EC = "Empty Cycle"
-        HPF = "Home Position Fault"
-        OFF = "Off"
-        OFFLINE = "Device Is Offline"
-        OTF = "Over Torque Fault"
-        P = "Clean Cycle Paused"
-        PD = "Pinch Detect"
-        RDY = "Ready"
-        SCF = "Cat Sensor Fault At Startup"
-        SDF = "Drawer Full At Startup"
-        SPF = "Pinch Detect At Startup"
+        def __new__(cls, value, label):
+            obj = object.__new__(cls)
+            obj._value_ = value
+            obj._label = label
+            return obj
+
+        BONNET_REMOVED = ("BR", "Bonnet Removed")
+        CLEAN_CYCLE_COMPLETE = ("CCC", "Clean Cycle Complete")
+        CLEAN_CYCLE = ("CCP", "Clean Cycle In Progress")
+        CAT_SENSOR_FAULT = ("CSF", "Cat Sensor Fault")
+        CAT_SENSOR_INTERRUPTED = ("CSI", "Cat Sensor Interrupted")
+        CAT_SENSOR_TIMING = ("CST", "Cat Sensor Timing")
+        DRAWER_FULL_1 = ("DF1", "Drawer Almost Full - 2 Cycles Left")
+        DRAWER_FULL_2 = ("DF2", "Drawer Almost Full - 1 Cycle Left")
+        DRAWER_FULL = ("DFS", "Drawer Full")
+        DUMP_HOME_POSITION_FAULT = ("DHF", "Dump + Home Position Fault")
+        DUMP_POSITION_FAULT = ("DPF", "Dump Position Fault")
+        EMPTY_CYCLE = ("EC", "Empty Cycle")
+        HOME_POSITION_FAULT = ("HPF", "Home Position Fault")
+        OFF = ("OFF", "Off")
+        OFFLINE = ("OFFLINE", "Offline")
+        OVER_TORQUE_FAULT = ("OTF", "Over Torque Fault")
+        PAUSED = ("P", "Clean Cycle Paused")
+        PINCH_DETECT = ("PD", "Pinch Detect")
+        READY = ("RDY", "Ready")
+        STARTUP_CAT_SENSOR_FAULT = ("SCF", "Cat Sensor Fault At Startup")
+        STARTUP_DRAWER_FULL = ("SDF", "Drawer Full At Startup")
+        STARTUP_PINCH_DETECT = ("SPF", "Pinch Detect At Startup")
+
+        # Handle unknown/future unit statuses
+        UNKNOWN = (None, "Unknown Status")
+
+        @classmethod
+        def _missing_(cls, _):
+            return cls.UNKNOWN
+
+        @property
+        def label(self):
+            return self._label
 
     class Commands:
         """Known commands that can be sent to trigger an action or setting for a Litter-Robot Connect self-cleaning litter box"""
@@ -108,10 +127,7 @@ class Robot:
         self.clean_cycle_wait_time_minutes = int(
             data.get("cleanCycleWaitTimeMinutes") or "0", 16
         )
-        try:
-            self.unit_status = self.UnitStatus[data.get("unitStatus")]
-        except:
-            self.unit_status = self.UnitStatus.OFFLINE
+        self.unit_status = self.UnitStatus(data.get("unitStatus"))
         self.is_onboarded = data.get("isOnboarded")
         self.device_type = data.get("deviceType")
         self.name = data.get(NAME)
@@ -122,31 +138,47 @@ class Robot:
         self.night_light_active = data.get("nightLightActive") != "0"
         self.did_notify_offline = data.get("didNotifyOffline")
         self.is_dfi_triggered = data.get("isDFITriggered") != "0"
-        self.calculate_sleep_info(data.get("sleepModeActive"))
+        self.calculate_sleep_info(
+            data.get("sleepModeActive"), data.get("sleepModeTime")
+        )
 
         self.is_loaded = True
 
-    def calculate_sleep_info(self, sleep_mode_data):
+    def calculate_sleep_info(
+        self, sleep_mode_active: Optional[str], sleep_mode_time: Optional[str] = None
+    ):
         """Calculates the sleep info of a robot."""
-        self.sleep_mode_active = sleep_mode_data not in ["0", None]
+        self.sleep_mode_active = sleep_mode_active not in ["0", None]
+
+        [start_time, end_time] = [None, None]
+
+        # The newer API uses sleepModeTime to avoid "drift" in the reported sleep start time
+        if sleep_mode_time:
+            start_time = datetime.fromtimestamp(sleep_mode_time, pytz.UTC)
+
+        self.is_sleeping = False
         if self.sleep_mode_active:
-            self.is_sleeping = int(sleep_mode_data[1:3]) < _SLEEP_DURATION
-            sleep_clock = datetime.strptime(sleep_mode_data[1:], "%H:%M:%S")
-            self.sleep_mode_start_time = self.last_seen + (
-                timedelta(hours=0 if self.is_sleeping else 24)
-                - timedelta(
-                    hours=sleep_clock.hour,
-                    minutes=sleep_clock.minute,
-                    seconds=sleep_clock.second,
+            self.is_sleeping = int(sleep_mode_active[1:3]) < SLEEP_DURATION
+
+            # Handle older API sleep start time
+            if not start_time:
+                [hours, minutes, seconds] = list(
+                    map(int, sleep_mode_active[1:].split(":"))
                 )
-            )
-            self.sleep_mode_end_time = self.sleep_mode_start_time + timedelta(
-                hours=_SLEEP_DURATION
-            )
-        else:
-            self.is_sleeping = False
-            self.sleep_mode_start_time = None
-            self.sleep_mode_end_time = None
+                start_time = self.last_seen + (
+                    timedelta(hours=0 if self.is_sleeping else 24)
+                    - timedelta(hours=hours, minutes=minutes, seconds=seconds)
+                )
+                # Round to the nearest minute to reduce "drift"
+                start_time = datetime.fromtimestamp(
+                    (start_time.timestamp() + 30) // 60 * 60, start_time.tzinfo
+                )
+
+        if start_time:
+            end_time = start_time + timedelta(hours=SLEEP_DURATION)
+
+        self.sleep_mode_start_time = start_time
+        self.sleep_mode_end_time = end_time
 
     async def _get(self, subpath: str = "", **kwargs):
         return (await self._session.get(self._path + subpath, **kwargs)).json()
@@ -202,15 +234,25 @@ class Robot:
             self.Commands.POWER_ON if value else self.Commands.POWER_OFF
         )
 
-    async def set_sleep_mode(self, value: bool, sleep_time: time = None):
+    async def set_sleep_mode(self, value: bool, sleep_time: Optional[time] = None):
         if value and not isinstance(sleep_time, time):
             raise InvalidCommandException(
                 f"An attempt to turn on sleep mode was received with an invalid time. Check the time and try again."
             )
-        return await self._dispatch_command(
-            f"{self.Commands.SLEEP_MODE_ON}{(datetime(2, 1, 1) - (datetime.combine(datetime.now(timezone.utc),sleep_time,sleep_time.tzinfo if sleep_time.tzinfo else timezone.utc)- datetime.now(timezone.utc))).strftime('%H:%M:%S')}"
-            if value
-            else self.Commands.SLEEP_MODE_OFF
+
+        return await self._patch(
+            json={
+                "sleepModeEnable": value,
+                **(
+                    {
+                        "sleepModeTime": int(
+                            datetime.combine(datetime.now(), sleep_time).timestamp()
+                        )
+                    }
+                    if sleep_time
+                    else {}
+                ),
+            }
         )
 
     async def set_wait_time(self, wait_time: int):
@@ -240,7 +282,7 @@ class Robot:
         return [
             Activity(
                 self.from_litter_robot_timestamp(activity["timestamp"]),
-                self.UnitStatus[activity["unitStatus"]],
+                self.UnitStatus(activity["unitStatus"]),
             )
             for activity in await self._get("/activity", params={"limit": limit})[
                 "activities"
@@ -264,11 +306,15 @@ class Robot:
         )
 
     @staticmethod
-    def from_litter_robot_timestamp(timestamp: Optional[str]):
-        """Construct a UTC offset-aware datetime from a Litter-Robot API timestamp."""
-        if not timestamp:
-            return timestamp
-        return datetime.fromisoformat(timestamp + "+00:00")
+    def from_litter_robot_timestamp(timestamp: Optional[str]) -> Optional[datetime]:
+        """Construct a UTC offset-aware datetime from a Litter-Robot API timestamp.
+
+        Litter-Robot timestamps are in the format `YYYY-MM-DDTHH:MM:SS.ffffff`,
+        so to get the UTC offset-aware datetime, we just append `+00:00` and
+        call the `datetime.fromisoformat` method.
+        """
+        if timestamp:
+            return datetime.fromisoformat(f"{timestamp}+00:00")
 
 
 @dataclass
@@ -276,7 +322,7 @@ class Activity:
     """Represents a historical activity for a Litter-Robot"""
 
     timestamp: datetime
-    unit_status: Optional[Robot.UnitStatus] = Robot.UnitStatus.CCC
+    unit_status: Optional[Robot.UnitStatus] = Robot.UnitStatus.READY
     count: Optional[int] = 1
 
     def __str__(self):

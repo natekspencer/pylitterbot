@@ -72,17 +72,20 @@ class Account:
         try:
             resp = await self._session.get(f"users/{self.user_id}/robots")
 
-            for robot in resp.json():
-                try:
-                    robot_object = [
-                        r for r in self._robots if r.id == robot.get(ID)
-                    ].pop()
-                    robot_object.save_robot_info(robot)
-                except:
+            for robot_data in resp.json():
+                robot_object = next(
+                    filter(
+                        lambda robot: (robot.id == robot_data.get(ID)), self._robots
+                    ),
+                    None,
+                )
+                if robot_object:
+                    robot_object.save_robot_info(robot_data)
+                else:
                     robot_object = Robot(
                         user_id=self.user_id,
                         session=self._session,
-                        data=robot,
+                        data=robot_data,
                     )
                 robots.add(robot_object)
 
