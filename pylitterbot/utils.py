@@ -1,5 +1,6 @@
 from datetime import datetime, time
-from typing import Optional
+from typing import Any, Optional
+from warnings import warn
 
 import pytz
 
@@ -34,4 +35,31 @@ def round_time(dt: Optional[datetime] = None, round_to: int = 60) -> datetime:
 
     return datetime.fromtimestamp(
         (dt.timestamp() + round_to / 2) // round_to * round_to, dt.tzinfo
+    )
+
+
+def pluralize(word: str, count: int):
+    return f"{count} {word}{'s' if count != 1 else ''}"
+
+
+class DeprecatedClassMeta(type):
+    def __new__(cls, name, bases, classdict, *args, **kwargs):
+        alias = classdict.get("_DeprecatedClassMeta__alias")
+        classdict["_DeprecatedClassMeta__alias"] = alias
+        fixed_bases = tuple([])
+        return super().__new__(cls, name, fixed_bases, classdict, *args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        send_deprecation_warning(
+            f"{self.__module__}.{self.__qualname__}",
+            f"{self._DeprecatedClassMeta__alias.__module__}.{self._DeprecatedClassMeta__alias.__qualname__}",
+        )
+        return getattr(self._DeprecatedClassMeta__alias, name)
+
+
+def send_deprecation_warning(old_name, new_name):
+    warn(
+        f"{old_name} has been deprecated in favor of {new_name}, the alias will be removed in the future",
+        DeprecationWarning,
+        stacklevel=2,
     )

@@ -53,7 +53,7 @@ class OAuth2Session(Session):
     def __init__(self, vendor: Vendor = LitterRobot(), token: dict = None):
         super().__init__(vendor=vendor)
 
-        def raise_on_error(response):
+        def raise_on_error(response):  # pragma: no cover
             response.raise_for_status()
             return response
 

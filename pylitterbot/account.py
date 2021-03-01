@@ -1,5 +1,6 @@
 """Account access and data handling for Litter-Robot endpoint."""
 import logging
+from typing import Optional, Set
 
 from httpx import ConnectError, ConnectTimeout, HTTPStatusError
 
@@ -15,25 +16,25 @@ _LOGGER = logging.getLogger(__name__)
 class Account:
     """Class with data and methods for interacting with a user's Litter-Robots."""
 
-    def __init__(self, token: dict = None):
+    def __init__(self, token: dict = None) -> None:
         """Initialize the account data."""
         self._session = OAuth2Session(vendor=LitterRobot(), token=token)
-        self._user = None
-        self._robots = set()
+        self._user = dict()
+        self._robots: Set[Robot] = set()
 
     @property
-    def user_id(self):
+    def user_id(self) -> Optional[str]:
         """Returns the logged in user's id."""
-        return self._user.get("userId") if self._user else None
+        return self._user.get("userId")
 
     @property
-    def robots(self):
-        """Return set of robots for logged in account."""
+    def robots(self) -> Set[Robot]:
+        """Returns the set of robots for the logged in account."""
         return self._robots
 
     async def connect(
         self, username: str = None, password: str = None, load_robots: bool = False
-    ):
+    ) -> None:
         """Authenticates with the Litter-Robot API."""
         try:
             if not self._session._client.token:
@@ -61,14 +62,13 @@ class Account:
                 "Unable to communicate with the Litter-Robot API."
             ) from ex
 
-    async def refresh_user(self):
+    async def refresh_user(self) -> None:
         """Refresh the logged in user's info."""
-        resp = await self._session.get("users")
-        self._user = resp.json().get("user")
+        self._user.update((await self._session.get("users")).json().get("user"))
 
-    async def refresh_robots(self):
-        """Get information about robots connected to account."""
-        robots = set()
+    async def refresh_robots(self) -> None:
+        """Get information about robots connected to the account."""
+        robots: Set[Robot] = set()
         try:
             resp = await self._session.get(f"users/{self.user_id}/robots")
 
@@ -80,7 +80,7 @@ class Account:
                     None,
                 )
                 if robot_object:
-                    robot_object.save_robot_info(robot_data)
+                    robot_object._update_data(robot_data)
                 else:
                     robot_object = Robot(
                         user_id=self.user_id,
