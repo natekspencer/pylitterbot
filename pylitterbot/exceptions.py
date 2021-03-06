@@ -1,6 +1,6 @@
 class LitterRobotException(Exception):
     """
-    General LitterRobot exception.
+    General Litter-Robot exception.
     """
 
 

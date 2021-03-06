@@ -1,8 +1,12 @@
+"""Utilities module."""
+import logging
 from datetime import datetime, time
 from typing import Any, Optional
 from warnings import warn
 
 import pytz
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def from_litter_robot_timestamp(
@@ -58,8 +62,10 @@ class DeprecatedClassMeta(type):
 
 
 def send_deprecation_warning(old_name, new_name):
+    message = f"{old_name} has been deprecated in favor of {new_name}, the alias will be removed in the future"
     warn(
-        f"{old_name} has been deprecated in favor of {new_name}, the alias will be removed in the future",
+        message,
         DeprecationWarning,
         stacklevel=2,
     )
+    _LOGGER.warn(message)

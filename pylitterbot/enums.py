@@ -5,7 +5,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class LitterBoxCommand:
-    """Known commands that can be sent to trigger an action or setting for a Litter-Robot Connect self-cleaning litter box"""
+    """Known commands that can be sent to trigger an action or setting for a Litter-Robot Connect self-cleaning litter box."""
 
     _ENDPOINT = "/dispatch-commands"  # the endpoint to send commands to
     _PREFIX = "<"  # prefix sent in front of commands
@@ -25,10 +25,12 @@ class LitterBoxCommand:
 
 
 class LitterBoxStatus(Enum):
-    def __new__(cls, value, label):
+    """Representation of a Litter-Robot status."""
+
+    def __new__(cls, value, text):
         obj = object.__new__(cls)
         obj._value_ = value
-        obj._label = label
+        obj._text = text
         return obj
 
     BONNET_REMOVED = ("BR", "Bonnet Removed")
@@ -63,5 +65,5 @@ class LitterBoxStatus(Enum):
         return cls.UNKNOWN
 
     @property
-    def label(self) -> str:
-        return self._label
+    def text(self) -> str:
+        return self._text

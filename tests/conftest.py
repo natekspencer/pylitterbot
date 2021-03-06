@@ -1,3 +1,4 @@
+from typing import Optional
 from unittest.mock import patch
 
 import pytest
@@ -5,15 +6,17 @@ from httpx import HTTPStatusError
 from pylitterbot.litterrobot import LitterRobot
 from pylitterbot.session import AsyncOAuth2Client
 
-from tests.common import (
+from .common import (
+    ACTIVITY_FULL_RESPONSE,
     ACTIVITY_RESPONSE,
     COMMAND_RESPONSE,
     INSIGHT_RESPONSE,
     INVALID_COMMAND_RESPONSE,
     ROBOT_DATA,
+    ROBOT_FULL_DATA,
+    ROBOT_FULL_ID,
     ROBOT_ID,
     TOKEN_RESPONSE,
-    USER_ID,
     USER_RESPONSE,
 )
 
@@ -35,54 +38,60 @@ class MockResponse:
             raise HTTPStatusError("Error in request", request=None, response=self)
 
 
-def mocked_requests_get(*args, **kwargs):
-    if args[0] == f"{LitterRobot.endpoint}/users":
-        return MockResponse(USER_RESPONSE, 200)
-    elif args[0] == f"{LitterRobot.endpoint}/users/{USER_ID}/robots":
-        return MockResponse([ROBOT_DATA], 200)
-    elif args[0] == f"{LitterRobot.endpoint}/users/{USER_ID}/robots/{ROBOT_ID}":
-        return MockResponse(ROBOT_DATA, 200)
-    elif (
-        args[0] == f"{LitterRobot.endpoint}/users/{USER_ID}/robots/{ROBOT_ID}/activity"
-    ):
-        return MockResponse(ACTIVITY_RESPONSE, 200)
-    elif (
-        args[0] == f"{LitterRobot.endpoint}/users/{USER_ID}/robots/{ROBOT_ID}/insights"
-    ):
-        return MockResponse(INSIGHT_RESPONSE, 200)
+class MockedResponses:
+    def __init__(self, robot_data: Optional[dict] = None) -> None:
+        self.robot_data = robot_data if robot_data else {}
 
-    return MockResponse(None, 404)
+    def mocked_requests_get(self, *args, **kwargs):
+        if args[0].endswith("/users"):
+            return MockResponse(USER_RESPONSE, 200)
+        elif args[0].endswith("/robots"):
+            return MockResponse([ROBOT_DATA, ROBOT_FULL_DATA], 200)
+        elif args[0].endswith(f"/robots/{ROBOT_ID}"):
+            return MockResponse({**ROBOT_DATA, **self.robot_data}, 200)
+        elif args[0].endswith(f"/robots/{ROBOT_FULL_ID}"):
+            return MockResponse({**ROBOT_FULL_DATA, **self.robot_data}, 200)
+        elif args[0].endswith(f"/robots/{ROBOT_ID}/activity"):
+            return MockResponse(ACTIVITY_RESPONSE, 200)
+        elif args[0].endswith(f"/robots/{ROBOT_FULL_ID}/activity"):
+            return MockResponse(ACTIVITY_FULL_RESPONSE, 200)
+        elif args[0].endswith("/insights"):
+            return MockResponse(INSIGHT_RESPONSE, 200)
 
+        return MockResponse(None, 404)
 
-def mocked_requests_patch(*args, **kwargs):
-    if args[0] == f"{LitterRobot.endpoint}/users/{USER_ID}/robots/{ROBOT_ID}":
-        return MockResponse({**ROBOT_DATA, **kwargs.get("json")}, 200)
+    def mocked_requests_patch(self, *args, **kwargs):
+        if args[0].endswith(f"/robots/{ROBOT_ID}"):
+            return MockResponse({**ROBOT_DATA, **kwargs.get("json")}, 200)
+        elif args[0].endswith(f"/robots/{ROBOT_FULL_ID}"):
+            return MockResponse({**ROBOT_FULL_DATA, **kwargs.get("json")}, 200)
 
-    return MockResponse(None, 404)
+        return MockResponse(None, 404)
 
+    def mocked_requests_post(self, *args, **kwargs):
+        if args[0].endswith("/dispatch-commands"):
+            if (kwargs.get("json") or {}).get("command") == "<W12":
+                return MockResponse(
+                    INVALID_COMMAND_RESPONSE,
+                    int(INVALID_COMMAND_RESPONSE["status_code"]),
+                )
+            return MockResponse(COMMAND_RESPONSE, 200)
 
-def mocked_requests_post(*args, **kwargs):
-    if (
-        args[0]
-        == f"{LitterRobot.endpoint}/users/{USER_ID}/robots/{ROBOT_ID}/dispatch-commands"
-    ):
-        if (kwargs.get("json") or {}).get("command") == "<W12":
-            return MockResponse(
-                INVALID_COMMAND_RESPONSE, int(INVALID_COMMAND_RESPONSE["status_code"])
-            )
-        return MockResponse(COMMAND_RESPONSE, 200)
-
-    return MockResponse(None, 404)
+        return MockResponse(None, 404)
 
 
 @pytest.fixture
 def mock_client():
+    responses = MockedResponses()
     with patch(
-        "pylitterbot.session.AsyncOAuth2Client.get", side_effect=mocked_requests_get
+        "pylitterbot.session.AsyncOAuth2Client.get",
+        side_effect=responses.mocked_requests_get,
     ), patch(
-        "pylitterbot.session.AsyncOAuth2Client.patch", side_effect=mocked_requests_patch
+        "pylitterbot.session.AsyncOAuth2Client.patch",
+        side_effect=responses.mocked_requests_patch,
     ), patch(
-        "pylitterbot.session.AsyncOAuth2Client.post", side_effect=mocked_requests_post
+        "pylitterbot.session.AsyncOAuth2Client.post",
+        side_effect=responses.mocked_requests_post,
     ):
         client = AsyncOAuth2Client
         client.fetch_token = fetch_token

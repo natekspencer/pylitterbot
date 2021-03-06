@@ -41,9 +41,19 @@ class Robot:
     VALID_WAIT_TIMES = [3, 7, 15]
 
     class UnitStatus(metaclass=DeprecatedClassMeta):
+        """.. deprecated::
+
+        (deprecated) Use `pylitterbot.enums.LitterBoxStatus` instead.
+        """
+
         _DeprecatedClassMeta__alias = LitterBoxStatus
 
     class Commands(metaclass=DeprecatedClassMeta):
+        """.. deprecated::
+
+        (deprecated) Use `pylitterbot.enums.LitterBoxCommand` instead.
+        """
+
         _DeprecatedClassMeta__alias = LitterBoxCommand
 
     def __init__(
@@ -129,7 +139,10 @@ class Robot:
 
     @property
     def dfi_cycle_count(self) -> int:  # pragma: no cover
-        """Returns the cycle count since the drawer full indicator was triggered (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `drawer_full_indicator_cycle_count` instead.
+        """
         send_deprecation_warning("dfi_cycle_count", "drawer_full_indicator_cycle_count")
         return self.drawer_full_indicator_cycle_count
 
@@ -140,7 +153,10 @@ class Robot:
 
     @property
     def is_dfi_triggered(self) -> bool:  # pragma: no cover
-        """Returns `True` if the drawer full indicator has been triggered (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `is_drawer_full_indicator_triggered` instead.
+        """
         send_deprecation_warning(
             "is_dfi_triggered", "is_drawer_full_indicator_triggered"
         )
@@ -193,7 +209,10 @@ class Robot:
 
     @property
     def night_light_active(self) -> bool:  # pragma: no cover
-        """Returns `True` if night light mode is enabled (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `night_light_mode_enabled` instead.
+        """
         send_deprecation_warning("night_light_active", "night_light_mode_enabled")
         return self.night_light_mode_enabled
 
@@ -204,7 +223,10 @@ class Robot:
 
     @property
     def panel_lock_active(self) -> bool:  # pragma: no cover
-        """Returns `True` if the front panel buttons are locked on the Litter-Robot (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `panel_lock_enabled` instead.
+        """
         send_deprecation_warning("panel_lock_active", "panel_lock_enabled")
         return self.panel_lock_enabled
 
@@ -230,7 +252,10 @@ class Robot:
 
     @property
     def sleep_mode_active(self) -> bool:  # pragma: no cover
-        """Returns `True` if sleep mode is enabled (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `sleep_mode_enabled` instead.
+        """
         send_deprecation_warning("sleep_mode_active", "sleep_mode_enabled")
         return self.sleep_mode_enabled
 
@@ -251,7 +276,10 @@ class Robot:
 
     @property
     def unit_status(self) -> LitterBoxStatus:  # pragma: no cover
-        """Returns the status of the Litter-Robot (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `status` instead.
+        """
         send_deprecation_warning("unit_status", "status")
         return self.status
 
@@ -259,6 +287,11 @@ class Robot:
     def status_code(self) -> Optional[str]:
         """Returns the status code of the Litter-Robot."""
         return self.__data.get(UNIT_STATUS)
+
+    @property
+    def status_text(self) -> Optional[str]:
+        """Returns the status text of the Litter-Robot."""
+        return self.status.text
 
     @property
     def waste_drawer_level(self) -> int:
@@ -269,7 +302,10 @@ class Robot:
 
     @property
     def waste_drawer_gauge(self) -> int:  # pragma: no cover
-        """Returns the approximate waste drawer level (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `waste_drawer_level` instead.
+        """
         send_deprecation_warning("waste_drawer_gauge", "waste_drawer_level")
         return self.waste_drawer_level
 
@@ -344,13 +380,32 @@ class Robot:
             _LOGGER.error(f"{ex}")
             return False
 
+    async def _refresh_status(self) -> None:
+        """Helper method to refresh the status from the activity endpoint.
+
+        When the API reports a drawer full status of DF1 or DF2, the unit status no longer reflects
+        regular clean cycle transitions of CST, CCP or CCC. This method is automatically called by
+        the `refresh` method to catch clean cycle statuses while in these drawers full states, but
+        it can also be called manually to force a refresh of the status from the activity endpoint.
+        """
+        activity = (await self.get_activity_history(1))[0]
+        self.__data.update({UNIT_STATUS: activity.unit_status.value})
+
     async def refresh(self) -> None:
         """Refresh the Litter-Robot's data from the API."""
         data = await self._get()
         self._update_data(data)
+        if self.status in [
+            LitterBoxStatus.DRAWER_FULL_1,
+            LitterBoxStatus.DRAWER_FULL_2,
+        ]:
+            await self._refresh_status()
 
     async def refresh_robot_info(self) -> None:  # pragma: no cover
-        """Refresh the Litter-Robot's data from the API (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `refresh` instead.
+        """
         send_deprecation_warning("refresh_robot_info", "refresh")
         await self.refresh()
 
@@ -421,7 +476,10 @@ class Robot:
         self._update_data(data)
 
     async def set_robot_name(self, name: str) -> None:  # pragma: no cover
-        """Sets the Litter-Robot's name (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `set_name` instead.
+        """
         send_deprecation_warning("set_robot_name", "set_name")
         await self.set_name(name)
 
@@ -438,6 +496,11 @@ class Robot:
 
     async def get_activity_history(self, limit: int = 100) -> List[Activity]:
         """Returns the activity history."""
+        if limit < 1:
+            raise InvalidCommandException(
+                f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
+            )
+
         return [
             Activity(
                 from_litter_robot_timestamp(activity["timestamp"]),
@@ -451,7 +514,10 @@ class Robot:
     async def get_robot_activity(
         self, limit: int = 100
     ) -> List[Activity]:  # pragma: no cover
-        """Returns the activity history (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `get_activity_history` instead.
+        """
         send_deprecation_warning("get_robot_activity", "get_activity_history")
         return await self.get_activity_history(limit)
 
@@ -481,6 +547,9 @@ class Robot:
     async def get_robot_insights(
         self, days: int = 30, timezoneOffset: int = None
     ) -> Insight:  # pragma: no cover
-        """Returns the insight data (for backwards compatibility)."""
+        """.. deprecated::
+
+        (deprecated) Use `get_insight` instead.
+        """
         send_deprecation_warning("get_robot_insights", "get_insight")
         return await self.get_insight(days, timezoneOffset)

@@ -1,3 +1,4 @@
+from typing import Optional
 from unittest.mock import Mock, patch
 
 from httpx._exceptions import ConnectError, HTTPStatusError
@@ -45,6 +46,28 @@ ROBOT_DATA = {
     "setupDate": "2021-01-01T00:00:00.000000",
 }
 
+ROBOT_FULL_ID = "a9876b5432cd1e"
+ROBOT_FULL_NAME = "Full Test"
+ROBOT_FULL_SERIAL = "LR3C987654"
+ROBOT_FULL_DATA = {
+    "powerStatus": "AC",
+    "lastSeen": "2021-02-01T00:30:00.000000",
+    "cleanCycleWaitTimeMinutes": "7",
+    "unitStatus": "DF1",
+    "litterRobotNickname": ROBOT_FULL_NAME,
+    "cycleCount": "15",
+    "panelLockActive": "0",
+    "cyclesAfterDrawerFull": "0",
+    "litterRobotSerial": ROBOT_FULL_SERIAL,
+    "cycleCapacity": "30",
+    "litterRobotId": ROBOT_FULL_ID,
+    "nightLightActive": "1",
+    "sleepModeActive": "102:00:00",
+    "deviceType": "udp",
+    "isOnboarded": True,
+    "setupDate": "2021-01-01T00:00:00.000000",
+}
+
 COMMAND_RESPONSE = {
     "_developerMessage": "Command: <COMMAND> posted to litterRobotId: <LR-ID>",
 }
@@ -66,6 +89,19 @@ ACTIVITY_RESPONSE = {
         {
             "timestamp": "2021-03-01T00:00:00.000000",
             "unitStatus": "CCC",
+        },
+    ]
+}
+
+ACTIVITY_FULL_RESPONSE = {
+    "activities": [
+        {
+            "timestamp": "2021-03-01T00:01:00.000000",
+            "unitStatus": "CST",
+        },
+        {
+            "timestamp": "2021-03-01T00:00:00.000000",
+            "unitStatus": "DF1",
         },
     ]
 }
@@ -93,10 +129,10 @@ async def get_account(
         return account
 
 
-async def get_robot(mock_client) -> Robot:
+async def get_robot(mock_client, robot_id: Optional[str] = ROBOT_ID) -> Robot:
     """Gets a robot that has the underlying API patched."""
     account = await get_account(mock_client, logged_in=True, load_robots=True)
-    robot = account.robots.pop()
+    robot = next(filter(lambda robot: (robot.id == robot_id), account.robots))
     assert robot
 
     return robot

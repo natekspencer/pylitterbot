@@ -15,7 +15,7 @@ class Activity:
     count: Optional[int] = 1
 
     def __str__(self) -> str:
-        return f"{self.timestamp.isoformat()}: {self.unit_status.label} - {pluralize('cycle', self.count)}"
+        return f"{self.timestamp.isoformat()}: {self.unit_status.text} - {pluralize('cycle', self.count)}"
 
 
 @dataclass

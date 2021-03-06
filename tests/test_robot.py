@@ -1,12 +1,22 @@
 from datetime import datetime, time
+from unittest.mock import patch
 
 import pytest
 import pytz
 from pylitterbot import Robot
+from pylitterbot.const import UNIT_STATUS
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
 
-from .common import ROBOT_DATA, ROBOT_ID, ROBOT_NAME, ROBOT_SERIAL, get_robot
+from .common import (
+    ROBOT_DATA,
+    ROBOT_FULL_ID,
+    ROBOT_ID,
+    ROBOT_NAME,
+    ROBOT_SERIAL,
+    get_robot,
+)
+from .conftest import MockedResponses
 
 pytestmark = pytest.mark.asyncio
 
@@ -45,8 +55,8 @@ def test_robot_setup():
         hour=6, minute=30, tzinfo=pytz.UTC
     )
     assert robot.status == LitterBoxStatus.READY
-    assert robot.status.label == LitterBoxStatus.READY.label
     assert robot.status_code == LitterBoxStatus.READY.value
+    assert robot.status_text == LitterBoxStatus.READY.text
     assert robot.waste_drawer_level == 50
 
 
@@ -69,7 +79,26 @@ def test_robot_with_unknown_status():
     assert robot.status_code == random_status
     assert robot.status == LitterBoxStatus.UNKNOWN
     assert robot.status.value is None
-    assert robot.status.label == "Unknown"
+    assert robot.status.text == "Unknown"
+
+
+async def test_robot_with_drawer_full_status(mock_client):
+    """Tests that a robot with a `unitStatus` of DF1/DF2 calls the activity endpoint."""
+    responses = MockedResponses(robot_data={UNIT_STATUS: LitterBoxStatus.DRAWER_FULL_2})
+    robot = await get_robot(mock_client, ROBOT_FULL_ID)
+    assert robot.status == LitterBoxStatus.CAT_SENSOR_TIMING
+
+    with patch(
+        "pylitterbot.session.AsyncOAuth2Client.get",
+        side_effect=responses.mocked_requests_get,
+    ):
+        await robot.refresh()
+        assert mock_client.get.call_args.args[0].endswith("activity")
+        assert mock_client.get.call_args.kwargs.get("params").get("limit") == 1
+
+        responses.robot_data = {UNIT_STATUS: LitterBoxStatus.DRAWER_FULL}
+        await robot.refresh()
+        assert robot.status == LitterBoxStatus.DRAWER_FULL
 
 
 def test_robot_creation_fails():
@@ -120,10 +149,9 @@ async def test_other_commands(mock_client):
     assert mock_client.patch.call_args.kwargs.get("json") == {"sleepModeEnable": False}
 
     await robot.set_sleep_mode(True)
-    assert mock_client.patch.call_args.kwargs.get("json") == {
-        "sleepModeEnable": True,
-        "sleepModeTime": 1614637800,
-    }
+    json = mock_client.patch.call_args.kwargs.get("json")
+    assert json.get("sleepModeEnable")
+    assert json.get("sleepModeTime") == robot.sleep_mode_start_time.timestamp()
 
     assert robot.cycle_count > 0
     await robot.reset_waste_drawer()
@@ -157,3 +185,6 @@ async def test_invalid_commands(mock_client):
 
     with pytest.raises(InvalidCommandException):
         await robot.set_sleep_mode(True, 12)
+
+    with pytest.raises(InvalidCommandException):
+        await robot.get_activity_history(0)

@@ -27,10 +27,10 @@ async def test_account(mock_client):
 
     await account.connect(username=USERNAME, password=PASSWORD, load_robots=True)
     assert account.user_id == USER_ID
-    assert len(account.robots) == 1
+    assert len(account.robots) == 2
 
     await account.refresh_robots()
-    assert len(account.robots) == 1
+    assert len(account.robots) == 2
 
     with patch(
         "pylitterbot.session.AsyncOAuth2Client.get",

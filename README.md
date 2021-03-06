@@ -70,7 +70,7 @@ If no exception occurred, your Litter-Robot should now perform a clean cycle.
 
 Currently the following methods are available in the Robot class:
 
-- refresh_robot_info()
+- refresh()
 - start_cleaning()
 - reset_settings()
 - set_panel_lockout()
@@ -78,7 +78,7 @@ Currently the following methods are available in the Robot class:
 - set_power_status()
 - set_sleep_mode()
 - set_wait_time()
-- set_robot_name()
+- set_name()
 - reset_waste_drawer()
-- get_robot_activity()
-- get_robot_insights()
+- get_activity_history()
+- get_insight()
