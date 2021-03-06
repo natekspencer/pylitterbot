@@ -1,6 +1,8 @@
 import logging
 from enum import Enum
 
+from pylitterbot.utils import send_deprecation_warning
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -66,4 +68,14 @@ class LitterBoxStatus(Enum):
 
     @property
     def text(self) -> str:
+        """Returns the textual representation of a litter box's status."""
         return self._text
+
+    @property
+    def label(self) -> str:  # pragma: no cover
+        """.. deprecated::
+
+        (deprecated) Use `text` instead.
+        """
+        send_deprecation_warning("label", "text")
+        return self.text
