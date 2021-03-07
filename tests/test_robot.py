@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -60,12 +60,21 @@ def test_robot_setup():
     assert robot.waste_drawer_level == 50
 
 
-def test_robot_with_sleepModeTime():
+def test_robot_with_sleep_mode_time():
     """Tests that robot with `sleepModeTime` is setup correctly."""
-    robot = Robot(data={**ROBOT_DATA, "sleepModeTime": 1612218600})
-    assert robot.sleep_mode_start_time.timetz() == time(
-        hour=22, minute=30, tzinfo=pytz.UTC
-    )
+    for hour in range(-12, 25, 12):
+        with patch(
+            "pylitterbot.robot.utcnow",
+            return_value=datetime.now(pytz.UTC) + timedelta(hours=hour),
+        ):
+            start_time = datetime.combine(
+                datetime.today(), time(hour=12, tzinfo=pytz.UTC)
+            )
+
+            robot = Robot(
+                data={**ROBOT_DATA, "sleepModeTime": int(start_time.timestamp())}
+            )
+            assert robot.sleep_mode_start_time.timetz() == start_time.timetz()
 
 
 def test_robot_with_unknown_status():
@@ -84,21 +93,26 @@ def test_robot_with_unknown_status():
 
 async def test_robot_with_drawer_full_status(mock_client):
     """Tests that a robot with a `unitStatus` of DF1/DF2 calls the activity endpoint."""
-    responses = MockedResponses(robot_data={UNIT_STATUS: LitterBoxStatus.DRAWER_FULL_2})
     robot = await get_robot(mock_client, ROBOT_FULL_ID)
     assert robot.status == LitterBoxStatus.CAT_SENSOR_TIMING
+    assert robot.is_waste_drawer_full
 
+    responses = MockedResponses(
+        robot_data={UNIT_STATUS: LitterBoxStatus.DRAWER_FULL_2.value}
+    )
     with patch(
         "pylitterbot.session.AsyncOAuth2Client.get",
         side_effect=responses.mocked_requests_get,
     ):
         await robot.refresh()
+        assert robot.is_waste_drawer_full
         assert mock_client.get.call_args.args[0].endswith("activity")
         assert mock_client.get.call_args.kwargs.get("params").get("limit") == 1
 
-        responses.robot_data = {UNIT_STATUS: LitterBoxStatus.DRAWER_FULL}
+        responses.robot_data = {UNIT_STATUS: LitterBoxStatus.DRAWER_FULL.value}
         await robot.refresh()
         assert robot.status == LitterBoxStatus.DRAWER_FULL
+        assert robot.is_waste_drawer_full
 
 
 def test_robot_creation_fails():

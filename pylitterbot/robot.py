@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime, time, timedelta
 from typing import List, Optional
-from warnings import warn
 
 import pytz
 
@@ -30,6 +29,16 @@ from .utils import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+ACTIVITY_STATUS = "lastActivityStatus"
+
+DRAWER_ALMOST_FULL_STATUS_CODES = [
+    LitterBoxStatus.DRAWER_FULL_1.value,
+    LitterBoxStatus.DRAWER_FULL_2.value,
+]
+DRAWER_FULL_STATUS_CODES = DRAWER_ALMOST_FULL_STATUS_CODES + [
+    LitterBoxStatus.DRAWER_FULL.value
+]
 
 SLEEP_DURATION_HOURS = 8
 SLEEP_DURATION = timedelta(hours=SLEEP_DURATION_HOURS)
@@ -82,17 +91,16 @@ class Robot:
         self.__data = dict()
         self._sleep_mode_start_time = self._sleep_mode_end_time = None
 
-        self.id = id or data.get(ID)
-        self.serial = serial or data.get(SERIAL)
-
-        self._name = name  # or data.get(NAME)
-        self._path = f"/users/{user_id}/robots/{self.id}"
+        self._id = id
+        self._name = name
+        self._serial = serial
         self._session = session
 
         self._is_loaded = False
-
         if data:
             self._update_data(data)
+
+        self._path = f"/users/{user_id}/robots/{self.id}"
 
     def __str__(self) -> str:
         return f"Name: {self.name}, Serial: {self.serial}, id: {self.id}"
@@ -147,6 +155,11 @@ class Robot:
         return self.drawer_full_indicator_cycle_count
 
     @property
+    def id(self) -> str:
+        """Returns the id of the Litter-Robot."""
+        return self._id if self._id else self.__data.get(ID)
+
+    @property
     def is_drawer_full_indicator_triggered(self) -> bool:
         """Returns `True` if the drawer full indicator has been triggered."""
         return self.__data.get("isDFITriggered", "0") != "0"
@@ -178,11 +191,7 @@ class Robot:
     @property
     def is_waste_drawer_full(self) -> bool:
         """Returns `True` if the Litter-Robot is reporting that the waste drawer is full."""
-        return self.status in [
-            LitterBoxStatus.DRAWER_FULL,
-            LitterBoxStatus.DRAWER_FULL_1,
-            LitterBoxStatus.DRAWER_FULL_2,
-        ]
+        return self.status_code_reported in DRAWER_FULL_STATUS_CODES
 
     @property
     def last_seen(self) -> Optional[datetime]:
@@ -241,6 +250,11 @@ class Robot:
         return self.__data.get("powerStatus")
 
     @property
+    def serial(self) -> Optional[str]:
+        """Returns the serial of the Litter-Robot, if any."""
+        return self._serial if self._serial else self.__data.get(SERIAL)
+
+    @property
     def setup_date(self) -> Optional[datetime]:
         """Returns the datetime the Litter-Robot was onboarded, if any."""
         return from_litter_robot_timestamp(self.__data.get("setupDate"))
@@ -286,6 +300,14 @@ class Robot:
     @property
     def status_code(self) -> Optional[str]:
         """Returns the status code of the Litter-Robot."""
+        attribute = UNIT_STATUS
+        if self.status_code_reported in DRAWER_ALMOST_FULL_STATUS_CODES:
+            attribute = ACTIVITY_STATUS
+        return self.__data.get(attribute)
+
+    @property
+    def status_code_reported(self) -> Optional[str]:
+        """Returns the status code of the Litter-Robot as reported by the API."""
         return self.__data.get(UNIT_STATUS)
 
     @property
@@ -380,7 +402,7 @@ class Robot:
             _LOGGER.error(f"{ex}")
             return False
 
-    async def _refresh_status(self) -> None:
+    async def _refresh_activity_status(self) -> None:
         """Helper method to refresh the status from the activity endpoint.
 
         When the API reports a drawer full status of DF1 or DF2, the unit status no longer reflects
@@ -389,17 +411,14 @@ class Robot:
         it can also be called manually to force a refresh of the status from the activity endpoint.
         """
         activity = (await self.get_activity_history(1))[0]
-        self.__data.update({UNIT_STATUS: activity.unit_status.value})
+        self.__data.update({ACTIVITY_STATUS: activity.unit_status.value})
 
     async def refresh(self) -> None:
         """Refresh the Litter-Robot's data from the API."""
         data = await self._get()
         self._update_data(data)
-        if self.status in [
-            LitterBoxStatus.DRAWER_FULL_1,
-            LitterBoxStatus.DRAWER_FULL_2,
-        ]:
-            await self._refresh_status()
+        if self.status_code_reported in DRAWER_ALMOST_FULL_STATUS_CODES:
+            await self._refresh_activity_status()
 
     async def refresh_robot_info(self) -> None:  # pragma: no cover
         """.. deprecated::

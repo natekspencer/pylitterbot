@@ -1,4 +1,3 @@
-from typing import Optional
 from unittest.mock import Mock, patch
 
 from httpx._exceptions import ConnectError, HTTPStatusError
@@ -129,7 +128,7 @@ async def get_account(
         return account
 
 
-async def get_robot(mock_client, robot_id: Optional[str] = ROBOT_ID) -> Robot:
+async def get_robot(mock_client, robot_id: str = ROBOT_ID) -> Robot:
     """Gets a robot that has the underlying API patched."""
     account = await get_account(mock_client, logged_in=True, load_robots=True)
     robot = next(filter(lambda robot: (robot.id == robot_id), account.robots))

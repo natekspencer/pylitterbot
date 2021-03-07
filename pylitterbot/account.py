@@ -5,10 +5,9 @@ from typing import Optional, Set
 from httpx import ConnectError, ConnectTimeout, HTTPStatusError
 
 from .const import ID
-from .enums import LitterBoxStatus
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .litterrobot import LitterRobot
-from .robot import Robot
+from .robot import DRAWER_ALMOST_FULL_STATUS_CODES, Robot
 from .session import OAuth2Session
 
 _LOGGER = logging.getLogger(__name__)
@@ -88,11 +87,8 @@ class Account:
                         session=self._session,
                         data=robot_data,
                     )
-                if robot_object.status in [
-                    LitterBoxStatus.DRAWER_FULL_1,
-                    LitterBoxStatus.DRAWER_FULL_2,
-                ]:
-                    await robot_object._refresh_status()
+                if robot_object.status_code_reported in DRAWER_ALMOST_FULL_STATUS_CODES:
+                    await robot_object._refresh_activity_status()
                 robots.add(robot_object)
 
             self._robots = robots
