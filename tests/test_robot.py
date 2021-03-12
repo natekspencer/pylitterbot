@@ -3,10 +3,9 @@ from unittest.mock import patch
 
 import pytest
 import pytz
-from pylitterbot import Robot
-from pylitterbot.const import UNIT_STATUS
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
+from pylitterbot.robot import UNIT_STATUS, Robot
 
 from .common import (
     ROBOT_DATA,

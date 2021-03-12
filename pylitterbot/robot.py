@@ -5,17 +5,6 @@ from typing import List, Optional
 import pytz
 
 from .activity import Activity, Insight
-from .const import (
-    CYCLE_CAPACITY,
-    CYCLE_COUNT,
-    DRAWER_FULL_CYCLES,
-    ID,
-    NAME,
-    SERIAL,
-    SLEEP_MODE_ACTIVE,
-    SLEEP_MODE_TIME,
-    UNIT_STATUS,
-)
 from .enums import LitterBoxCommand, LitterBoxStatus
 from .exceptions import InvalidCommandException, LitterRobotException
 from .session import Session
@@ -31,23 +20,25 @@ from .utils import (
 _LOGGER = logging.getLogger(__name__)
 
 ACTIVITY_STATUS = "lastActivityStatus"
-
-DRAWER_ALMOST_FULL_STATUS_CODES = [
-    LitterBoxStatus.DRAWER_FULL_1.value,
-    LitterBoxStatus.DRAWER_FULL_2.value,
-]
-DRAWER_FULL_STATUS_CODES = DRAWER_ALMOST_FULL_STATUS_CODES + [
-    LitterBoxStatus.DRAWER_FULL.value
-]
+CYCLE_CAPACITY = "cycleCapacity"
+CYCLE_CAPACITY_DEFAULT = 30
+CYCLE_COUNT = "cycleCount"
+DRAWER_FULL_CYCLES = "cyclesAfterDrawerFull"
+LITTER_ROBOT_ID = "litterRobotId"
+LITTER_ROBOT_NICKNAME = "litterRobotNickname"
+LITTER_ROBOT_SERIAL = "litterRobotSerial"
+SLEEP_MODE_ACTIVE = "sleepModeActive"
+SLEEP_MODE_TIME = "sleepModeTime"
+UNIT_STATUS = "unitStatus"
 
 SLEEP_DURATION_HOURS = 8
 SLEEP_DURATION = timedelta(hours=SLEEP_DURATION_HOURS)
 
+VALID_WAIT_TIMES = [3, 7, 15]
+
 
 class Robot:
     """Data and methods for interacting with a Litter-Robot Connect self-cleaning litter box"""
-
-    VALID_WAIT_TIMES = [3, 7, 15]
 
     class UnitStatus(metaclass=DeprecatedClassMeta):
         """.. deprecated::
@@ -118,7 +109,11 @@ class Robot:
     @property
     def cycle_capacity(self) -> int:
         """Returns the cycle capacity of the Litter-Robot."""
-        return int(self.__data.get(CYCLE_CAPACITY, 30))
+        return max(
+            int(self.__data.get(CYCLE_CAPACITY, CYCLE_CAPACITY_DEFAULT)),
+            self.cycle_count
+            + LitterBoxStatus(self.status_code_reported).minimum_cycles_left,
+        )
 
     @property
     def cycle_count(self) -> int:
@@ -157,7 +152,7 @@ class Robot:
     @property
     def id(self) -> str:
         """Returns the id of the Litter-Robot."""
-        return self._id if self._id else self.__data.get(ID)
+        return self._id if self._id else self.__data.get(LITTER_ROBOT_ID)
 
     @property
     def is_drawer_full_indicator_triggered(self) -> bool:
@@ -191,7 +186,9 @@ class Robot:
     @property
     def is_waste_drawer_full(self) -> bool:
         """Returns `True` if the Litter-Robot is reporting that the waste drawer is full."""
-        return self.status_code_reported in DRAWER_FULL_STATUS_CODES
+        return self.status_code_reported in LitterBoxStatus.get_drawer_full_statuses(
+            codes_only=True
+        )
 
     @property
     def last_seen(self) -> Optional[datetime]:
@@ -209,7 +206,7 @@ class Robot:
     @property
     def name(self) -> Optional[str]:
         """Returns the name of the Litter-Robot, if any."""
-        return self._name if self._name else self.__data.get(NAME)
+        return self._name if self._name else self.__data.get(LITTER_ROBOT_NICKNAME)
 
     @property
     def night_light_mode_enabled(self) -> bool:
@@ -252,7 +249,7 @@ class Robot:
     @property
     def serial(self) -> Optional[str]:
         """Returns the serial of the Litter-Robot, if any."""
-        return self._serial if self._serial else self.__data.get(SERIAL)
+        return self._serial if self._serial else self.__data.get(LITTER_ROBOT_SERIAL)
 
     @property
     def setup_date(self) -> Optional[datetime]:
@@ -301,7 +298,9 @@ class Robot:
     def status_code(self) -> Optional[str]:
         """Returns the status code of the Litter-Robot."""
         attribute = UNIT_STATUS
-        if self.status_code_reported in DRAWER_ALMOST_FULL_STATUS_CODES:
+        if self.status_code_reported in LitterBoxStatus.get_drawer_full_statuses(
+            completely_full=False, codes_only=True
+        ):
             attribute = ACTIVITY_STATUS
         return self.__data.get(attribute)
 
@@ -417,7 +416,9 @@ class Robot:
         """Refresh the Litter-Robot's data from the API."""
         data = await self._get()
         self._update_data(data)
-        if self.status_code_reported in DRAWER_ALMOST_FULL_STATUS_CODES:
+        if self.status_code_reported in LitterBoxStatus.get_drawer_full_statuses(
+            completely_full=False, codes_only=True
+        ):
             await self._refresh_activity_status()
 
     async def refresh_robot_info(self) -> None:  # pragma: no cover
@@ -483,15 +484,15 @@ class Robot:
 
     async def set_wait_time(self, wait_time: int) -> None:
         """Sets the wait time on the Litter-Robot."""
-        if wait_time not in self.VALID_WAIT_TIMES:
+        if wait_time not in VALID_WAIT_TIMES:
             raise InvalidCommandException(
-                f"Attempt to send an invalid wait time to Litter-Robot. Wait time must be one of: {self.VALID_WAIT_TIMES}, but received {wait_time}"
+                f"Attempt to send an invalid wait time to Litter-Robot. Wait time must be one of: {VALID_WAIT_TIMES}, but received {wait_time}"
             )
         await self._dispatch_command(f"{LitterBoxCommand.WAIT_TIME}{f'{wait_time:X}'}")
 
     async def set_name(self, name: str) -> None:
         """Sets the Litter-Robot's name."""
-        data = await self._patch(json={NAME: name})
+        data = await self._patch(json={LITTER_ROBOT_NICKNAME: name})
         self._update_data(data)
 
     async def set_robot_name(self, name: str) -> None:  # pragma: no cover
