@@ -317,7 +317,7 @@ class Robot:
     @property
     def waste_drawer_level(self) -> float:
         """Returns the approximate waste drawer level."""
-        return (self.cycle_count / self.cycle_capacity * 10000 + 0.5) // 1 * 0.01
+        return (self.cycle_count / self.cycle_capacity * 1000 + 0.5) // 1 / 10
 
     @property
     def waste_drawer_gauge(self) -> int:  # pragma: no cover
