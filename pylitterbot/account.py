@@ -88,13 +88,7 @@ class Account:
                         session=self._session,
                         data=robot_data,
                     )
-                if (
-                    robot_object.status_code_reported
-                    in LitterBoxStatus.get_drawer_full_statuses(
-                        completely_full=False, codes_only=True
-                    )
-                ):
-                    await robot_object._refresh_activity_status()
+
                 robots.add(robot_object)
 
             self._robots = robots

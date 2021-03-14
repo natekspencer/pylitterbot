@@ -19,7 +19,6 @@ from .utils import (
 
 _LOGGER = logging.getLogger(__name__)
 
-ACTIVITY_STATUS = "lastActivityStatus"
 CYCLE_CAPACITY = "cycleCapacity"
 CYCLE_CAPACITY_DEFAULT = 30
 CYCLE_COUNT = "cycleCount"
@@ -80,6 +79,7 @@ class Robot:
             )
 
         self.__data = dict()
+        self.__minimum_cycles_left = 3
         self._sleep_mode_start_time = self._sleep_mode_end_time = None
 
         self._id = id
@@ -111,8 +111,7 @@ class Robot:
         """Returns the cycle capacity of the Litter-Robot."""
         return max(
             int(self.__data.get(CYCLE_CAPACITY, CYCLE_CAPACITY_DEFAULT)),
-            self.cycle_count
-            + LitterBoxStatus(self.status_code_reported).minimum_cycles_left,
+            self.cycle_count + self.__minimum_cycles_left,
         )
 
     @property
@@ -186,9 +185,9 @@ class Robot:
     @property
     def is_waste_drawer_full(self) -> bool:
         """Returns `True` if the Litter-Robot is reporting that the waste drawer is full."""
-        return self.status_code_reported in LitterBoxStatus.get_drawer_full_statuses(
-            codes_only=True
-        )
+        return (
+            self.is_drawer_full_indicator_triggered and self.cycle_count > 9
+        ) or self.__minimum_cycles_left < 3
 
     @property
     def last_seen(self) -> Optional[datetime]:
@@ -297,16 +296,6 @@ class Robot:
     @property
     def status_code(self) -> Optional[str]:
         """Returns the status code of the Litter-Robot."""
-        attribute = UNIT_STATUS
-        if self.status_code_reported in LitterBoxStatus.get_drawer_full_statuses(
-            completely_full=False, codes_only=True
-        ):
-            attribute = ACTIVITY_STATUS
-        return self.__data.get(attribute)
-
-    @property
-    def status_code_reported(self) -> Optional[str]:
-        """Returns the status code of the Litter-Robot as reported by the API."""
         return self.__data.get(UNIT_STATUS)
 
     @property
@@ -332,6 +321,7 @@ class Robot:
         """Saves the Litter-Robot info from a data dictionary."""
         self.__data.update(data)
         self._parse_sleep_info()
+        self._update_minimum_cycles_left()
 
         self._is_loaded = True
 
@@ -371,6 +361,14 @@ class Robot:
         self._sleep_mode_start_time = start_time
         self._sleep_mode_end_time = end_time
 
+    def _update_minimum_cycles_left(self) -> None:
+        """Updates the minimum cycles left."""
+        if (
+            self.status == LitterBoxStatus.READY
+            or self.__minimum_cycles_left > self.status.minimum_cycles_left
+        ):
+            self.__minimum_cycles_left = self.status.minimum_cycles_left
+
     async def _get(self, subpath: str = "", **kwargs) -> dict:
         """Sends a GET request to the Litter-Robot API."""
         return (await self._session.get(self._path + subpath, **kwargs)).json()
@@ -399,25 +397,10 @@ class Robot:
             _LOGGER.error(f"{ex}")
             return False
 
-    async def _refresh_activity_status(self) -> None:
-        """Helper method to refresh the status from the activity endpoint.
-
-        When the API reports a drawer full status of DF1 or DF2, the unit status no longer reflects
-        regular clean cycle transitions of CST, CCP or CCC. This method is automatically called by
-        the `refresh` method to catch clean cycle statuses while in these drawers full states, but
-        it can also be called manually to force a refresh of the status from the activity endpoint.
-        """
-        activity = (await self.get_activity_history(1))[0]
-        self.__data.update({ACTIVITY_STATUS: activity.unit_status.value})
-
     async def refresh(self) -> None:
         """Refresh the Litter-Robot's data from the API."""
         data = await self._get()
         self._update_data(data)
-        if self.status_code_reported in LitterBoxStatus.get_drawer_full_statuses(
-            completely_full=False, codes_only=True
-        ):
-            await self._refresh_activity_status()
 
     async def refresh_robot_info(self) -> None:  # pragma: no cover
         """.. deprecated::
