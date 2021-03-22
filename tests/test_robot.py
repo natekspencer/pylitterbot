@@ -3,10 +3,9 @@ from unittest.mock import patch
 
 import pytest
 import pytz
-from pylitterbot import Robot
-from pylitterbot.const import UNIT_STATUS
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
+from pylitterbot.robot import UNIT_STATUS, Robot
 
 from .common import (
     ROBOT_DATA,
@@ -94,7 +93,7 @@ def test_robot_with_unknown_status():
 async def test_robot_with_drawer_full_status(mock_client):
     """Tests that a robot with a `unitStatus` of DF1/DF2 calls the activity endpoint."""
     robot = await get_robot(mock_client, ROBOT_FULL_ID)
-    assert robot.status == LitterBoxStatus.CAT_SENSOR_TIMING
+    assert robot.status == LitterBoxStatus.DRAWER_FULL_1
     assert robot.is_waste_drawer_full
 
     responses = MockedResponses(
@@ -106,8 +105,6 @@ async def test_robot_with_drawer_full_status(mock_client):
     ):
         await robot.refresh()
         assert robot.is_waste_drawer_full
-        assert mock_client.get.call_args.args[0].endswith("activity")
-        assert mock_client.get.call_args.kwargs.get("params").get("limit") == 1
 
         responses.robot_data = {UNIT_STATUS: LitterBoxStatus.DRAWER_FULL.value}
         await robot.refresh()

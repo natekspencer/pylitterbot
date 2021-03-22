@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import logging
 from enum import Enum
+from typing import Any, List
 
 from pylitterbot.utils import send_deprecation_warning
 
@@ -29,10 +32,13 @@ class LitterBoxCommand:
 class LitterBoxStatus(Enum):
     """Representation of a Litter-Robot status."""
 
-    def __new__(cls, value, text):
+    def __new__(
+        cls, value: str, text: str, minimum_cycles_left: int = 3
+    ) -> LitterBoxStatus:
         obj = object.__new__(cls)
         obj._value_ = value
         obj._text = text
+        obj._minimum_cycles_left = minimum_cycles_left
         return obj
 
     BONNET_REMOVED = ("BR", "Bonnet Removed")
@@ -41,9 +47,9 @@ class LitterBoxStatus(Enum):
     CAT_SENSOR_FAULT = ("CSF", "Cat Sensor Fault")
     CAT_SENSOR_INTERRUPTED = ("CSI", "Cat Sensor Interrupted")
     CAT_SENSOR_TIMING = ("CST", "Cat Sensor Timing")
-    DRAWER_FULL_1 = ("DF1", "Drawer Almost Full - 2 Cycles Left")
-    DRAWER_FULL_2 = ("DF2", "Drawer Almost Full - 1 Cycle Left")
-    DRAWER_FULL = ("DFS", "Drawer Full")
+    DRAWER_FULL_1 = ("DF1", "Drawer Almost Full - 2 Cycles Left", 2)
+    DRAWER_FULL_2 = ("DF2", "Drawer Almost Full - 1 Cycle Left", 1)
+    DRAWER_FULL = ("DFS", "Drawer Full", 0)
     DUMP_HOME_POSITION_FAULT = ("DHF", "Dump + Home Position Fault")
     DUMP_POSITION_FAULT = ("DPF", "Dump Position Fault")
     EMPTY_CYCLE = ("EC", "Empty Cycle")
@@ -55,14 +61,14 @@ class LitterBoxStatus(Enum):
     PINCH_DETECT = ("PD", "Pinch Detect")
     READY = ("RDY", "Ready")
     STARTUP_CAT_SENSOR_FAULT = ("SCF", "Cat Sensor Fault At Startup")
-    STARTUP_DRAWER_FULL = ("SDF", "Drawer Full At Startup")
+    STARTUP_DRAWER_FULL = ("SDF", "Drawer Full At Startup", 0)
     STARTUP_PINCH_DETECT = ("SPF", "Pinch Detect At Startup")
 
     # Handle unknown/future unit statuses
     UNKNOWN = (None, "Unknown")
 
     @classmethod
-    def _missing_(cls, _):
+    def _missing_(cls, _: Any) -> LitterBoxStatus:
         _LOGGER.error('Unknown status code "%s"', _)
         return cls.UNKNOWN
 
@@ -79,3 +85,24 @@ class LitterBoxStatus(Enum):
         """
         send_deprecation_warning("label", "text")
         return self.text
+
+    @property
+    def minimum_cycles_left(self) -> int:
+        """Returns the minimum number of cycles left based on a litter box's status."""
+        return self._minimum_cycles_left
+
+    @classmethod
+    def get_drawer_full_statuses(
+        cls,
+        completely_full: bool = True,
+        almost_full: bool = True,
+        codes_only: bool = False,
+    ) -> List[LitterBoxStatus | str]:
+        """Returns the statuses that represent that the waste drawer is full."""
+        return [
+            status.value if codes_only else status
+            for status in (
+                [cls.DRAWER_FULL, cls.STARTUP_DRAWER_FULL] if completely_full else []
+            )
+            + ([cls.DRAWER_FULL_1, cls.DRAWER_FULL_2] if almost_full else [])
+        ]
