@@ -68,4 +68,4 @@ def send_deprecation_warning(old_name, new_name):
         DeprecationWarning,
         stacklevel=2,
     )
-    _LOGGER.warn(message)
+    _LOGGER.warning(message)
