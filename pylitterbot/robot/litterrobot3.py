@@ -243,6 +243,28 @@ class LitterRobot3(LitterRobot):
         self._update_data(cast(dict, data))
         return self.waste_drawer_level == 0.0
 
+    async def get_last_clean_cycle_date(self) -> datetime | None:
+        """Returns the last completed clean cycle date."""
+        last_clean_cycle: datetime | None = None
+        previous_status: LitterBoxStatus | None = None
+        cycle_statuses = [LitterBoxStatus.CLEAN_CYCLE, LitterBoxStatus.EMPTY_CYCLE]
+        finish_statuses: list[LitterBoxStatus] = [
+            LitterBoxStatus.READY,
+            *LitterBoxStatus.get_drawer_full_statuses(),
+        ]
+
+        for activity in await self.get_activity_history():
+            if activity.unit_status == LitterBoxStatus.CLEAN_CYCLE_COMPLETE or (
+                activity.unit_status in cycle_statuses
+                and previous_status in finish_statuses
+            ):
+                last_clean_cycle = activity.timestamp
+                break
+            else:
+                previous_status = activity.unit_status
+
+        return last_clean_cycle
+
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
         """Return the activity history."""
         if limit < 1:
@@ -250,11 +272,12 @@ class LitterRobot3(LitterRobot):
                 f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
             )
         data = cast(dict, await self._get("activity", params={"limit": limit}))
-        return [
+        activities = [
             Activity(timestamp, LitterBoxStatus(activity[UNIT_STATUS]))
             for activity in data["activities"]
             if (timestamp := to_timestamp(activity["timestamp"])) is not None
         ]
+        return sorted(activities, key=lambda activity: activity.timestamp, reverse=True)
 
     async def get_insight(
         self, days: int = 30, timezone_offset: int | None = None
