@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, time, timedelta
 from typing import List, Optional
@@ -319,6 +320,7 @@ class Robot:
 
     def _update_data(self, data: dict) -> None:
         """Saves the Litter-Robot info from a data dictionary."""
+        _LOGGER.debug("Robot data: %s", json.dumps(data))
         self.__data.update(data)
         self._parse_sleep_info()
         self._update_minimum_cycles_left()
@@ -340,15 +342,23 @@ class Robot:
 
         # Handle older API sleep start time
         if self.sleep_mode_enabled and not start_time:
-            [hours, minutes, seconds] = list(map(int, sleep_mode_active[1:].split(":")))
-            # Round to the nearest minute to reduce "drift"
-            start_time = round_time(
-                today_at_time(self.last_seen.timetz())
-                + (
-                    timedelta(hours=0 if self.is_sleeping else 24)
-                    - timedelta(hours=hours, minutes=minutes, seconds=seconds)
+            try:
+                [hours, minutes, seconds] = list(
+                    map(int, sleep_mode_active[1:].split(":"))
                 )
-            )
+                # Round to the nearest minute to reduce "drift"
+                start_time = round_time(
+                    today_at_time(self.last_seen.timetz())
+                    + (
+                        timedelta(hours=0 if self.is_sleeping else 24)
+                        - timedelta(hours=hours, minutes=minutes, seconds=seconds)
+                    )
+                )
+            except ValueError as ex:
+                _LOGGER.error(
+                    "Unable to parse sleep mode start time from value '%s'",
+                    sleep_mode_active,
+                )
 
         if start_time:
             now = utcnow()
