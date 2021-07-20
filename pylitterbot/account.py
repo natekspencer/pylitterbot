@@ -93,4 +93,4 @@ class Account:
 
             self._robots = robots
         except LitterRobotException:
-            _LOGGER.warning("Unable to retrieve your robots")
+            _LOGGER.error("Unable to retrieve your robots")

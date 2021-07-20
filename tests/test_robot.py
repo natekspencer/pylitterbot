@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, time, timedelta
 from unittest.mock import patch
 
@@ -74,6 +75,20 @@ def test_robot_with_sleep_mode_time():
                 data={**ROBOT_DATA, "sleepModeTime": int(start_time.timestamp())}
             )
             assert robot.sleep_mode_start_time.timetz() == start_time.timetz()
+
+
+def test_robot_with_invalid_sleep_mode_active(caplog):
+    """Tests that a robot with an invalid `sleepModeActive` value is setup correctly."""
+    invalid_value = "17F"
+    robot = Robot(data={**ROBOT_DATA, "sleepModeActive": invalid_value})
+    assert caplog.record_tuples == [
+        (
+            "pylitterbot.robot",
+            logging.ERROR,
+            f"Unable to parse sleep mode start time from value '{invalid_value}'",
+        )
+    ]
+    assert robot.sleep_mode_start_time is None
 
 
 def test_robot_with_unknown_status():
