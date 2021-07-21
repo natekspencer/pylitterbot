@@ -35,7 +35,7 @@ class Session:
     def generate_headers(
         self, custom_headers: Optional[Dict[str, str]] = None
     ) -> Dict[str, str]:
-        """"Merge self.headers with custom headers if necessary."""
+        """Merge self.headers with custom headers if necessary."""
         if not custom_headers:
             return self.headers
 
@@ -71,7 +71,7 @@ class OAuth2Session(Session):
     async def fetch_token(self, username: str, password: str) -> Dict[str, str]:
         """Fetch an access token via oauth2."""
         async with self._client:
-            await self._client.fetch_token(username=username, password=password)
+            return await self._client.fetch_token(username=username, password=password)
 
     async def get(self, path: str, **kwargs) -> Response:
         """Make a get request."""
