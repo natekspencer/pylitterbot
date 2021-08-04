@@ -3,11 +3,24 @@ from types import MethodType
 from typing import Dict, Optional
 from urllib.parse import urljoin
 
+import authlib.integrations.httpx_client.oauth2_client
+import httpx
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from httpx import ConnectError, ConnectTimeout, HTTPError, HTTPStatusError, Response
 
 from .exceptions import InvalidCommandException, LitterRobotException
 from .litterrobot import LitterRobot, Vendor
+
+# httpx==0.18.2 switched to an object called `USE_CLIENT_DEFAULT` instead of `UNSET`
+# The latest release of Authlib (0.15.4 as of this writing) has not included this fix
+# though it does exist in the master branch of Authlib. Because of this, we need to
+# check the version and patch the issue if httpx is on or after version 0.18.2
+if httpx.__version__ >= "0.18.2" and not hasattr(
+    authlib.integrations.httpx_client.oauth2_client, "USE_CLIENT_DEFAULT"
+):
+    from httpx import USE_CLIENT_DEFAULT
+
+    authlib.integrations.httpx_client.oauth2_client.UNSET = USE_CLIENT_DEFAULT
 
 
 class Session:
