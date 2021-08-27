@@ -83,8 +83,7 @@ class OAuth2Session(Session):
 
     async def fetch_token(self, username: str, password: str) -> Dict[str, str]:
         """Fetch an access token via oauth2."""
-        async with self._client:
-            return await self._client.fetch_token(username=username, password=password)
+        return await self._client.fetch_token(username=username, password=password)
 
     async def get(self, path: str, **kwargs) -> Response:
         """Make a get request."""
@@ -103,10 +102,9 @@ class OAuth2Session(Session):
         url = self.urljoin(path)
         headers = self.generate_headers(kwargs.pop("headers", None))
         try:
-            async with self._client:
-                response = await method(url, headers=headers, **kwargs)
-                response.raise_for_status()
-                return response
+            response = await method(url, headers=headers, **kwargs)
+            response.raise_for_status()
+            return response
         except (HTTPStatusError, HTTPError, ConnectTimeout, ConnectError) as ex:
             if isinstance(ex, HTTPStatusError) and ex.response.status_code == 500:
                 raise InvalidCommandException(
