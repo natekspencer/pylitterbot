@@ -62,6 +62,10 @@ class Account:
                 "Unable to communicate with the Litter-Robot API."
             ) from ex
 
+    async def disconnect(self) -> None:
+        """Close the underlying session."""
+        await self._session.close()
+
     async def refresh_user(self) -> None:
         """Refresh the logged in user's info."""
         self._user.update((await self._session.get("users")).json().get("user"))

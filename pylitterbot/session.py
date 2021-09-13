@@ -30,6 +30,10 @@ class Session:
         self.endpoint = vendor.endpoint
         self.headers = {"x-api-key": vendor.x_api_key}
 
+    async def close(self):
+        """Close the session."""
+        raise NotImplementedError
+
     async def get(self, path, **kwargs):
         """Send a GET request to the specified path."""
         raise NotImplementedError
@@ -80,6 +84,10 @@ class OAuth2Session(Session):
 
         self._client.register_compliance_hook("access_token_response", raise_on_error)
         self._client.register_compliance_hook("refresh_token_response", raise_on_error)
+
+    async def close(self) -> None:
+        """Close the session."""
+        return await self._client.aclose()
 
     async def fetch_token(self, username: str, password: str) -> Dict[str, str]:
         """Fetch an access token via oauth2."""
