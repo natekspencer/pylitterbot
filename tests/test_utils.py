@@ -10,6 +10,7 @@ def test_round_time_default():
 def test_deprecation():
     """Tests that a deprecation warning is called."""
     import pytest
+
     from pylitterbot.enums import LitterBoxStatus
     from pylitterbot.robot import Robot
 

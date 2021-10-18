@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 from httpx import HTTPStatusError
+
 from pylitterbot.session import AsyncOAuth2Client
 
 from .common import (

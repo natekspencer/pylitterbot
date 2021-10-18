@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 from httpx._exceptions import ConnectError, HTTPStatusError
+
 from pylitterbot import Account
 from pylitterbot.robot import Robot
 

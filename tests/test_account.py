@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+
 from pylitterbot import Account
 from pylitterbot.exceptions import LitterRobotException, LitterRobotLoginException
 

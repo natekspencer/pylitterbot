@@ -1,6 +1,7 @@
 from unittest.mock import Mock
 
 import pytest
+
 from pylitterbot.session import Session
 
 pytestmark = pytest.mark.asyncio
