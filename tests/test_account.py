@@ -38,6 +38,8 @@ async def test_account(mock_client):
     ):
         await account.refresh_robots()
 
+    await account.disconnect()
+
 
 @pytest.mark.parametrize(
     "side_effect,exception",

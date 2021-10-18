@@ -17,5 +17,7 @@ async def test_base_session():
         await session.patch("")
     with pytest.raises(NotImplementedError):
         await session.post("")
+    with pytest.raises(NotImplementedError):
+        await session.close()
 
     assert "test" in session.generate_headers({"test": "value"}).keys()
