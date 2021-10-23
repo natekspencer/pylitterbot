@@ -354,7 +354,7 @@ class Robot:
                         - timedelta(hours=hours, minutes=minutes, seconds=seconds)
                     )
                 )
-            except ValueError as ex:
+            except ValueError:
                 _LOGGER.error(
                     "Unable to parse sleep mode start time from value '%s'",
                     sleep_mode_active,
@@ -458,7 +458,7 @@ class Robot:
                 sleep_time = (self.sleep_mode_start_time or utcnow()).timetz()
             else:
                 raise InvalidCommandException(
-                    f"An attempt to turn on sleep mode was received with an invalid time. Check the time and try again."
+                    "An attempt to turn on sleep mode was received with an invalid time. Check the time and try again."
                 )
 
         data = await self._patch(

@@ -4,7 +4,6 @@ from typing import Optional, Set
 
 from httpx import ConnectError, ConnectTimeout, HTTPStatusError
 
-from .enums import LitterBoxStatus
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .litterrobot import LitterRobot
 from .robot import LITTER_ROBOT_ID, Robot
