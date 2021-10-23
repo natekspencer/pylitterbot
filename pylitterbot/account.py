@@ -2,7 +2,7 @@
 import logging
 from typing import Optional, Set
 
-from httpx import ConnectError, ConnectTimeout, HTTPStatusError
+from httpx import ConnectError, ConnectTimeout, HTTPStatusError, ReadTimeout
 
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .litterrobot import LitterRobot
@@ -56,7 +56,7 @@ class Account:
                 ) from ex
             else:
                 raise LitterRobotException("Unable to login to Litter-Robot.") from ex
-        except (ConnectError, ConnectTimeout) as ex:
+        except (ConnectError, ConnectTimeout, ReadTimeout) as ex:
             raise LitterRobotException(
                 "Unable to communicate with the Litter-Robot API."
             ) from ex

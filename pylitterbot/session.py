@@ -4,7 +4,14 @@ from typing import Dict, Optional
 from urllib.parse import urljoin
 
 from authlib.integrations.httpx_client import AsyncOAuth2Client
-from httpx import ConnectError, ConnectTimeout, HTTPError, HTTPStatusError, Response
+from httpx import (
+    ConnectError,
+    ConnectTimeout,
+    HTTPError,
+    HTTPStatusError,
+    ReadTimeout,
+    Response,
+)
 
 from .exceptions import InvalidCommandException, LitterRobotException
 from .litterrobot import LitterRobot, Vendor
@@ -100,7 +107,13 @@ class OAuth2Session(Session):
             response = await method(url, headers=headers, **kwargs)
             response.raise_for_status()
             return response
-        except (HTTPStatusError, HTTPError, ConnectTimeout, ConnectError) as ex:
+        except (
+            HTTPStatusError,
+            HTTPError,
+            ConnectTimeout,
+            ConnectError,
+            ReadTimeout,
+        ) as ex:
             if isinstance(ex, HTTPStatusError) and ex.response.status_code == 500:
                 raise InvalidCommandException(
                     f"{ex.response.json()['developerMessage']} sent to Litter-Robot"
