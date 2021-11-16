@@ -116,7 +116,7 @@ class OAuth2Session(Session):
         ) as ex:
             if isinstance(ex, HTTPStatusError) and ex.response.status_code == 500:
                 raise InvalidCommandException(
-                    f"{ex.response.json()['developerMessage']} sent to Litter-Robot"
+                    f"{ex.response.json()['developerMessage']}"
                 ) from ex
             raise LitterRobotException(
                 "Unable to connect to the Litter-Robot API."

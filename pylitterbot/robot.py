@@ -324,37 +324,37 @@ class Robot:
         data = await self._get()
         self._update_data(data)
 
-    async def start_cleaning(self) -> None:
+    async def start_cleaning(self) -> bool:
         """Starts a cleaning cycle."""
-        await self._dispatch_command(LitterBoxCommand.CLEAN)
+        return await self._dispatch_command(LitterBoxCommand.CLEAN)
 
-    async def reset_settings(self) -> None:
+    async def reset_settings(self) -> bool:
         """Sets the Litter-Robot back to default settings."""
-        await self._dispatch_command(LitterBoxCommand.DEFAULT_SETTINGS)
+        return await self._dispatch_command(LitterBoxCommand.DEFAULT_SETTINGS)
 
-    async def set_panel_lockout(self, value: bool) -> None:
+    async def set_panel_lockout(self, value: bool) -> bool:
         """Turns the panel lock on or off."""
-        await self._dispatch_command(
+        return await self._dispatch_command(
             LitterBoxCommand.LOCK_ON if value else LitterBoxCommand.LOCK_OFF
         )
 
-    async def set_night_light(self, value: bool) -> None:
+    async def set_night_light(self, value: bool) -> bool:
         """Turns the night light mode on or off."""
-        await self._dispatch_command(
+        return await self._dispatch_command(
             LitterBoxCommand.NIGHT_LIGHT_ON
             if value
             else LitterBoxCommand.NIGHT_LIGHT_OFF
         )
 
-    async def set_power_status(self, value: bool) -> None:
+    async def set_power_status(self, value: bool) -> bool:
         """Turns the Litter-Robot on or off."""
-        await self._dispatch_command(
+        return await self._dispatch_command(
             LitterBoxCommand.POWER_ON if value else LitterBoxCommand.POWER_OFF
         )
 
     async def set_sleep_mode(
         self, value: bool, sleep_time: Optional[time] = None
-    ) -> None:
+    ) -> bool:
         """Sets the sleep mode on the Litter-Robot."""
         if value and not isinstance(sleep_time, time):
             # Handle being able to set sleep mode by using previous start time or now.
@@ -369,28 +369,36 @@ class Robot:
             json={
                 "sleepModeEnable": value,
                 **(
-                    {SLEEP_MODE_TIME: int(today_at_time(sleep_time).timestamp())}
+                    {
+                        SLEEP_MODE_TIME: (
+                            sleep_time := int(today_at_time(sleep_time).timestamp())
+                        )
+                    }
                     if sleep_time
                     else {}
                 ),
             }
         )
         self._update_data(data)
+        return sleep_time is None or self.__data[SLEEP_MODE_TIME] == sleep_time
 
-    async def set_wait_time(self, wait_time: int) -> None:
+    async def set_wait_time(self, wait_time: int) -> bool:
         """Sets the wait time on the Litter-Robot."""
         if wait_time not in VALID_WAIT_TIMES:
             raise InvalidCommandException(
                 f"Attempt to send an invalid wait time to Litter-Robot. Wait time must be one of: {VALID_WAIT_TIMES}, but received {wait_time}"
             )
-        await self._dispatch_command(f"{LitterBoxCommand.WAIT_TIME}{f'{wait_time:X}'}")
+        return await self._dispatch_command(
+            f"{LitterBoxCommand.WAIT_TIME}{f'{wait_time:X}'}"
+        )
 
-    async def set_name(self, name: str) -> None:
+    async def set_name(self, name: str) -> bool:
         """Sets the Litter-Robot's name."""
         data = await self._patch(json={LITTER_ROBOT_NICKNAME: name})
         self._update_data(data)
+        return self.name == name
 
-    async def reset_waste_drawer(self) -> None:
+    async def reset_waste_drawer(self) -> bool:
         """Resets the Litter-Robot's cycle counts and capacity."""
         data = await self._patch(
             json={
@@ -400,6 +408,7 @@ class Robot:
             }
         )
         self._update_data(data)
+        return self.waste_drawer_level == 0.0
 
     async def get_activity_history(self, limit: int = 100) -> List[Activity]:
         """Returns the activity history."""
