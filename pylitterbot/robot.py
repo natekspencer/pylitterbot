@@ -9,14 +9,7 @@ from .activity import Activity, Insight
 from .enums import LitterBoxCommand, LitterBoxStatus
 from .exceptions import InvalidCommandException, LitterRobotException
 from .session import Session
-from .utils import (
-    DeprecatedClassMeta,
-    from_litter_robot_timestamp,
-    round_time,
-    send_deprecation_warning,
-    today_at_time,
-    utcnow,
-)
+from .utils import from_litter_robot_timestamp, round_time, today_at_time, utcnow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,22 +32,6 @@ VALID_WAIT_TIMES = [3, 7, 15]
 
 class Robot:
     """Data and methods for interacting with a Litter-Robot Connect self-cleaning litter box"""
-
-    class UnitStatus(metaclass=DeprecatedClassMeta):
-        """.. deprecated::
-
-        (deprecated) Use `pylitterbot.enums.LitterBoxStatus` instead.
-        """
-
-        _DeprecatedClassMeta__alias = LitterBoxStatus
-
-    class Commands(metaclass=DeprecatedClassMeta):
-        """.. deprecated::
-
-        (deprecated) Use `pylitterbot.enums.LitterBoxCommand` instead.
-        """
-
-        _DeprecatedClassMeta__alias = LitterBoxCommand
 
     def __init__(
         self,
@@ -141,15 +118,6 @@ class Robot:
         return int(self.__data.get("DFICycleCount", 0))
 
     @property
-    def dfi_cycle_count(self) -> int:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `drawer_full_indicator_cycle_count` instead.
-        """
-        send_deprecation_warning("dfi_cycle_count", "drawer_full_indicator_cycle_count")
-        return self.drawer_full_indicator_cycle_count
-
-    @property
     def id(self) -> str:
         """Returns the id of the Litter-Robot."""
         return self._id if self._id else self.__data.get(LITTER_ROBOT_ID)
@@ -158,17 +126,6 @@ class Robot:
     def is_drawer_full_indicator_triggered(self) -> bool:
         """Returns `True` if the drawer full indicator has been triggered."""
         return self.__data.get("isDFITriggered", "0") != "0"
-
-    @property
-    def is_dfi_triggered(self) -> bool:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `is_drawer_full_indicator_triggered` instead.
-        """
-        send_deprecation_warning(
-            "is_dfi_triggered", "is_drawer_full_indicator_triggered"
-        )
-        return self.is_drawer_full_indicator_triggered
 
     @property
     def is_onboarded(self) -> bool:
@@ -214,27 +171,9 @@ class Robot:
         return self.__data.get("nightLightActive", "0") != "0"
 
     @property
-    def night_light_active(self) -> bool:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `night_light_mode_enabled` instead.
-        """
-        send_deprecation_warning("night_light_active", "night_light_mode_enabled")
-        return self.night_light_mode_enabled
-
-    @property
     def panel_lock_enabled(self) -> bool:
         """Returns `True` if the front panel buttons are locked on the Litter-Robot."""
         return self.__data.get("panelLockActive", "0") != "0"
-
-    @property
-    def panel_lock_active(self) -> bool:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `panel_lock_enabled` instead.
-        """
-        send_deprecation_warning("panel_lock_active", "panel_lock_enabled")
-        return self.panel_lock_enabled
 
     @property
     def power_status(self) -> Optional[str]:
@@ -262,15 +201,6 @@ class Robot:
         return self.__data.get(SLEEP_MODE_ACTIVE, "0") != "0"
 
     @property
-    def sleep_mode_active(self) -> bool:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `sleep_mode_enabled` instead.
-        """
-        send_deprecation_warning("sleep_mode_active", "sleep_mode_enabled")
-        return self.sleep_mode_enabled
-
-    @property
     def sleep_mode_start_time(self) -> Optional[datetime]:
         """Returns the sleep mode start time, if any."""
         return self._sleep_mode_start_time
@@ -286,15 +216,6 @@ class Robot:
         return LitterBoxStatus(self.status_code)
 
     @property
-    def unit_status(self) -> LitterBoxStatus:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `status` instead.
-        """
-        send_deprecation_warning("unit_status", "status")
-        return self.status
-
-    @property
     def status_code(self) -> Optional[str]:
         """Returns the status code of the Litter-Robot."""
         return self.__data.get(UNIT_STATUS)
@@ -308,15 +229,6 @@ class Robot:
     def waste_drawer_level(self) -> float:
         """Returns the approximate waste drawer level."""
         return (self.cycle_count / self.cycle_capacity * 1000 + 0.5) // 1 / 10
-
-    @property
-    def waste_drawer_gauge(self) -> int:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `waste_drawer_level` instead.
-        """
-        send_deprecation_warning("waste_drawer_gauge", "waste_drawer_level")
-        return self.waste_drawer_level
 
     def _update_data(self, data: dict) -> None:
         """Saves the Litter-Robot info from a data dictionary."""
@@ -412,14 +324,6 @@ class Robot:
         data = await self._get()
         self._update_data(data)
 
-    async def refresh_robot_info(self) -> None:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `refresh` instead.
-        """
-        send_deprecation_warning("refresh_robot_info", "refresh")
-        await self.refresh()
-
     async def start_cleaning(self) -> None:
         """Starts a cleaning cycle."""
         await self._dispatch_command(LitterBoxCommand.CLEAN)
@@ -486,14 +390,6 @@ class Robot:
         data = await self._patch(json={LITTER_ROBOT_NICKNAME: name})
         self._update_data(data)
 
-    async def set_robot_name(self, name: str) -> None:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `set_name` instead.
-        """
-        send_deprecation_warning("set_robot_name", "set_name")
-        await self.set_name(name)
-
     async def reset_waste_drawer(self) -> None:
         """Resets the Litter-Robot's cycle counts and capacity."""
         data = await self._patch(
@@ -522,16 +418,6 @@ class Robot:
             ]
         ]
 
-    async def get_robot_activity(
-        self, limit: int = 100
-    ) -> List[Activity]:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `get_activity_history` instead.
-        """
-        send_deprecation_warning("get_robot_activity", "get_activity_history")
-        return await self.get_activity_history(limit)
-
     async def get_insight(self, days: int = 30, timezoneOffset: int = None) -> Insight:
         """Returns the insight data."""
         insight = await self._get(
@@ -554,13 +440,3 @@ class Robot:
                 for cycle in insight["cycleHistory"]
             ],
         )
-
-    async def get_robot_insights(
-        self, days: int = 30, timezoneOffset: int = None
-    ) -> Insight:  # pragma: no cover
-        """.. deprecated::
-
-        (deprecated) Use `get_insight` instead.
-        """
-        send_deprecation_warning("get_robot_insights", "get_insight")
-        return await self.get_insight(days, timezoneOffset)
