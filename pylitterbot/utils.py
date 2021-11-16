@@ -46,7 +46,7 @@ def pluralize(word: str, count: int):
     return f"{count} {word}{'s' if count != 1 else ''}"
 
 
-class DeprecatedClassMeta(type):
+class DeprecatedClassMeta(type):  # pragma: no cover
     def __new__(cls, name, bases, classdict, *args, **kwargs):
         alias = classdict.get("_DeprecatedClassMeta__alias")
         classdict["_DeprecatedClassMeta__alias"] = alias
@@ -61,7 +61,7 @@ class DeprecatedClassMeta(type):
         return getattr(self._DeprecatedClassMeta__alias, name)
 
 
-def send_deprecation_warning(old_name, new_name):
+def send_deprecation_warning(old_name, new_name):  # pragma: no cover
     message = f"{old_name} has been deprecated in favor of {new_name}, the alias will be removed in the future"
     warn(
         message,
