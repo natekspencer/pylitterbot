@@ -1,6 +1,5 @@
 """Session handling for litter-robot endpoint."""
-from types import MethodType
-from typing import Dict, Optional
+from typing import Awaitable, Callable, Dict, Optional
 from urllib.parse import urljoin
 
 from authlib.integrations.httpx_client import AsyncOAuth2Client
@@ -99,7 +98,9 @@ class OAuth2Session(Session):
         """Make a patch request."""
         return await self.call(self._client.patch, path, **kwargs)
 
-    async def call(self, method: MethodType, path: str, **kwargs) -> Response:
+    async def call(
+        self, method: Callable[..., Awaitable[Response]], path: str, **kwargs
+    ) -> Response:
         """Make a request, token will be updated automatically as needed."""
         url = self.urljoin(path)
         headers = self.generate_headers(kwargs.pop("headers", None))
@@ -116,7 +117,7 @@ class OAuth2Session(Session):
         ) as ex:
             if isinstance(ex, HTTPStatusError) and ex.response.status_code == 500:
                 raise InvalidCommandException(
-                    f"{ex.response.json()['developerMessage']}"
+                    f"{(message:=ex.response.json()).get('developerMessage',message)}"
                 ) from ex
             raise LitterRobotException(
                 "Unable to connect to the Litter-Robot API."

@@ -75,6 +75,11 @@ class MockedResponses:
                     INVALID_COMMAND_RESPONSE,
                     int(INVALID_COMMAND_RESPONSE["status_code"]),
                 )
+            if (kwargs.get("json") or {}).get("command") == "<BAD":
+                return MockResponse(
+                    {"oops": "no developerMessage"},
+                    int(INVALID_COMMAND_RESPONSE["status_code"]),
+                )
             return MockResponse(COMMAND_RESPONSE, 200)
 
         return MockResponse(None, 404)

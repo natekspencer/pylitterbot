@@ -1,4 +1,4 @@
-__version__ = "2021.11.0"
+__version__ = "2021.12.0"
 
 from .account import Account
 from .robot import Robot

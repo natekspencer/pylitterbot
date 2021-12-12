@@ -198,7 +198,7 @@ async def test_other_commands(mock_client):
     )
 
 
-async def test_invalid_commands(mock_client):
+async def test_invalid_commands(mock_client, caplog: pytest.LogCaptureFixture):
     """Tests expected exceptions/responses for invalid commands."""
     robot = await get_robot(mock_client)
 
@@ -209,6 +209,9 @@ async def test_invalid_commands(mock_client):
     assert mock_client.post.call_args.kwargs.get("json") == {
         "command": f"{LitterBoxCommand._PREFIX}W12"
     }
+
+    assert await robot._dispatch_command("BAD") is False
+    assert "oops" in caplog.text
 
     with pytest.raises(InvalidCommandException):
         await robot.set_sleep_mode(True, 12)
