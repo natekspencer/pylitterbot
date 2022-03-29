@@ -1,10 +1,8 @@
 """Utilities module."""
 import logging
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from typing import Any, Optional
 from warnings import warn
-
-import pytz
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +22,7 @@ def from_litter_robot_timestamp(
 
 def utcnow() -> datetime:
     """Return the current UTC offset-aware datetime."""
-    return datetime.now(pytz.UTC)
+    return datetime.now(timezone.utc)
 
 
 def today_at_time(tm: time) -> datetime:
