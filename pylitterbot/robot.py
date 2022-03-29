@@ -1,9 +1,7 @@
 import json
 import logging
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from typing import List, Optional
-
-import pytz
 
 from .activity import Activity, Insight
 from .enums import LitterBoxCommand, LitterBoxStatus
@@ -249,7 +247,7 @@ class Robot:
         # The newer API uses `sleepModeTime` to avoid "drift" in the reported sleep start time
         if sleep_mode_time:
             start_time = today_at_time(
-                datetime.fromtimestamp(sleep_mode_time, pytz.UTC).timetz()
+                datetime.fromtimestamp(sleep_mode_time, timezone.utc).timetz()
             )
 
         # Handle older API sleep start time

@@ -1,9 +1,8 @@
 import logging
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
-import pytz
 
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
@@ -40,20 +39,20 @@ def test_robot_setup():
     assert robot.is_sleeping
     assert not robot.is_waste_drawer_full
     assert robot.last_seen == datetime(
-        year=2021, month=2, day=1, minute=30, tzinfo=pytz.UTC
+        year=2021, month=2, day=1, minute=30, tzinfo=timezone.utc
     )
     assert robot.model == "Litter-Robot 3 Connect"
     assert robot.name == ROBOT_NAME
     assert robot.night_light_mode_enabled
     assert not robot.panel_lock_enabled
     assert robot.power_status == "AC"
-    assert robot.setup_date == datetime(year=2021, month=1, day=1, tzinfo=pytz.UTC)
+    assert robot.setup_date == datetime(year=2021, month=1, day=1, tzinfo=timezone.utc)
     assert robot.sleep_mode_enabled
     assert robot.sleep_mode_start_time.timetz() == time(
-        hour=22, minute=30, tzinfo=pytz.UTC
+        hour=22, minute=30, tzinfo=timezone.utc
     )
     assert robot.sleep_mode_end_time.timetz() == time(
-        hour=6, minute=30, tzinfo=pytz.UTC
+        hour=6, minute=30, tzinfo=timezone.utc
     )
     assert robot.status == LitterBoxStatus.READY
     assert robot.status_code == LitterBoxStatus.READY.value
@@ -66,10 +65,10 @@ def test_robot_with_sleep_mode_time():
     for hour in range(-12, 25, 12):
         with patch(
             "pylitterbot.robot.utcnow",
-            return_value=datetime.now(pytz.UTC) + timedelta(hours=hour),
+            return_value=datetime.now(timezone.utc) + timedelta(hours=hour),
         ):
             start_time = datetime.combine(
-                datetime.today(), time(hour=12, tzinfo=pytz.UTC)
+                datetime.today(), time(hour=12, tzinfo=timezone.utc)
             )
 
             robot = Robot(
