@@ -1,7 +1,7 @@
 [![pypi](https://img.shields.io/pypi/v/pylitterbot?style=for-the-badge)](https://pypi.org/project/pylitterbot)
 [![downloads](https://img.shields.io/pypi/dm/pylitterbot?style=for-the-badge)](https://pypi.org/project/pylitterbot)
 [![Buy Me A Coffee/Beer](https://img.shields.io/badge/Buy_Me_A_☕/🍺-F16061?style=for-the-badge&logo=ko-fi&logoColor=white&labelColor=grey)](https://ko-fi.com/natekspencer)
-[![Purchase Litter-Robot 4](https://img.shields.io/badge/Purchase-Litter--Robot_4-lightgrey?style=for-the-badge&labelColor=grey)](https://www.pntrs.com/t/SENLRk1JS0dDSEtJTklPQ0hKS05HTQ)
+[![Purchase Litter-Robot](https://img.shields.io/badge/Buy_a_Litter--Robot-Save_$25-lightgrey?style=for-the-badge&labelColor=grey)](https://www.gopjn.com/t/SENKTktMR0lDSEtJTklPQ0hKS05HTQ)
 
 # pylitterbot
 
@@ -99,7 +99,7 @@ Currently the following methods are available in the Robot class:
 
 I'm not employed by Litter-Robot, and provide this python package as-is.
 
-If you don't already own a Litter-Robot, please consider using [my affiliate link](https://www.pntrs.com/t/SENLRk1JS0dDSEtJTklPQ0hKS05HTQ) to purchase your own robot!
+If you don't already own a Litter-Robot, please consider using [my affiliate link](https://www.gopjn.com/t/SENKTktMR0lDSEtJTklPQ0hKS05HTQ) to purchase your own robot and save $25!
 
 If you already own a Litter-Robot and/or want to donate to me directly, consider buying me a coffee (or beer) instead by using the link below:
 
