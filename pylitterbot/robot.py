@@ -18,6 +18,7 @@ DRAWER_FULL_CYCLES = "cyclesAfterDrawerFull"
 LITTER_ROBOT_ID = "litterRobotId"
 LITTER_ROBOT_NICKNAME = "litterRobotNickname"
 LITTER_ROBOT_SERIAL = "litterRobotSerial"
+MINIMUM_CYCLES_LEFT_DEFAULT = 3
 SLEEP_MODE_ACTIVE = "sleepModeActive"
 SLEEP_MODE_TIME = "sleepModeTime"
 UNIT_STATUS = "unitStatus"
@@ -55,7 +56,7 @@ class Robot:
             )
 
         self.__data = dict()
-        self.__minimum_cycles_left = 3
+        self.__minimum_cycles_left = MINIMUM_CYCLES_LEFT_DEFAULT
         self._sleep_mode_start_time = self._sleep_mode_end_time = None
 
         self._id = id
@@ -85,9 +86,12 @@ class Robot:
     @property
     def cycle_capacity(self) -> int:
         """Returns the cycle capacity of the Litter-Robot."""
+        minimum_capacity = self.cycle_count + self.__minimum_cycles_left
+        if self.__minimum_cycles_left < MINIMUM_CYCLES_LEFT_DEFAULT:
+            return minimum_capacity
         return max(
             int(self.__data.get(CYCLE_CAPACITY, CYCLE_CAPACITY_DEFAULT)),
-            self.cycle_count + self.__minimum_cycles_left,
+            minimum_capacity,
         )
 
     @property
@@ -143,7 +147,7 @@ class Robot:
         """Returns `True` if the Litter-Robot is reporting that the waste drawer is full."""
         return (
             self.is_drawer_full_indicator_triggered and self.cycle_count > 9
-        ) or self.__minimum_cycles_left < 3
+        ) or self.__minimum_cycles_left < MINIMUM_CYCLES_LEFT_DEFAULT
 
     @property
     def last_seen(self) -> Optional[datetime]:

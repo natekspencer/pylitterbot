@@ -18,8 +18,6 @@ from .common import (
 )
 from .conftest import MockedResponses
 
-pytestmark = pytest.mark.asyncio
-
 
 def test_robot_setup():
     """Tests that robot setup is successful and parses as expected."""
@@ -108,23 +106,35 @@ def test_robot_with_unknown_status():
 async def test_robot_with_drawer_full_status(mock_client):
     """Tests that a robot with a `unitStatus` of DF1/DF2 calls the activity endpoint."""
     robot = await get_robot(mock_client, ROBOT_FULL_ID)
-    assert robot.status == LitterBoxStatus.DRAWER_FULL_1
+    robot_status = LitterBoxStatus.DRAWER_FULL_1
+    assert robot_status.minimum_cycles_left == 2
+    assert robot.status == robot_status
     assert robot.is_waste_drawer_full
+    assert robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
 
-    responses = MockedResponses(
-        robot_data={UNIT_STATUS: LitterBoxStatus.DRAWER_FULL_2.value}
-    )
+    robot_status = LitterBoxStatus.DRAWER_FULL_2
+    assert robot_status.minimum_cycles_left == 1
+    responses = MockedResponses(robot_data={UNIT_STATUS: robot_status.value})
     with patch(
         "pylitterbot.session.AsyncOAuth2Client.get",
         side_effect=responses.mocked_requests_get,
     ):
         await robot.refresh()
+        assert robot.status == robot_status
         assert robot.is_waste_drawer_full
+        assert (
+            robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
+        )
 
-        responses.robot_data = {UNIT_STATUS: LitterBoxStatus.DRAWER_FULL.value}
+        robot_status = LitterBoxStatus.DRAWER_FULL
+        assert robot_status.minimum_cycles_left == 0
+        responses.robot_data = {UNIT_STATUS: robot_status.value}
         await robot.refresh()
-        assert robot.status == LitterBoxStatus.DRAWER_FULL
+        assert robot.status == robot_status
         assert robot.is_waste_drawer_full
+        assert (
+            robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
+        )
 
 
 def test_robot_creation_fails():
