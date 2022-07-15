@@ -5,9 +5,9 @@
 
 # pylitterbot
 
-Python package for controlling a Litter-Robot Connect self-cleaning litter box
+Python package for controlling a Litter-Robot 3 Connect self-cleaning litter box
 
-This is an unofficial API for controlling Litter-Robot Connect self-cleaning litter boxes.
+This is an unofficial API for controlling Litter-Robot 3 Connect self-cleaning litter boxes.
 The code is based on https://github.com/natekspencer/LitterRobotManager, which in turn was
 based on the discussions from https://community.smartthings.com/t/litter-robot-connect/106882
 and my own reverse engineering of the API via the android APK.
@@ -92,6 +92,13 @@ Currently the following methods are available in the Robot class:
 - reset_waste_drawer()
 - get_activity_history()
 - get_insight()
+
+---
+
+## TODO
+
+- Add support for Feeder Robots
+- Add support for Litter-Robot 4
 
 ---
 
