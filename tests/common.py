@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
-from httpx._exceptions import ConnectError, HTTPStatusError
+import pytest
+from aiohttp import ClientResponseError, web
 
 from pylitterbot import Account
 from pylitterbot.robot import Robot
@@ -118,22 +119,19 @@ INSIGHT_RESPONSE = {
 }
 
 
-async def get_account(
-    mock_client, logged_in: bool = False, load_robots: bool = False
-) -> Account:
+async def get_account(logged_in: bool = False, load_robots: bool = False) -> Account:
     """Gets an account that has the underlying API patched."""
-    with patch("pylitterbot.session.AsyncOAuth2Client", mock_client):
-        account = Account()
-        if logged_in:
-            await account.connect(
-                username=USERNAME, password=PASSWORD, load_robots=load_robots
-            )
-        return account
+    account = Account()
+    if logged_in:
+        await account.connect(
+            username=USERNAME, password=PASSWORD, load_robots=load_robots
+        )
+    return account
 
 
-async def get_robot(mock_client, robot_id: str = ROBOT_ID) -> Robot:
+async def get_robot(robot_id: str = ROBOT_ID) -> Robot:
     """Gets a robot that has the underlying API patched."""
-    account = await get_account(mock_client, logged_in=True, load_robots=True)
+    account = await get_account(logged_in=True, load_robots=True)
     robot = next(filter(lambda robot: (robot.id == robot_id), account.robots))
     assert robot
 
@@ -141,12 +139,10 @@ async def get_robot(mock_client, robot_id: str = ROBOT_ID) -> Robot:
 
 
 def mock_http_status_error(status_code):
-    """Returns a mocked `httpx._exceptions.HTTPStatusError`."""
-    return HTTPStatusError(
-        Mock(), request=Mock(), response=Mock(status_code=status_code)
-    )
+    """Returns a mocked `aiohttp.ClientResponseError`."""
+    return ClientResponseError(Mock(), history=Mock())
 
 
 def mock_connect_error():
-    """Returns a mocked `httpx._exceptions.ConnectError`."""
-    return ConnectError(Mock(), request=Mock())
+    """Returns a mocked `aiohttp.ClientResponseError`."""
+    return ClientResponseError(Mock(), history=Mock())

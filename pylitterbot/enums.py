@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Any, List
+from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,6 +25,22 @@ class LitterBoxCommand:
     SLEEP_MODE_OFF = "S0"  # turn off sleep mode: sleepModeActive = 0
     SLEEP_MODE_ON = "S1"  # this command is invalid on its own and must be combined with a time component so that it forms the syntax S1HH:MI:SS - turn on sleep mode: sleepModeActive = 1HH:MI:SS; HH:MI:SS is a 24 hour clock that enters sleep mode from 00:00:00-08:00:00, so if at midnight you set sleep mode to 122:30:00, then sleep mode will being in 1.5 hours or 1:30am; when coming out of sleep state, a clean cycle is performed (see details on "C" command above)
     WAIT_TIME = "W"  # set wait time to [3, 7 or 15] minutes: cleanCycleWaitTimeMinutes = [3, 7 or F] (hexadecimal representation of minutes)
+
+
+class LitterRobot4Command:
+    """Known commands that can be sent to trigger an action or setting for a Litter-Robot 4 self-cleaning litter box."""
+
+    CLEAN_CYCLE = "cleanCycle"
+    KEY_PAD_LOCK_OUT_OFF = "keyPadLockOutOff"
+    KEY_PAD_LOCK_OUT_ON = "keyPadLockOutOn"
+    NIGHT_LIGHT_MODE_AUTO = "nightLightModeAuto"
+    NIGHT_LIGHT_MODE_OFF = "nightLightModeOff"
+    NIGHT_LIGHT_MODE_ON = "nightLightModeOn"
+    POWER_OFF = "powerOff"
+    POWER_ON = "powerOn"
+    REQUEST_STATE = "requestState"
+    SET_CLUMP_TIME = "setClumpTime"  # "{\"clumpTime\":3}" (3,5,7,15,30)
+    SET_NIGHT_LIGHT_VALUE = "setNightLightValue"  # "{\"nightLightPower\":85}" = Low, "{\"nightLightPower\":170}" = Medium, "{\"nightLightPower\":255}" = High
 
 
 class LitterBoxStatus(Enum):
@@ -86,7 +102,7 @@ class LitterBoxStatus(Enum):
         completely_full: bool = True,
         almost_full: bool = True,
         codes_only: bool = False,
-    ) -> List[LitterBoxStatus | str]:
+    ) -> list[LitterBoxStatus | str]:
         """Returns the statuses that represent that the waste drawer is full."""
         return [
             status.value if codes_only else status

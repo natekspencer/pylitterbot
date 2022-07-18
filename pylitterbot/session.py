@@ -1,124 +1,165 @@
 """Session handling for litter-robot endpoint."""
-from typing import Awaitable, Callable, Dict, Optional
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Any
 from urllib.parse import urljoin
 
-from authlib.integrations.httpx_client import AsyncOAuth2Client
-from httpx import (
-    ConnectError,
-    ConnectTimeout,
-    HTTPError,
-    HTTPStatusError,
-    ReadTimeout,
-    Response,
-)
+import jwt
+from aiohttp import ClientResponse, ClientResponseError, ClientSession
+from aiohttp.typedefs import StrOrURL
 
 from .exceptions import InvalidCommandException, LitterRobotException
-from .litterrobot import LitterRobot, Vendor
+from .utils import decode
 
 
-class Session:
-    def __init__(self, vendor: Vendor):
+class Session(ABC):
+    def __init__(self, websession: ClientSession | None = None) -> None:
         """Initialize the session."""
-        self.vendor = vendor
-        self.endpoint = vendor.endpoint
-        self.headers = {"x-api-key": vendor.x_api_key}
-
-    async def close(self):
-        """Close the session."""
-        raise NotImplementedError
-
-    async def get(self, path, **kwargs):
-        """Send a GET request to the specified path."""
-        raise NotImplementedError
-
-    async def post(self, path, **kwargs):
-        """Send a POST request to the specified path."""
-        raise NotImplementedError
-
-    async def patch(self, path, **kwargs):
-        """Send a PATCH request to the specified path."""
-        raise NotImplementedError
-
-    def urljoin(self, path):
-        return urljoin(self.endpoint, path)
-
-    def generate_headers(
-        self, custom_headers: Optional[Dict[str, str]] = None
-    ) -> Dict[str, str]:
-        """Merge self.headers with custom headers if necessary."""
-        if not custom_headers:
-            return self.headers
-
-        return {**self.headers, **custom_headers}
-
-
-class OAuth2Session(Session):
-    """
-    Class with methods for interacting with a Litter-Robot cloud session.
-
-    :param email: Email for Litter-Robot account
-    :param password: Password for Litter-Robot account
-    """
-
-    def __init__(self, vendor: Vendor = LitterRobot(), token: dict = None):
-        super().__init__(vendor=vendor)
-
-        def raise_on_error(response):  # pragma: no cover
-            response.raise_for_status()
-            return response
-
-        self._client = AsyncOAuth2Client(
-            token_endpoint=vendor.token_endpoint,
-            client_id=vendor.client_id,
-            client_secret=vendor.client_secret,
-            token_endpoint_auth_method="client_secret_post",
-            token=token,
-        )
-
-        self._client.register_compliance_hook("access_token_response", raise_on_error)
-        self._client.register_compliance_hook("refresh_token_response", raise_on_error)
+        self.websession = websession if websession is not None else ClientSession()
 
     async def close(self) -> None:
         """Close the session."""
-        return await self._client.aclose()
+        await self.websession.close()
 
-    async def fetch_token(self, username: str, password: str) -> Dict[str, str]:
-        """Fetch an access token via oauth2."""
-        return await self._client.fetch_token(username=username, password=password)
+    async def get(self, path: str, **kwargs) -> ClientResponse:
+        """Send a GET request to the specified path."""
+        return await self.request("GET", path, **kwargs)
 
-    async def get(self, path: str, **kwargs) -> Response:
-        """Make a get request."""
-        return await self.call(self._client.get, path, **kwargs)
+    async def post(self, path: str, **kwargs) -> ClientResponse:
+        """Send a POST request to the specified path."""
+        return await self.request("POST", path, **kwargs)
 
-    async def post(self, path: str, **kwargs) -> Response:
-        """Make a post request."""
-        return await self.call(self._client.post, path, **kwargs)
+    async def patch(self, path: str, **kwargs) -> ClientResponse:
+        """Send a PATCH request to the specified path."""
+        return await self.request("PATCH", path, **kwargs)
 
-    async def patch(self, path: str, **kwargs) -> Response:
-        """Make a patch request."""
-        return await self.call(self._client.patch, path, **kwargs)
+    @abstractmethod
+    async def async_get_access_token(self) -> str:
+        """Return a valid access token."""
 
-    async def call(
-        self, method: Callable[..., Awaitable[Response]], path: str, **kwargs
-    ) -> Response:
-        """Make a request, token will be updated automatically as needed."""
-        url = self.urljoin(path)
-        headers = self.generate_headers(kwargs.pop("headers", None))
+    async def request(self, method: str, url: StrOrURL, **kwargs) -> ClientResponse:
+        """Make a request."""
+        headers = kwargs.pop("headers", None)
+
+        if headers is None:
+            headers = {}
+        else:
+            headers = dict(headers)
+
+        if not kwargs.pop("skip_auth", False):
+            access_token = await self.async_get_access_token()
+            headers["authorization"] = f"Bearer {access_token}"
+
+        resp = await self.websession.request(method, url, **kwargs, headers=headers)
+        resp.raise_for_status()
+        return resp
+
+
+AUTH_ENDPOINT = "https://42nk7qrhdg.execute-api.us-east-1.amazonaws.com/prod/login"
+AUTH_ENDPOINT_KEY = "dzJ0UEZiamxQMTNHVW1iOGRNalVMNUIyWXlQVkQzcEo3RXk2Zno4dg=="
+TOKEN_EXCHANGE_ENDPOINT = (
+    "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyCustomToken"
+)
+TOKEN_REFRESH_ENDPOINT = "https://securetoken.googleapis.com/v1/token"
+TOKEN_KEY = "QUl6YVN5Q3Y4NGplbDdKa0NRbHNncXJfc2xYZjNmM3gtY01HMTVR"
+
+
+class OAuth2Session(Session):
+    """Class with methods for interacting with a Litter-Robot cloud session."""
+
+    def __init__(
+        self,
+        token: dict = None,
+        websession: ClientSession | None = None,
+    ) -> None:
+        """Initialize the session."""
+        super().__init__(websession=websession)
+
+        self._token = token
+        self._custom_args = {
+            AUTH_ENDPOINT: {
+                "skip_auth": True,
+                "headers": {"x-api-key": decode(AUTH_ENDPOINT_KEY)},
+            },
+            TOKEN_EXCHANGE_ENDPOINT: {
+                "skip_auth": True,
+                "headers": {"x-ios-bundle-identifier": "com.whisker.ios"},
+                "params": {"key": decode(TOKEN_KEY)},
+                "json": {"returnSecureToken": True},
+            },
+            TOKEN_REFRESH_ENDPOINT: {
+                "skip_auth": True,
+                "headers": {"x-ios-bundle-identifier": "com.whisker.ios"},
+                "params": {"key": decode(TOKEN_KEY)},
+                "json": {"grantType": "refresh_token"},
+            },
+        }
+
+    def generate_args(self, url: StrOrURL, **kwargs) -> dict[str, Any]:
+        """Generate args."""
+        for k, v in next(
+            (v for k, v in self._custom_args.items() if url.startswith(k)), {}
+        ).items():
+            if (orig := kwargs.get(k)) is not None:
+                v = {**v, **orig} if isinstance(v, dict) else orig
+            kwargs[k] = v
+        return kwargs
+
+    def is_token_valid(self) -> bool:
+        """Return `True` if the token is stills valid."""
         try:
-            response = await method(url, headers=headers, **kwargs)
-            response.raise_for_status()
-            return response
-        except (
-            HTTPStatusError,
-            HTTPError,
-            ConnectTimeout,
-            ConnectError,
-            ReadTimeout,
-        ) as ex:
-            if isinstance(ex, HTTPStatusError) and ex.response.status_code == 500:
-                raise InvalidCommandException(
-                    f"{(message:=ex.response.json()).get('developerMessage',message)}"
-                ) from ex
-            raise LitterRobotException(
-                "Unable to connect to the Litter-Robot API."
-            ) from ex
+            jwt.decode(
+                self._token.get("access_token", self._token.get("idToken")),
+                options={"verify_signature": False, "verify_exp": True},
+            )
+        except jwt.ExpiredSignatureError:
+            return False
+        return True
+
+    async def async_get_access_token(self, **kwargs) -> str:
+        """Return a valid access token."""
+        if not self._token:
+            resp = await self.post(
+                AUTH_ENDPOINT,
+                json={
+                    "email": kwargs.get("username"),
+                    "password": kwargs.get("password"),
+                },
+            )
+            async with resp:
+                token = await resp.json()
+
+            resp = await self.post(
+                TOKEN_EXCHANGE_ENDPOINT, json={"token": token.get("token")}
+            )
+            async with resp:
+                self._token = await resp.json()
+        elif not self.is_token_valid():
+            resp = await self.post(
+                TOKEN_REFRESH_ENDPOINT,
+                json={
+                    "refreshToken": self._token.get(
+                        "refresh_token", self._token.get("refreshToken")
+                    )
+                },
+            )
+            async with resp:
+                self._token = await resp.json()
+        return self._token.get("access_token", self._token.get("idToken"))
+
+    async def request(self, method: str, url: StrOrURL, **kwargs) -> ClientResponse:
+        """Make a request."""
+        # try:
+        kwargs = self.generate_args(url, **kwargs)
+        return await super().request(method, url, **kwargs)
+        # except (ClientResponseError,) as ex:
+        #     if isinstance(ex, ClientResponseError) and ex.status == 500:
+        #         raise InvalidCommandException(
+        #             f"{(message:=ex.response.json()).get('developerMessage',message)}"
+        #         ) from ex
+        #     raise LitterRobotException(
+        #         "Unable to connect to the Litter-Robot API."
+        #     ) from ex
+        # except Exception as ex:
+        #     print(ex)

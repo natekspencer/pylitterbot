@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterable, Optional
+from typing import Iterable
 
 from .enums import LitterBoxStatus
 from .utils import pluralize
@@ -11,8 +13,8 @@ class Activity:
     """Represents a historical activity for a Litter-Robot"""
 
     timestamp: datetime
-    unit_status: Optional[LitterBoxStatus] = LitterBoxStatus.READY
-    count: Optional[int] = 1
+    unit_status: LitterBoxStatus | None = LitterBoxStatus.READY
+    count: int | None = 1
 
     def __str__(self) -> str:
         return f"{self.timestamp.isoformat()}: {self.unit_status.text} - {pluralize('cycle', self.count)}"

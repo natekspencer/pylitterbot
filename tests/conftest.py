@@ -1,10 +1,22 @@
-from typing import Optional
-from unittest.mock import patch
+from __future__ import annotations
 
+import re
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import MagicMock, Mock, patch
+
+import jwt
 import pytest
-from httpx import HTTPStatusError
+from aiohttp import ClientResponseError
+from aioresponses import aioresponses
 
-from pylitterbot.session import AsyncOAuth2Client
+from pylitterbot.robot import LR4_ENDPOINT
+from pylitterbot.session import (
+    AUTH_ENDPOINT,
+    TOKEN_EXCHANGE_ENDPOINT,
+    TOKEN_REFRESH_ENDPOINT,
+    ClientSession,
+)
 
 from .common import (
     ACTIVITY_FULL_RESPONSE,
@@ -21,28 +33,90 @@ from .common import (
 )
 
 
-async def fetch_token(self, **kwargs):
+@pytest.fixture
+def mock_aioresponse() -> aioresponses:
+    with aioresponses() as m:
+        m.post(
+            AUTH_ENDPOINT, status=200, payload={"token": "tokenResponse"}, repeat=True
+        )
+        m.post(
+            re.compile(re.escape(TOKEN_EXCHANGE_ENDPOINT)),
+            status=200,
+            payload={
+                "kind": "kindResponse",
+                "idToken": jwt.encode(
+                    {"exp": datetime.now(tz=timezone.utc) - timedelta(hours=1)},
+                    "secret",
+                ),
+                "refreshToken": "refreshTokenResponse",
+                "expiresIn": "3600",
+                "isNewUser": False,
+            },
+            repeat=True,
+        )
+        m.post(
+            re.compile(re.escape(TOKEN_REFRESH_ENDPOINT)),
+            status=200,
+            payload={
+                "access_token": (
+                    token := jwt.encode(
+                        {"exp": datetime.now(tz=timezone.utc) - timedelta(hours=1)},
+                        "secret",
+                    )
+                ),
+                "expires_in": "3600",
+                "token_type": "Bearer",
+                "refresh_token": "refreshTokenResponse",
+                "id_token": token,
+                "user_id": "userIdResponse",
+                "project_id": "projectId",
+            },
+            repeat=True,
+        )
+        m.get(re.compile(".*/users$"), status=200, payload=USER_RESPONSE)
+        m.get(
+            re.compile(".*/robots$"),
+            status=200,
+            payload=[ROBOT_DATA, ROBOT_FULL_DATA],
+            repeat=True,
+        )
+        m.post(
+            re.compile(".*/dispatch-commands$"),
+            status=200,
+            payload=COMMAND_RESPONSE,
+            repeat=True,
+        )
+        m.post(
+            LR4_ENDPOINT,
+            status=200,
+            payload={"data": {"getLitterRobot4ByUser": []}},
+            repeat=True,
+        )
+        yield m
+
+
+async def async_get_access_token(self, **kwargs):
     self.parse_response_token(TOKEN_RESPONSE)
+
+
+async def __aexit__(self, exc_type, exc, tb):
+    pass
 
 
 class MockResponse:
     def __init__(self, json_data, status_code):
         self.json_data = json_data
-        self.status_code = status_code
+        self.status = status_code
 
     def json(self):
         return self.json_data
 
-    def raise_for_status(self):
-        if self.status_code != 200:
-            raise HTTPStatusError("Error in request", request=None, response=self)
-
 
 class MockedResponses:
-    def __init__(self, robot_data: Optional[dict] = None) -> None:
+    def __init__(self, robot_data: dict | None = None) -> None:
         self.robot_data = robot_data if robot_data else {}
 
-    def mocked_requests_get(self, *args, **kwargs):
+    async def mocked_requests_get(self, *args, **kwargs):
         if args[0].endswith("/users"):
             return MockResponse(USER_RESPONSE, 200)
         elif args[0].endswith("/robots"):
@@ -60,7 +134,7 @@ class MockedResponses:
 
         return MockResponse(None, 404)
 
-    def mocked_requests_patch(self, *args, **kwargs):
+    async def mocked_requests_patch(self, *args, **kwargs):
         if args[0].endswith(f"/robots/{ROBOT_ID}"):
             return MockResponse({**ROBOT_DATA, **kwargs.get("json")}, 200)
         elif args[0].endswith(f"/robots/{ROBOT_FULL_ID}"):
@@ -68,7 +142,11 @@ class MockedResponses:
 
         return MockResponse(None, 404)
 
-    def mocked_requests_post(self, *args, **kwargs):
+    async def mocked_requests_post(self, *args, **kwargs):
+        if args[1].endswith(
+            "https://42nk7qrhdg.execute-api.us-east-1.amazonaws.com/prod/login"
+        ):
+            return MockResponse(TOKEN_RESPONSE, 200)
         if args[0].endswith("/dispatch-commands"):
             if (kwargs.get("json") or {}).get("command") == "<W12":
                 return MockResponse(
@@ -83,21 +161,3 @@ class MockedResponses:
             return MockResponse(COMMAND_RESPONSE, 200)
 
         return MockResponse(None, 404)
-
-
-@pytest.fixture
-def mock_client():
-    responses = MockedResponses()
-    with patch(
-        "pylitterbot.session.AsyncOAuth2Client.get",
-        side_effect=responses.mocked_requests_get,
-    ), patch(
-        "pylitterbot.session.AsyncOAuth2Client.patch",
-        side_effect=responses.mocked_requests_patch,
-    ), patch(
-        "pylitterbot.session.AsyncOAuth2Client.post",
-        side_effect=responses.mocked_requests_post,
-    ):
-        client = AsyncOAuth2Client
-        client.fetch_token = fetch_token
-        yield client
