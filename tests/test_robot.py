@@ -136,6 +136,8 @@ async def test_robot_with_drawer_full_status(mock_aioresponse):
     #         robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
     #     )
 
+    await robot._session.close()
+
 
 def test_robot_creation_fails():
     """Tests that robot creation fails if missing information."""
@@ -167,6 +169,7 @@ async def test_dispatch_commands(mock_aioresponse, method_call, dispatch_command
     assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
         "command": f"{LitterBoxCommand._PREFIX}{dispatch_command}"
     }
+    await robot._session.close()
 
 
 async def test_other_commands(mock_aioresponse):
@@ -195,18 +198,20 @@ async def test_other_commands(mock_aioresponse):
     # await robot.reset_waste_drawer()
     # assert robot.cycle_count == 0
 
-    # history = await robot.get_activity_history(2)
-    # assert history
-    # assert len(history) == 2
-    # assert str(history[0]) == "2021-03-01T00:01:00+00:00: Ready - 1 cycle"
+    history = await robot.get_activity_history(2)
+    assert history
+    assert len(history) == 2
+    assert str(history[0]) == "2021-03-01T00:01:00+00:00: Ready - 1 cycle"
 
-    # insight = await robot.get_insight(2)
-    # assert insight
-    # assert len(insight.cycle_history) == 2
-    # assert (
-    #     str(insight)
-    #     == "Completed 3 cycles averaging 1.5 cycles per day over the last 2 days"
-    # )
+    insight = await robot.get_insight(2)
+    assert insight
+    assert len(insight.cycle_history) == 2
+    assert (
+        str(insight)
+        == "Completed 3 cycles averaging 1.5 cycles per day over the last 2 days"
+    )
+
+    await robot._session.close()
 
 
 async def test_invalid_commands(mock_aioresponse, caplog: pytest.LogCaptureFixture):
@@ -229,3 +234,4 @@ async def test_invalid_commands(mock_aioresponse, caplog: pytest.LogCaptureFixtu
 
     # with pytest.raises(InvalidCommandException):
     #     await robot.get_activity_history(0)
+    await robot._session.close()

@@ -149,7 +149,5 @@ class Account:
 
                 robots.add(robot_object)
             self._robots = robots
-        except LitterRobotException:
+        except (LitterRobotException, ClientResponseError):
             _LOGGER.error("Unable to retrieve your robots")
-        except Exception as e:
-            print(e)

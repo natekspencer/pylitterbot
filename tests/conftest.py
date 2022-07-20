@@ -24,6 +24,7 @@ from .common import (
     COMMAND_RESPONSE,
     INSIGHT_RESPONSE,
     INVALID_COMMAND_RESPONSE,
+    LITTER_ROBOT_4_RESPONSE,
     ROBOT_DATA,
     ROBOT_FULL_DATA,
     ROBOT_FULL_ID,
@@ -80,6 +81,18 @@ def mock_aioresponse() -> aioresponses:
             payload=[ROBOT_DATA, ROBOT_FULL_DATA],
             repeat=True,
         )
+        m.get(
+            re.compile(".*/activity?.*$"),
+            status=200,
+            payload=ACTIVITY_RESPONSE,
+            repeat=True,
+        )
+        m.get(
+            re.compile(".*/insights?.*$"),
+            status=200,
+            payload=INSIGHT_RESPONSE,
+            repeat=True,
+        )
         m.post(
             re.compile(".*/dispatch-commands$"),
             status=200,
@@ -89,7 +102,7 @@ def mock_aioresponse() -> aioresponses:
         m.post(
             LR4_ENDPOINT,
             status=200,
-            payload={"data": {"getLitterRobot4ByUser": []}},
+            payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_RESPONSE]}},
             repeat=True,
         )
         yield m

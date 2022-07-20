@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from unittest.mock import Mock, patch
 
 import pytest
@@ -118,6 +120,51 @@ INSIGHT_RESPONSE = {
     ],
 }
 
+LITTER_ROBOT_4_RESPONSE = {
+    "unitId": "LR4ID",
+    "name": "Litter-Robot 4",
+    "serial": "LR4C000001",
+    "userId": "000001",
+    "unitPowerType": "AC",
+    "unitTimezone": "America/Denver",
+    "cleanCycleWaitTime": 7,
+    "isKeypadLockout": False,
+    "nightLightMode": "AUTO",
+    "nightLightBrightness": 255,
+    "isPanelSleepMode": False,
+    "panelSleepTime": 0,
+    "panelWakeTime": 0,
+    "unitPowerStatus": "ON",
+    "sleepStatus": "WAKE",
+    "robotStatus": "ROBOT_IDLE",
+    "globeMotorFaultStatus": "FAULT_CLEAR",
+    "pinchStatus": "CLEAR",
+    "catDetect": "CAT_DETECT_SCALE_CLEAR",
+    "isBonnetRemoved": False,
+    "isNightLightLEDOn": True,
+    "odometerPowerCycles": 9,
+    "odometerCleanCycles": 93,
+    "odometerEmptyCycles": 0,
+    "odometerFilterCycles": 0,
+    "isDFIResetPending": False,
+    "DFINumberOfCycles": 58,
+    "DFILevelPercent": 91,
+    "isDFIFull": False,
+    "DFIFullCounter": 0,
+    "DFITriggerCount": 33,
+    "litterLevel": 475,
+    "DFILevelMM": 115,
+    "isCatDetectPending": False,
+    "globeMotorRetractFaultStatus": "FAULT_CLEAR",
+    "robotCycleStatus": "CYCLE_IDLE",
+    "robotCycleState": "CYCLE_STATE_WAIT_ON",
+    "weightSensor": 0.9,
+    "isOnline": True,
+    "isOnboarded": True,
+    "lastSeen": "2022-07-20T00:13:37.165Z",
+    "setupDateTime": "2022-07-16T21:40:50.055Z",
+}
+
 
 async def get_account(logged_in: bool = False, load_robots: bool = False) -> Account:
     """Gets an account that has the underlying API patched."""
@@ -138,11 +185,6 @@ async def get_robot(robot_id: str = ROBOT_ID) -> Robot:
     return robot
 
 
-def mock_http_status_error(status_code):
+def mock_client_response_error(status: int | None = None) -> ClientResponseError:
     """Returns a mocked `aiohttp.ClientResponseError`."""
-    return ClientResponseError(Mock(), history=Mock())
-
-
-def mock_connect_error():
-    """Returns a mocked `aiohttp.ClientResponseError`."""
-    return ClientResponseError(Mock(), history=Mock())
+    return ClientResponseError(Mock(), history=Mock(), status=status)
