@@ -130,5 +130,5 @@ class Account:
                 update_or_create_robot(robot_data, LitterRobot4)
 
             self._robots = robots
-        except (LitterRobotException, ClientResponseError):
+        except (LitterRobotException, ClientResponseError, ClientConnectorError):
             _LOGGER.error("Unable to retrieve your robots")

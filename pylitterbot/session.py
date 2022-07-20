@@ -101,7 +101,7 @@ class LitterRobotSession(Session):
 
     async def async_get_access_token(self, **kwargs) -> str | None:
         """Return a valid access token."""
-        if self._token is None:
+        if self._token is None or not self.is_token_valid():
             return None
         return self._token.get("access_token", self._token.get("idToken"))
 
