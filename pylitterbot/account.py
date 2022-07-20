@@ -128,9 +128,9 @@ class Account:
 
                 robots.add(robot_object)
 
-            for robot_data in (
-                (await resp[1].json()).get("data").get("getLitterRobot4ByUser")
-            ):
+            for robot_data in (await resp[1].json()).get("data").get(
+                "getLitterRobot4ByUser"
+            ) or []:
                 robot_object = next(
                     filter(
                         lambda robot: (robot.id == robot_data.get("unitId")),
