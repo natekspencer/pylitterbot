@@ -97,8 +97,8 @@ Currently the following methods are available in the Robot class:
 
 ## TODO
 
+- Add additional support for Litter-Robot 4 data
 - Add support for Feeder Robots
-- Add support for Litter-Robot 4
 
 ---
 

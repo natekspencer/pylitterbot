@@ -37,9 +37,6 @@ CYCLE_CAPACITY = "cycleCapacity"
 CYCLE_CAPACITY_DEFAULT = 30
 CYCLE_COUNT = "cycleCount"
 DRAWER_FULL_CYCLES = "cyclesAfterDrawerFull"
-LITTER_ROBOT_ID = "litterRobotId"
-LITTER_ROBOT_NICKNAME = "litterRobotNickname"
-LITTER_ROBOT_SERIAL = "litterRobotSerial"
 MINIMUM_CYCLES_LEFT_DEFAULT = 3
 SLEEP_MODE_ACTIVE = "sleepModeActive"
 SLEEP_MODE_TIME = "sleepModeTime"
@@ -419,9 +416,6 @@ class LitterRobot3(Robot):
         super().__init__(id, serial, user_id, name, session, data)
         self._path = f"{DEFAULT_ENDPOINT}/users/{user_id}/robots/{self.id}"
 
-    def __str__(self) -> str:
-        return f"Name: {self.name}, Serial: {self.serial}, id: {self.id}"
-
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
         """Returns the number of minutes after a cat uses the Litter-Robot to begin an automatic clean cycle."""
@@ -603,7 +597,7 @@ class LitterRobot3(Robot):
 
     async def set_name(self, name: str) -> bool:
         """Sets the Litter-Robot's name."""
-        data = await self._patch(json={LITTER_ROBOT_NICKNAME: name})
+        data = await self._patch(json={self._data_name: name})
         self._update_data(data)
         return self.name == name
 

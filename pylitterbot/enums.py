@@ -39,8 +39,8 @@ class LitterRobot4Command:
     POWER_OFF = "powerOff"
     POWER_ON = "powerOn"
     REQUEST_STATE = "requestState"
-    SET_CLUMP_TIME = "setClumpTime"  # "{\"clumpTime\":3}" (3,5,7,15,30)
-    SET_NIGHT_LIGHT_VALUE = "setNightLightValue"  # "{\"nightLightPower\":85}" = Low, "{\"nightLightPower\":170}" = Medium, "{\"nightLightPower\":255}" = High
+    SET_CLUMP_TIME = "setClumpTime"
+    SET_NIGHT_LIGHT_VALUE = "setNightLightValue"
 
 
 class LitterBoxStatus(Enum):

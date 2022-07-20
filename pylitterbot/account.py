@@ -12,7 +12,6 @@ from .models import LITTER_ROBOT_4_MODEL
 from .robot import (
     DEFAULT_ENDPOINT,
     DEFAULT_ENDPOINT_KEY,
-    LITTER_ROBOT_ID,
     LR4_ENDPOINT,
     LitterRobot3,
     LitterRobot4,
@@ -73,10 +72,6 @@ class Account:
                 ) from ex
             else:
                 raise LitterRobotException("Unable to login to Litter-Robot.") from ex
-        # except OtherExceptions? as ex:
-        #     raise LitterRobotException(
-        #         "Unable to communicate with the Litter-Robot API."
-        #     ) from ex
 
     async def disconnect(self) -> None:
         """Close the underlying session."""
@@ -109,10 +104,10 @@ class Account:
             ]
             resp = await asyncio.gather(*all_robots)
 
-            for robot_data in await resp[0].json():
+            def update_or_create_robot(robot_data: dict, cls: type[Robot]) -> None:
                 robot_object = next(
                     filter(
-                        lambda robot: (robot.id == robot_data.get(LITTER_ROBOT_ID)),
+                        lambda robot: (robot.id == robot_data.get(cls._data_id)),
                         self._robots,
                     ),
                     None,
@@ -120,34 +115,20 @@ class Account:
                 if robot_object:
                     robot_object._update_data(robot_data)
                 else:
-                    robot_object = LitterRobot3(
+                    robot_object = cls(
                         user_id=self.user_id,
                         session=self._session,
                         data=robot_data,
                     )
-
                 robots.add(robot_object)
 
+            for robot_data in await resp[0].json():
+                update_or_create_robot(robot_data, LitterRobot3)
             for robot_data in (await resp[1].json()).get("data").get(
                 "getLitterRobot4ByUser"
             ) or []:
-                robot_object = next(
-                    filter(
-                        lambda robot: (robot.id == robot_data.get("unitId")),
-                        self._robots,
-                    ),
-                    None,
-                )
-                if robot_object:
-                    robot_object._update_data(robot_data)
-                else:
-                    robot_object = LitterRobot4(
-                        user_id=self.user_id,
-                        session=self._session,
-                        data=robot_data,
-                    )
+                update_or_create_robot(robot_data, LitterRobot4)
 
-                robots.add(robot_object)
             self._robots = robots
         except (LitterRobotException, ClientResponseError):
             _LOGGER.error("Unable to retrieve your robots")

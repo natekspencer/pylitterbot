@@ -150,16 +150,5 @@ class OAuth2Session(Session):
 
     async def request(self, method: str, url: StrOrURL, **kwargs) -> ClientResponse:
         """Make a request."""
-        # try:
         kwargs = self.generate_args(url, **kwargs)
         return await super().request(method, url, **kwargs)
-        # except (ClientResponseError,) as ex:
-        #     if isinstance(ex, ClientResponseError) and ex.status == 500:
-        #         raise InvalidCommandException(
-        #             f"{(message:=ex.response.json()).get('developerMessage',message)}"
-        #         ) from ex
-        #     raise LitterRobotException(
-        #         "Unable to connect to the Litter-Robot API."
-        #     ) from ex
-        # except Exception as ex:
-        #     print(ex)
