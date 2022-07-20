@@ -18,6 +18,7 @@ from .common import (
     USER_RESPONSE,
     USERNAME,
     get_account,
+    mock_client_connector_error,
     mock_client_response_error,
 )
 
@@ -54,7 +55,7 @@ async def test_account(mock_aioresponse: aioresponses) -> None:
     [
         (mock_client_response_error(401), LitterRobotLoginException),
         (mock_client_response_error(400), LitterRobotException),
-        (mock_client_response_error(), LitterRobotException),
+        (mock_client_connector_error(), LitterRobotException),
     ],
 )
 async def test_account_connect_exceptions(mock_aioresponse, side_effect, exception):

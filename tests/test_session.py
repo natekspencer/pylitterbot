@@ -12,6 +12,13 @@ pytestmark = pytest.mark.asyncio
 
 async def test_token_refresh(mock_aioresponse: aioresponses) -> None:
     """Tests the base session."""
+    mock_aioresponse.patch("localhost")
+
+    session = LitterRobotSession()
+    assert not session.is_token_valid()
+    await session.refresh_token()
+    assert not session.is_token_valid()
+
     session = LitterRobotSession(
         token={
             "access_token": jwt.encode(
@@ -21,7 +28,6 @@ async def test_token_refresh(mock_aioresponse: aioresponses) -> None:
             "refresh_token": "some_refresh_token",
         }
     )
-    assert session
     assert not session.is_token_valid()
-    await session.refresh_token()
+    await session.patch("localhost")
     assert session.is_token_valid()

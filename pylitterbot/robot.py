@@ -853,4 +853,4 @@ class LitterRobot4(Robot):
         return Insight(0, 0, [])
 
 
-FEEDER_ENDPOINT = "https://graphql.whisker.iothings.site/v1/graphql"
+# FEEDER_ENDPOINT = "https://graphql.whisker.iothings.site/v1/graphql"

@@ -5,7 +5,7 @@ import asyncio
 import logging
 
 import jwt
-from aiohttp import ClientResponseError, ClientSession
+from aiohttp import ClientConnectorError, ClientResponseError, ClientSession
 
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .models import LITTER_ROBOT_4_MODEL
@@ -70,6 +70,8 @@ class Account:
                 ) from ex
             else:
                 raise LitterRobotException("Unable to login to Litter-Robot.") from ex
+        except ClientConnectorError as ex:
+            raise LitterRobotException("Unable to reach the Litter-Robot api.") from ex
 
     async def disconnect(self) -> None:
         """Close the underlying session."""

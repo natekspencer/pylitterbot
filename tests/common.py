@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import Mock, patch
 
 import pytest
-from aiohttp import ClientResponseError, web
+from aiohttp import ClientConnectorError, ClientResponseError, web
 
 from pylitterbot import Account
 from pylitterbot.robot import Robot
@@ -187,4 +187,9 @@ async def get_robot(robot_id: str = ROBOT_ID) -> Robot:
 
 def mock_client_response_error(status: int | None = None) -> ClientResponseError:
     """Returns a mocked `aiohttp.ClientResponseError`."""
-    return ClientResponseError(Mock(), history=Mock(), status=status)
+    return ClientResponseError(Mock(), Mock(), status=status)
+
+
+def mock_client_connector_error(status: int | None = None) -> ClientConnectorError:
+    """Returns a mocked `aiohttp.ClientConnectorError`."""
+    return ClientConnectorError(Mock(), Mock())
