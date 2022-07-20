@@ -663,6 +663,7 @@ class LitterRobot3(Robot):
 LR4_STATUS_MAP = {
     "ROBOT_CAT_DETECT_DELAY": LitterBoxStatus.CAT_SENSOR_TIMING,
     "ROBOT_CLEAN": LitterBoxStatus.CLEAN_CYCLE,
+    # "ROBOT_FIND_DUMP": happened during cleaning
     "ROBOT_IDLE": LitterBoxStatus.READY,
     "ROBOT_POWER_OFF": LitterBoxStatus.OFF,
 }

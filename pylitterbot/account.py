@@ -1,6 +1,7 @@
 """Account access and data handling for Litter-Robot endpoint."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import jwt
@@ -92,11 +93,23 @@ class Account:
         """Get information about robots connected to the account."""
         robots: set[Robot] = set()
         try:
-            resp = await self._session.get(
-                f"{DEFAULT_ENDPOINT}/users/{self.user_id}/robots"
-            )
+            all_robots = [
+                self._session.get(f"{DEFAULT_ENDPOINT}/users/{self.user_id}/robots"),
+                self._session.post(
+                    LR4_ENDPOINT,
+                    json={
+                        "query": f"""
+                        query GetLR4($userId: String!) {{
+                            getLitterRobot4ByUser(userId: $userId) {LITTER_ROBOT_4_MODEL}
+                        }}
+                        """,
+                        "variables": {"userId": self.user_id},
+                    },
+                ),
+            ]
+            resp = await asyncio.gather(*all_robots)
 
-            for robot_data in await resp.json():
+            for robot_data in await resp[0].json():
                 robot_object = next(
                     filter(
                         lambda robot: (robot.id == robot_data.get(LITTER_ROBOT_ID)),
@@ -115,19 +128,8 @@ class Account:
 
                 robots.add(robot_object)
 
-            resp = await self._session.post(
-                LR4_ENDPOINT,
-                json={
-                    "query": f"""
-                        query GetLR4($userId: String!) {{
-                            getLitterRobot4ByUser(userId: $userId) {LITTER_ROBOT_4_MODEL}
-                        }}
-                        """,
-                    "variables": {"userId": self.user_id},
-                },
-            )
             for robot_data in (
-                (await resp.json()).get("data").get("getLitterRobot4ByUser")
+                (await resp[1].json()).get("data").get("getLitterRobot4ByUser")
             ):
                 robot_object = next(
                     filter(
