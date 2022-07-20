@@ -5,14 +5,14 @@ import aioresponses
 import jwt
 import pytest
 
-from pylitterbot.session import OAuth2Session
+from pylitterbot.session import LitterRobotSession
 
 pytestmark = pytest.mark.asyncio
 
 
 async def test_token_refresh(mock_aioresponse: aioresponses) -> None:
     """Tests the base session."""
-    session = OAuth2Session(
+    session = LitterRobotSession(
         token={
             "access_token": jwt.encode(
                 {"exp": datetime.now(tz=timezone.utc) - timedelta(hours=1)},
@@ -23,5 +23,5 @@ async def test_token_refresh(mock_aioresponse: aioresponses) -> None:
     )
     assert session
     assert not session.is_token_valid()
-    assert (await session.async_get_access_token()) is not None
+    await session.refresh_token()
     assert session.is_token_valid()

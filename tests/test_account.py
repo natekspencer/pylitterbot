@@ -9,7 +9,6 @@ from aioresponses import aioresponses
 from pylitterbot import Account
 from pylitterbot.exceptions import LitterRobotException, LitterRobotLoginException
 from pylitterbot.robot import LR4_ENDPOINT
-from pylitterbot.session import AUTH_ENDPOINT, TOKEN_EXCHANGE_ENDPOINT
 
 from .common import (
     PASSWORD,

@@ -17,7 +17,7 @@ from .robot import (
     LitterRobot4,
     Robot,
 )
-from .session import OAuth2Session, urljoin
+from .session import LitterRobotSession, urljoin
 from .utils import decode
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class Account:
         self, token: dict | None = None, websession: ClientSession | None = None
     ) -> None:
         """Initialize the account data."""
-        self._session = OAuth2Session(token=token, websession=websession)
+        self._session = LitterRobotSession(token=token, websession=websession)
         self._session._custom_args[DEFAULT_ENDPOINT] = {
             "headers": {"x-api-key": decode(DEFAULT_ENDPOINT_KEY)}
         }
@@ -50,13 +50,11 @@ class Account:
     async def connect(
         self, username: str = None, password: str = None, load_robots: bool = False
     ) -> None:
-        """Authenticates with the Litter-Robot API."""
+        """Connect to the Litter-Robot API."""
         try:
             if not self._session._token:
                 if username and password:
-                    await self._session.async_get_access_token(
-                        username=username, password=password
-                    )
+                    await self._session.login(username=username, password=password)
                 else:
                     raise LitterRobotLoginException(
                         "Username and password are required to login to Litter-Robot."

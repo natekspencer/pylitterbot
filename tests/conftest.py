@@ -7,16 +7,11 @@ from unittest.mock import MagicMock, Mock, patch
 
 import jwt
 import pytest
-from aiohttp import ClientResponseError
-from aioresponses import aioresponses
+from aiohttp import ClientResponse, ClientResponseError
+from aioresponses import CallbackResult, aioresponses
 
 from pylitterbot.robot import LR4_ENDPOINT
-from pylitterbot.session import (
-    AUTH_ENDPOINT,
-    TOKEN_EXCHANGE_ENDPOINT,
-    TOKEN_REFRESH_ENDPOINT,
-    ClientSession,
-)
+from pylitterbot.session import ClientSession, LitterRobotSession
 
 from .common import (
     ACTIVITY_FULL_RESPONSE,
@@ -38,10 +33,13 @@ from .common import (
 def mock_aioresponse() -> aioresponses:
     with aioresponses() as m:
         m.post(
-            AUTH_ENDPOINT, status=200, payload={"token": "tokenResponse"}, repeat=True
+            LitterRobotSession.AUTH_ENDPOINT,
+            status=200,
+            payload={"token": "tokenResponse"},
+            repeat=True,
         )
         m.post(
-            re.compile(re.escape(TOKEN_EXCHANGE_ENDPOINT)),
+            re.compile(re.escape(LitterRobotSession.TOKEN_EXCHANGE_ENDPOINT)),
             status=200,
             payload={
                 "kind": "kindResponse",
@@ -56,7 +54,7 @@ def mock_aioresponse() -> aioresponses:
             repeat=True,
         )
         m.post(
-            re.compile(re.escape(TOKEN_REFRESH_ENDPOINT)),
+            re.compile(re.escape(LitterRobotSession.TOKEN_REFRESH_ENDPOINT)),
             status=200,
             payload={
                 "access_token": (
@@ -106,10 +104,6 @@ def mock_aioresponse() -> aioresponses:
             repeat=True,
         )
         yield m
-
-
-async def async_get_access_token(self, **kwargs):
-    self.parse_response_token(TOKEN_RESPONSE)
 
 
 async def __aexit__(self, exc_type, exc, tb):

@@ -16,11 +16,13 @@ from .utils import decode
 class Session(ABC):
     def __init__(self, websession: ClientSession | None = None) -> None:
         """Initialize the session."""
-        self.websession = websession if websession is not None else ClientSession()
+        self._websession = websession
+        self._websession_provided = websession is not None
 
     async def close(self) -> None:
         """Close the session."""
-        await self.websession.close()
+        if not self._websession_provided and self._websession is not None:
+            await self._websession.close()
 
     async def get(self, path: str, **kwargs) -> ClientResponse:
         """Send a GET request to the specified path."""
@@ -38,35 +40,30 @@ class Session(ABC):
     async def async_get_access_token(self) -> str:
         """Return a valid access token."""
 
-    async def request(self, method: str, url: StrOrURL, **kwargs) -> ClientResponse:
+    async def request(self, method: str, url: str, **kwargs) -> ClientResponse:
         """Make a request."""
-        headers = kwargs.pop("headers", None)
+        if self._websession is None:
+            self._websession = ClientSession()
 
-        if headers is None:
-            headers = {}
-        else:
-            headers = dict(headers)
+        if "headers" not in kwargs:
+            kwargs["headers"] = {}
 
-        if not kwargs.pop("skip_auth", False):
-            access_token = await self.async_get_access_token()
-            headers["authorization"] = f"Bearer {access_token}"
+        if (access_token := await self.async_get_access_token()) is not None:
+            kwargs["headers"]["authorization"] = f"Bearer {access_token}"
 
-        resp = await self.websession.request(method, url, **kwargs, headers=headers)
-        resp.raise_for_status()
-        return resp
+        return await self._websession.request(method, url, **kwargs)
 
 
-AUTH_ENDPOINT = "https://42nk7qrhdg.execute-api.us-east-1.amazonaws.com/prod/login"
-AUTH_ENDPOINT_KEY = "dzJ0UEZiamxQMTNHVW1iOGRNalVMNUIyWXlQVkQzcEo3RXk2Zno4dg=="
-TOKEN_EXCHANGE_ENDPOINT = (
-    "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyCustomToken"
-)
-TOKEN_REFRESH_ENDPOINT = "https://securetoken.googleapis.com/v1/token"
-TOKEN_KEY = "QUl6YVN5Q3Y4NGplbDdKa0NRbHNncXJfc2xYZjNmM3gtY01HMTVR"
-
-
-class OAuth2Session(Session):
+class LitterRobotSession(Session):
     """Class with methods for interacting with a Litter-Robot cloud session."""
+
+    AUTH_ENDPOINT = "https://42nk7qrhdg.execute-api.us-east-1.amazonaws.com/prod/login"
+    AUTH_ENDPOINT_KEY = "dzJ0UEZiamxQMTNHVW1iOGRNalVMNUIyWXlQVkQzcEo3RXk2Zno4dg=="
+    TOKEN_EXCHANGE_ENDPOINT = (
+        "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyCustomToken"
+    )
+    TOKEN_REFRESH_ENDPOINT = "https://securetoken.googleapis.com/v1/token"
+    TOKEN_KEY = "QUl6YVN5Q3Y4NGplbDdKa0NRbHNncXJfc2xYZjNmM3gtY01HMTVR"
 
     def __init__(
         self,
@@ -77,24 +74,7 @@ class OAuth2Session(Session):
         super().__init__(websession=websession)
 
         self._token = token
-        self._custom_args = {
-            AUTH_ENDPOINT: {
-                "skip_auth": True,
-                "headers": {"x-api-key": decode(AUTH_ENDPOINT_KEY)},
-            },
-            TOKEN_EXCHANGE_ENDPOINT: {
-                "skip_auth": True,
-                "headers": {"x-ios-bundle-identifier": "com.whisker.ios"},
-                "params": {"key": decode(TOKEN_KEY)},
-                "json": {"returnSecureToken": True},
-            },
-            TOKEN_REFRESH_ENDPOINT: {
-                "skip_auth": True,
-                "headers": {"x-ios-bundle-identifier": "com.whisker.ios"},
-                "params": {"key": decode(TOKEN_KEY)},
-                "json": {"grantType": "refresh_token"},
-            },
-        }
+        self._custom_args = {}
 
     def generate_args(self, url: StrOrURL, **kwargs) -> dict[str, Any]:
         """Generate args."""
@@ -108,6 +88,8 @@ class OAuth2Session(Session):
 
     def is_token_valid(self) -> bool:
         """Return `True` if the token is stills valid."""
+        if self._token is None:
+            return False
         try:
             jwt.decode(
                 self._token.get("access_token", self._token.get("idToken")),
@@ -117,38 +99,52 @@ class OAuth2Session(Session):
             return False
         return True
 
-    async def async_get_access_token(self, **kwargs) -> str:
+    async def async_get_access_token(self, **kwargs) -> str | None:
         """Return a valid access token."""
-        if not self._token:
-            resp = await self.post(
-                AUTH_ENDPOINT,
-                json={
-                    "email": kwargs.get("username"),
-                    "password": kwargs.get("password"),
-                },
-            )
-            async with resp:
-                token = await resp.json()
-
-            resp = await self.post(
-                TOKEN_EXCHANGE_ENDPOINT, json={"token": token.get("token")}
-            )
-            async with resp:
-                self._token = await resp.json()
-        elif not self.is_token_valid():
-            resp = await self.post(
-                TOKEN_REFRESH_ENDPOINT,
-                json={
-                    "refreshToken": self._token.get(
-                        "refresh_token", self._token.get("refreshToken")
-                    )
-                },
-            )
-            async with resp:
-                self._token = await resp.json()
+        if self._token is None:
+            return None
         return self._token.get("access_token", self._token.get("idToken"))
 
-    async def request(self, method: str, url: StrOrURL, **kwargs) -> ClientResponse:
+    async def login(self, username: str, password: str) -> None:
+        """Login to the Litter-Robot api and generate a new token."""
+        async with await self.post(
+            self.AUTH_ENDPOINT,
+            skip_auth=True,
+            headers={"x-api-key": decode(self.AUTH_ENDPOINT_KEY)},
+            json={"email": username, "password": password},
+        ) as resp:
+            token = await resp.json()
+
+        async with await self.post(
+            self.TOKEN_EXCHANGE_ENDPOINT,
+            skip_auth=True,
+            headers={"x-ios-bundle-identifier": "com.whisker.ios"},
+            params={"key": decode(self.TOKEN_KEY)},
+            json={"returnSecureToken": True, "token": token.get("token")},
+        ) as resp:
+            self._token = await resp.json()
+
+    async def refresh_token(self) -> None:
+        """Refresh the access token."""
+        if self._token is None:
+            return None
+        async with await self.post(
+            self.TOKEN_REFRESH_ENDPOINT,
+            skip_auth=True,
+            headers={"x-ios-bundle-identifier": "com.whisker.ios"},
+            params={"key": decode(self.TOKEN_KEY)},
+            json={
+                "grantType": "refresh_token",
+                "refreshToken": self._token.get(
+                    "refresh_token", self._token.get("refreshToken")
+                ),
+            },
+        ) as resp:
+            self._token = await resp.json()
+
+    async def request(self, method: str, url: str, **kwargs) -> ClientResponse:
         """Make a request."""
         kwargs = self.generate_args(url, **kwargs)
+        if not kwargs.pop("skip_auth", False) and not self.is_token_valid():
+            await self.refresh_token()
         return await super().request(method, url, **kwargs)
