@@ -19,7 +19,7 @@ from .common import (
     COMMAND_RESPONSE,
     INSIGHT_RESPONSE,
     INVALID_COMMAND_RESPONSE,
-    LITTER_ROBOT_4_RESPONSE,
+    LITTER_ROBOT_4_DATA,
     ROBOT_DATA,
     ROBOT_FULL_DATA,
     ROBOT_FULL_ID,
@@ -92,79 +92,9 @@ def mock_aioresponse() -> aioresponses:
             repeat=True,
         )
         m.post(
-            re.compile(".*/dispatch-commands$"),
-            status=200,
-            payload=COMMAND_RESPONSE,
-            repeat=True,
-        )
-        m.post(
             LR4_ENDPOINT,
             status=200,
-            payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_RESPONSE]}},
-            repeat=True,
+            payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_DATA]}},
+            repeat=False,
         )
         yield m
-
-
-async def __aexit__(self, exc_type, exc, tb):
-    pass
-
-
-class MockResponse:
-    def __init__(self, json_data, status_code):
-        self.json_data = json_data
-        self.status = status_code
-
-    def json(self):
-        return self.json_data
-
-
-class MockedResponses:
-    def __init__(self, robot_data: dict | None = None) -> None:
-        self.robot_data = robot_data if robot_data else {}
-
-    async def mocked_requests_get(self, *args, **kwargs):
-        if args[0].endswith("/users"):
-            return MockResponse(USER_RESPONSE, 200)
-        elif args[0].endswith("/robots"):
-            return MockResponse([ROBOT_DATA, ROBOT_FULL_DATA], 200)
-        elif args[0].endswith(f"/robots/{ROBOT_ID}"):
-            return MockResponse({**ROBOT_DATA, **self.robot_data}, 200)
-        elif args[0].endswith(f"/robots/{ROBOT_FULL_ID}"):
-            return MockResponse({**ROBOT_FULL_DATA, **self.robot_data}, 200)
-        elif args[0].endswith(f"/robots/{ROBOT_ID}/activity"):
-            return MockResponse(ACTIVITY_RESPONSE, 200)
-        elif args[0].endswith(f"/robots/{ROBOT_FULL_ID}/activity"):
-            return MockResponse(ACTIVITY_FULL_RESPONSE, 200)
-        elif args[0].endswith("/insights"):
-            return MockResponse(INSIGHT_RESPONSE, 200)
-
-        return MockResponse(None, 404)
-
-    async def mocked_requests_patch(self, *args, **kwargs):
-        if args[0].endswith(f"/robots/{ROBOT_ID}"):
-            return MockResponse({**ROBOT_DATA, **kwargs.get("json")}, 200)
-        elif args[0].endswith(f"/robots/{ROBOT_FULL_ID}"):
-            return MockResponse({**ROBOT_FULL_DATA, **kwargs.get("json")}, 200)
-
-        return MockResponse(None, 404)
-
-    async def mocked_requests_post(self, *args, **kwargs):
-        if args[1].endswith(
-            "https://42nk7qrhdg.execute-api.us-east-1.amazonaws.com/prod/login"
-        ):
-            return MockResponse(TOKEN_RESPONSE, 200)
-        if args[0].endswith("/dispatch-commands"):
-            if (kwargs.get("json") or {}).get("command") == "<W12":
-                return MockResponse(
-                    INVALID_COMMAND_RESPONSE,
-                    int(INVALID_COMMAND_RESPONSE["status_code"]),
-                )
-            if (kwargs.get("json") or {}).get("command") == "<BAD":
-                return MockResponse(
-                    {"oops": "no developerMessage"},
-                    int(INVALID_COMMAND_RESPONSE["status_code"]),
-                )
-            return MockResponse(COMMAND_RESPONSE, 200)
-
-        return MockResponse(None, 404)

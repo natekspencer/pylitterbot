@@ -283,21 +283,17 @@ class Robot:
         ):
             self._minimum_cycles_left = self.status.minimum_cycles_left
 
-    async def _get(self, subpath: str = "", **kwargs) -> dict:
+    async def _get(self, subpath: str = "", **kwargs) -> dict | list[dict]:
         """Sends a GET request to the Litter-Robot API."""
-        return await (await self._session.get(self._path + subpath, **kwargs)).json()
+        return await self._session.get(self._path + subpath, **kwargs)
 
     async def _patch(self, subpath: str = "", json=None, **kwargs) -> dict:
         """Sends a PATCH request to the Litter-Robot API."""
-        return await (
-            await self._session.patch(self._path + subpath, json=json, **kwargs)
-        ).json()
+        return await self._session.patch(self._path + subpath, json=json, **kwargs)
 
     async def _post(self, subpath: str = "", json=None, **kwargs) -> dict:
         """Sends a POST request to the Litter-Robot API."""
-        return await (
-            await self._session.post(self._path + subpath, json=json, **kwargs)
-        ).json()
+        return await self._session.post(self._path + subpath, json=json, **kwargs)
 
     @abstractmethod
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
@@ -311,7 +307,7 @@ class Robot:
         """Starts a cleaning cycle."""
         return await self._dispatch_command(self._command_clean)
 
-    async def reset_settings(self) -> bool:
+    async def reset_settings(self) -> bool:  # pragma: no cover
         """Sets the Litter-Robot back to default settings."""
         raise NotImplementedError()
 
@@ -333,7 +329,9 @@ class Robot:
             self._command_power_on if value else self._command_power_off
         )
 
-    async def set_sleep_mode(self, value: bool, sleep_time: time | None = None) -> bool:
+    async def set_sleep_mode(
+        self, value: bool, sleep_time: time | None = None
+    ) -> bool:  # pragma: no cover
         """Sets the sleep mode on the Litter-Robot."""
         raise NotImplementedError()
 
@@ -341,53 +339,21 @@ class Robot:
     async def set_wait_time(self, wait_time: int) -> bool:
         """Sets the wait time on the Litter-Robot."""
 
-    async def set_name(self, name: str) -> bool:
+    async def set_name(self, name: str) -> bool:  # pragma: no cover
         """Sets the Litter-Robot's name."""
         raise NotImplementedError()
 
-    async def reset_waste_drawer(self) -> bool:
+    async def reset_waste_drawer(self) -> bool:  # pragma: no cover
         """Resets the Litter-Robot's cycle counts and capacity."""
         raise NotImplementedError()
 
+    @abstractmethod
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
         """Returns the activity history."""
-        if limit < 1:
-            raise InvalidCommandException(
-                f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
-            )
 
-        return [
-            Activity(
-                from_litter_robot_timestamp(activity["timestamp"]),
-                LitterBoxStatus(activity[UNIT_STATUS]),
-            )
-            for activity in (await self._get("/activity", params={"limit": limit}))[
-                "activities"
-            ]
-        ]
-
+    @abstractmethod
     async def get_insight(self, days: int = 30, timezoneOffset: int = None) -> Insight:
         """Returns the insight data."""
-        insight = await self._get(
-            "/insights",
-            params={
-                "days": days,
-                **(
-                    {} if timezoneOffset is None else {"timezoneOffset": timezoneOffset}
-                ),
-            },
-        )
-        return Insight(
-            insight["totalCycles"],
-            insight["averageCycles"],
-            [
-                Activity(
-                    datetime.strptime(cycle["date"], "%Y-%m-%d").date(),
-                    count=cycle["cyclesCompleted"],
-                )
-                for cycle in insight["cycleHistory"]
-            ],
-        )
 
 
 class LitterRobot3(Robot):
@@ -545,7 +511,7 @@ class LitterRobot3(Robot):
             )
             return True
         except InvalidCommandException as ex:
-            _LOGGER.error(f"{ex}")
+            _LOGGER.error(ex)
             return False
 
     async def refresh(self) -> None:
@@ -787,7 +753,7 @@ class LitterRobot4(Robot):
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
         """Sends a command to the Litter-Robot."""
         try:
-            await self._post(
+            data = await self._post(
                 json={
                     "query": """
                         mutation sendCommand(
@@ -809,9 +775,13 @@ class LitterRobot4(Robot):
                     "variables": {"serial": self.serial, "command": command, **kwargs},
                 }
             )
+            if "Error" in (
+                error := data.get("data", {}).get("sendLitterRobot4Command", "")
+            ):
+                raise InvalidCommandException(error)
             return True
         except InvalidCommandException as ex:
-            _LOGGER.error(f"{ex}")
+            _LOGGER.error(ex)
             return False
 
     async def refresh(self) -> None:
@@ -841,15 +811,12 @@ class LitterRobot4(Robot):
 
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
         """Returns the activity history."""
-        if limit < 1:
-            raise InvalidCommandException(
-                f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
-            )
-
+        _LOGGER.warning("get_activity_history has not yet been implemented")
         return []
 
     async def get_insight(self, days: int = 30, timezoneOffset: int = None) -> Insight:
         """Returns the insight data."""
+        _LOGGER.warning("get_insight has not yet been implemented")
         return Insight(0, 0, [])
 
 

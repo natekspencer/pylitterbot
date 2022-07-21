@@ -82,7 +82,7 @@ class Account:
         resp = await self._session.get(
             urljoin(DEFAULT_ENDPOINT, "users"),
         )
-        self._user.update((await resp.json()).get("user"))
+        self._user.update(resp.get("user"))
 
     async def refresh_robots(self) -> None:
         """Get information about robots connected to the account."""
@@ -122,13 +122,11 @@ class Account:
                     )
                 robots.add(robot_object)
 
-            for robot_data in await resp[0].json():
+            for robot_data in resp[0]:
                 update_or_create_robot(robot_data, LitterRobot3)
-            for robot_data in (await resp[1].json()).get("data").get(
-                "getLitterRobot4ByUser"
-            ) or []:
+            for robot_data in resp[1].get("data").get("getLitterRobot4ByUser") or []:
                 update_or_create_robot(robot_data, LitterRobot4)
 
             self._robots = robots
         except (LitterRobotException, ClientResponseError, ClientConnectorError):
-            _LOGGER.error("Unable to retrieve your robots")
+            _LOGGER.exception("Unable to retrieve your robots")

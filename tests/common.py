@@ -120,7 +120,7 @@ INSIGHT_RESPONSE = {
     ],
 }
 
-LITTER_ROBOT_4_RESPONSE = {
+LITTER_ROBOT_4_DATA = {
     "unitId": "LR4ID",
     "name": "Litter-Robot 4",
     "serial": "LR4C000001",
@@ -161,8 +161,8 @@ LITTER_ROBOT_4_RESPONSE = {
     "weightSensor": 0.9,
     "isOnline": True,
     "isOnboarded": True,
-    "lastSeen": "2022-07-20T00:13:37.165Z",
-    "setupDateTime": "2022-07-16T21:40:50.055Z",
+    "lastSeen": "2022-07-20T00:13:00.000Z",
+    "setupDateTime": "2022-07-16T21:40:50.000Z",
 }
 
 

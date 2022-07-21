@@ -11,6 +11,7 @@ from pylitterbot.exceptions import LitterRobotException, LitterRobotLoginExcepti
 from pylitterbot.robot import LR4_ENDPOINT
 
 from .common import (
+    LITTER_ROBOT_4_DATA,
     PASSWORD,
     ROBOT_DATA,
     ROBOT_FULL_DATA,
@@ -38,6 +39,11 @@ async def test_account(mock_aioresponse: aioresponses) -> None:
     assert account.user_id == USER_ID
     assert len(account.robots) == 3
 
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        status=200,
+        payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_DATA]}},
+    )
     await account.refresh_robots()
     assert len(account.robots) == 3
 

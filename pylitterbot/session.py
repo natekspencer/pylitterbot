@@ -7,10 +7,12 @@ from urllib.parse import urljoin
 
 import jwt
 from aiohttp import ClientResponse, ClientResponseError, ClientSession
-from aiohttp.typedefs import StrOrURL
+from typing_extensions import ParamSpec
 
 from .exceptions import InvalidCommandException, LitterRobotException
 from .utils import decode
+
+_P = ParamSpec("P")
 
 
 class Session(ABC):
@@ -24,15 +26,15 @@ class Session(ABC):
         if not self._websession_provided and self._websession is not None:
             await self._websession.close()
 
-    async def get(self, path: str, **kwargs) -> ClientResponse:
+    async def get(self, path: str, **kwargs: _P.kwargs) -> dict | list[dict]:
         """Send a GET request to the specified path."""
         return await self.request("GET", path, **kwargs)
 
-    async def post(self, path: str, **kwargs) -> ClientResponse:
+    async def post(self, path: str, **kwargs: _P.kwargs) -> dict | list[dict]:
         """Send a POST request to the specified path."""
         return await self.request("POST", path, **kwargs)
 
-    async def patch(self, path: str, **kwargs) -> ClientResponse:
+    async def patch(self, path: str, **kwargs: _P.kwargs) -> dict | list[dict]:
         """Send a PATCH request to the specified path."""
         return await self.request("PATCH", path, **kwargs)
 
@@ -40,7 +42,9 @@ class Session(ABC):
     async def async_get_access_token(self) -> str:
         """Return a valid access token."""
 
-    async def request(self, method: str, url: str, **kwargs) -> ClientResponse:
+    async def request(
+        self, method: str, url: str, **kwargs: _P.kwargs
+    ) -> dict | list[dict]:
         """Make a request."""
         if self._websession is None:
             self._websession = ClientSession()
@@ -51,7 +55,14 @@ class Session(ABC):
         if (access_token := await self.async_get_access_token()) is not None:
             kwargs["headers"]["authorization"] = f"Bearer {access_token}"
 
-        return await self._websession.request(method, url, **kwargs)
+        async with self._websession.request(method, url, **kwargs) as resp:
+            if resp.status == 500:
+                if (data := await resp.json()).get("type") == "InvalidCommandException":
+                    raise InvalidCommandException(data.get("developerMessage", data))
+                raise InvalidCommandException(data)
+            resp.raise_for_status()
+            data = await resp.json()
+            return data
 
 
 class LitterRobotSession(Session):
@@ -76,7 +87,7 @@ class LitterRobotSession(Session):
         self._token = token
         self._custom_args = {}
 
-    def generate_args(self, url: StrOrURL, **kwargs) -> dict[str, Any]:
+    def generate_args(self, url: str, **kwargs: _P.kwargs) -> dict[str, Any]:
         """Generate args."""
         for k, v in next(
             (v for k, v in self._custom_args.items() if url.startswith(k)), {}
@@ -99,7 +110,7 @@ class LitterRobotSession(Session):
             return False
         return True
 
-    async def async_get_access_token(self, **kwargs) -> str | None:
+    async def async_get_access_token(self, **kwargs: _P.kwargs) -> str | None:
         """Return a valid access token."""
         if self._token is None or not self.is_token_valid():
             return None
@@ -107,28 +118,26 @@ class LitterRobotSession(Session):
 
     async def login(self, username: str, password: str) -> None:
         """Login to the Litter-Robot api and generate a new token."""
-        async with await self.post(
+        token = await self.post(
             self.AUTH_ENDPOINT,
             skip_auth=True,
             headers={"x-api-key": decode(self.AUTH_ENDPOINT_KEY)},
             json={"email": username, "password": password},
-        ) as resp:
-            token = await resp.json()
+        )
 
-        async with await self.post(
+        self._token = await self.post(
             self.TOKEN_EXCHANGE_ENDPOINT,
             skip_auth=True,
             headers={"x-ios-bundle-identifier": "com.whisker.ios"},
             params={"key": decode(self.TOKEN_KEY)},
             json={"returnSecureToken": True, "token": token.get("token")},
-        ) as resp:
-            self._token = await resp.json()
+        )
 
     async def refresh_token(self) -> None:
         """Refresh the access token."""
         if self._token is None:
             return None
-        async with await self.post(
+        self._token = await self.post(
             self.TOKEN_REFRESH_ENDPOINT,
             skip_auth=True,
             headers={"x-ios-bundle-identifier": "com.whisker.ios"},
@@ -139,10 +148,11 @@ class LitterRobotSession(Session):
                     "refresh_token", self._token.get("refreshToken")
                 ),
             },
-        ) as resp:
-            self._token = await resp.json()
+        )
 
-    async def request(self, method: str, url: str, **kwargs) -> ClientResponse:
+    async def request(
+        self, method: str, url: str, **kwargs: _P.kwargs
+    ) -> dict | list[dict]:
         """Make a request."""
         kwargs = self.generate_args(url, **kwargs)
         if not kwargs.pop("skip_auth", False) and not self.is_token_valid():

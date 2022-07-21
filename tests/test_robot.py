@@ -3,20 +3,35 @@ from datetime import datetime, time, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
+from aiohttp.typedefs import URL
+from aioresponses import CallbackResult, aioresponses
 
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
-from pylitterbot.robot import UNIT_STATUS, LitterRobot3, Robot
+from pylitterbot.robot import (
+    DEFAULT_ENDPOINT,
+    LR4_ENDPOINT,
+    UNIT_STATUS,
+    LitterRobot3,
+    LitterRobot4,
+    Robot,
+)
+from pylitterbot.session import LitterRobotSession
 
 from .common import (
+    COMMAND_RESPONSE,
+    INVALID_COMMAND_RESPONSE,
+    LITTER_ROBOT_4_DATA,
     ROBOT_DATA,
     ROBOT_FULL_ID,
     ROBOT_ID,
     ROBOT_NAME,
     ROBOT_SERIAL,
+    USER_ID,
     get_robot,
 )
-from .conftest import MockedResponses
+
+ROBOT_ENDPOINT = f"{DEFAULT_ENDPOINT}/users/{USER_ID}/robots/%s"
 
 
 def test_robot_setup():
@@ -56,6 +71,86 @@ def test_robot_setup():
     assert robot.status_code == LitterBoxStatus.READY.value
     assert robot.status_text == LitterBoxStatus.READY.text
     assert robot.waste_drawer_level == 50
+
+
+async def test_litter_robot_4_setup(
+    mock_aioresponse: aioresponses, caplog: pytest.LogCaptureFixture
+):
+    """Tests that a Litter-Robot 4 setup is successful and parses as expected."""
+    session = LitterRobotSession()
+    robot = LitterRobot4(session=session, data=LITTER_ROBOT_4_DATA)
+    assert robot
+    assert str(robot) == "Name: Litter-Robot 4, Serial: LR4C000001, id: LR4ID"
+    assert robot.auto_offline_disabled
+    assert robot.clean_cycle_wait_time_minutes == 7
+    assert robot.cycle_capacity == 58
+    assert robot.cycle_count == 93
+    assert robot.cycles_after_drawer_full == 0
+    assert robot.device_type is None
+    assert not robot.did_notify_offline
+    assert robot.drawer_full_indicator_cycle_count == 0
+    assert not robot.is_drawer_full_indicator_triggered
+    assert robot.is_onboarded
+    assert not robot.is_sleeping
+    assert not robot.is_waste_drawer_full
+    assert robot.last_seen == datetime(
+        year=2022, month=7, day=20, minute=13, tzinfo=timezone.utc
+    )
+    assert robot.model == "Litter-Robot 4"
+    assert robot.name == "Litter-Robot 4"
+    assert robot.night_light_mode_enabled
+    assert not robot.panel_lock_enabled
+    assert robot.power_status == "AC"
+    assert robot.setup_date == datetime(
+        year=2022, month=7, day=16, hour=21, minute=40, second=50, tzinfo=timezone.utc
+    )
+    assert not robot.sleep_mode_enabled
+    assert robot.sleep_mode_start_time.strftime("%H:%M") == "00:00"
+    assert robot.sleep_mode_end_time.strftime("%H:%M") == "00:00"
+    assert robot.status == LitterBoxStatus.READY
+    assert robot.status_code == LitterBoxStatus.READY.value
+    assert robot.status_text == LitterBoxStatus.READY.text
+    assert robot.waste_drawer_level == 91
+
+    assert await robot.get_activity_history() == []
+    insight = await robot.get_insight()
+    assert insight.cycle_history == []
+
+    assert await robot.start_cleaning()
+
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": {"sendLitterRobot4Command": "Error sending a command"}},
+        status=200,
+    )
+    assert not await robot._dispatch_command("12")
+    assert caplog.messages[-1] == "Error sending a command"
+
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "getLitterRobot4BySerial": {
+                    **LITTER_ROBOT_4_DATA,
+                    "DFILevelPercent": 99,
+                }
+            }
+        },
+    )
+    await robot.refresh()
+    assert robot.waste_drawer_level == 99
+
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "sendLitterRobot4Command": 'command "setClumpTime (0x02160007)" sent'
+            }
+        },
+    )
+    await robot.set_wait_time(7)
+    with pytest.raises(InvalidCommandException):
+        await robot.set_wait_time(-1)
 
 
 def test_robot_with_sleep_mode_time():
@@ -105,6 +200,8 @@ def test_robot_with_unknown_status():
 
 async def test_robot_with_drawer_full_status(mock_aioresponse):
     """Tests that a robot with a `unitStatus` of DF1/DF2 calls the activity endpoint."""
+    url = ROBOT_ENDPOINT % ROBOT_FULL_ID
+
     robot = await get_robot(ROBOT_FULL_ID)
     robot_status = LitterBoxStatus.DRAWER_FULL_1
     assert robot_status.minimum_cycles_left == 2
@@ -113,28 +210,20 @@ async def test_robot_with_drawer_full_status(mock_aioresponse):
     assert robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
 
     robot_status = LitterBoxStatus.DRAWER_FULL_2
+    mock_aioresponse.get(url, payload={**ROBOT_DATA, UNIT_STATUS: robot_status.value})
     assert robot_status.minimum_cycles_left == 1
-    responses = MockedResponses(robot_data={UNIT_STATUS: robot_status.value})
-    # with patch(
-    #     "pylitterbot.session.ClientSession.request",
-    #     side_effect=responses.mocked_requests_get,
-    # ):
-    #     await robot.refresh()
-    #     assert robot.status == robot_status
-    #     assert robot.is_waste_drawer_full
-    #     assert (
-    #         robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
-    #     )
+    await robot.refresh()
+    assert robot.status == robot_status
+    assert robot.is_waste_drawer_full
+    assert robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
 
-    #     robot_status = LitterBoxStatus.DRAWER_FULL
-    #     assert robot_status.minimum_cycles_left == 0
-    #     responses.robot_data = {UNIT_STATUS: robot_status.value}
-    #     await robot.refresh()
-    #     assert robot.status == robot_status
-    #     assert robot.is_waste_drawer_full
-    #     assert (
-    #         robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
-    #     )
+    robot_status = LitterBoxStatus.DRAWER_FULL
+    mock_aioresponse.get(url, payload={**ROBOT_DATA, UNIT_STATUS: robot_status.value})
+    assert robot_status.minimum_cycles_left == 0
+    await robot.refresh()
+    assert robot.status == robot_status
+    assert robot.is_waste_drawer_full
+    assert robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
 
     await robot._session.close()
 
@@ -165,6 +254,11 @@ async def test_dispatch_commands(mock_aioresponse, method_call, dispatch_command
     """Tests that the dispatch commands are sent as expected."""
     robot = await get_robot()
 
+    mock_aioresponse.post(
+        f"{ROBOT_ENDPOINT % robot.id}{LitterBoxCommand._ENDPOINT}",
+        status=200,
+        payload=COMMAND_RESPONSE,
+    )
     await getattr(robot, method_call.__name__)(*args)
     assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
         "command": f"{LitterBoxCommand._PREFIX}{dispatch_command}"
@@ -172,31 +266,43 @@ async def test_dispatch_commands(mock_aioresponse, method_call, dispatch_command
     await robot._session.close()
 
 
-async def test_other_commands(mock_aioresponse):
+async def test_other_commands(mock_aioresponse: aioresponses) -> None:
     """Tests that other various robot commands call as expected."""
     robot = await get_robot()
+    url = ROBOT_ENDPOINT % robot.id
 
-    # mock_aioresponse.get.reset_mock()
-    # await robot.refresh()
-    # mock_aioresponse.get.assert_called_once()
+    def patch_callback(url: URL, **kwargs):
+        return CallbackResult(payload={**robot._data, **kwargs.get("json")})
 
-    # NEW_NAME = "New Name"
-    # await robot.set_name(NEW_NAME)
-    # assert robot.name == NEW_NAME
+    mock_aioresponse.patch(url, callback=patch_callback)
+    NEW_NAME = "New Name"
+    await robot.set_name(NEW_NAME)
+    assert robot.name == NEW_NAME
 
-    # await robot.set_sleep_mode(False)
-    # assert mock_aioresponse.patch.call_args.kwargs.get("json") == {
-    #     "sleepModeEnable": False
-    # }
+    def patch_callback(url: URL, **kwargs):
+        assert kwargs["json"] == {"sleepModeEnable": False}
+        return CallbackResult(payload=robot._data)
 
-    # await robot.set_sleep_mode(True)
-    # json = mock_aioresponse.patch.call_args.kwargs.get("json")
-    # assert json.get("sleepModeEnable")
-    # assert json.get("sleepModeTime") == robot.sleep_mode_start_time.timestamp()
+    mock_aioresponse.patch(url, callback=patch_callback)
+    await robot.set_sleep_mode(False)
 
-    # assert robot.cycle_count > 0
-    # await robot.reset_waste_drawer()
-    # assert robot.cycle_count == 0
+    def patch_callback(url: URL, **kwargs):
+        json = kwargs["json"]
+        assert json.get("sleepModeEnable")
+        assert json.get("sleepModeTime") == robot.sleep_mode_start_time.timestamp()
+        return CallbackResult(payload={**robot._data, **json})
+
+    mock_aioresponse.patch(url, callback=patch_callback)
+    await robot.set_sleep_mode(True)
+
+    def patch_callback(url: URL, **kwargs):
+        json = kwargs["json"]
+        return CallbackResult(payload={**robot._data, **json})
+
+    mock_aioresponse.patch(url, callback=patch_callback)
+    assert robot.cycle_count > 0
+    await robot.reset_waste_drawer()
+    assert robot.cycle_count == 0
 
     history = await robot.get_activity_history(2)
     assert history
@@ -217,21 +323,22 @@ async def test_other_commands(mock_aioresponse):
 async def test_invalid_commands(mock_aioresponse, caplog: pytest.LogCaptureFixture):
     """Tests expected exceptions/responses for invalid commands."""
     robot = await get_robot()
+    url = f"{ROBOT_ENDPOINT % robot.id}{LitterBoxCommand._ENDPOINT}"
 
     with pytest.raises(InvalidCommandException):
         await robot.set_wait_time(12)
 
-    # assert await robot._dispatch_command("W12") is False
-    # assert mock_aioresponse.post.call_args.kwargs.get("json") == {
-    #     "command": f"{LitterBoxCommand._PREFIX}W12"
-    # }
+    mock_aioresponse.post(url, payload=INVALID_COMMAND_RESPONSE, status=500)
+    assert not await robot._dispatch_command("W12")
+    assert "Invalid command: <W12" in caplog.messages[-1]
 
-    # assert await robot._dispatch_command("BAD") is False
-    # assert "oops" in caplog.text
+    mock_aioresponse.post(url, payload={"oops": "no developerMessage"}, status=500)
+    assert not await robot._dispatch_command("BAD")
+    assert "oops" in caplog.messages[-1]
 
-    # with pytest.raises(InvalidCommandException):
-    #     await robot.set_sleep_mode(True, 12)
+    with pytest.raises(InvalidCommandException):
+        await robot.set_sleep_mode(True, 12)
 
-    # with pytest.raises(InvalidCommandException):
-    #     await robot.get_activity_history(0)
+    with pytest.raises(InvalidCommandException):
+        await robot.get_activity_history(0)
     await robot._session.close()
