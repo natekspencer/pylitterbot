@@ -255,13 +255,13 @@ async def test_dispatch_commands(mock_aioresponse, method_call, dispatch_command
     robot = await get_robot()
 
     mock_aioresponse.post(
-        f"{ROBOT_ENDPOINT % robot.id}{LitterBoxCommand._ENDPOINT}",
+        f"{ROBOT_ENDPOINT % robot.id}{LitterBoxCommand.ENDPOINT}",
         status=200,
         payload=COMMAND_RESPONSE,
     )
     await getattr(robot, method_call.__name__)(*args)
     assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
-        "command": f"{LitterBoxCommand._PREFIX}{dispatch_command}"
+        "command": f"{LitterBoxCommand.PREFIX}{dispatch_command}"
     }
     await robot._session.close()
 
@@ -289,11 +289,26 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
     def patch_callback(url: URL, **kwargs):
         json = kwargs["json"]
         assert json.get("sleepModeEnable")
-        assert json.get("sleepModeTime") == robot.sleep_mode_start_time.timestamp()
+        assert json.get("sleepModeTime") in (
+            robot.sleep_mode_start_time.timestamp(),
+            (robot.sleep_mode_start_time + timedelta(hours=24)).timestamp(),
+        )
         return CallbackResult(payload={**robot._data, **json})
 
     mock_aioresponse.patch(url, callback=patch_callback)
     await robot.set_sleep_mode(True)
+
+    def patch_callback(url: URL, **kwargs):
+        json = kwargs["json"]
+        assert json.get("sleepModeEnable")
+        assert json.get("sleepModeTime") in (
+            robot.sleep_mode_start_time.timestamp(),
+            (robot.sleep_mode_start_time + timedelta(hours=24)).timestamp(),
+        )
+        return CallbackResult(payload={**robot._data, **json})
+
+    mock_aioresponse.patch(url, callback=patch_callback)
+    await robot.set_sleep_mode(True, robot.sleep_mode_start_time.timetz())
 
     def patch_callback(url: URL, **kwargs):
         json = kwargs["json"]
@@ -323,7 +338,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
 async def test_invalid_commands(mock_aioresponse, caplog: pytest.LogCaptureFixture):
     """Tests expected exceptions/responses for invalid commands."""
     robot = await get_robot()
-    url = f"{ROBOT_ENDPOINT % robot.id}{LitterBoxCommand._ENDPOINT}"
+    url = f"{ROBOT_ENDPOINT % robot.id}{LitterBoxCommand.ENDPOINT}"
 
     with pytest.raises(InvalidCommandException):
         await robot.set_wait_time(12)

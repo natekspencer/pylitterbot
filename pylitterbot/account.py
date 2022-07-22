@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from urllib.parse import urljoin
 
-import jwt
 from aiohttp import ClientConnectorError, ClientResponseError, ClientSession
 
 from .exceptions import LitterRobotException, LitterRobotLoginException
@@ -17,7 +17,7 @@ from .robot import (
     LitterRobot4,
     Robot,
 )
-from .session import LitterRobotSession, urljoin
+from .session import LitterRobotSession
 from .utils import decode
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class Account:
     ) -> None:
         """Connect to the Litter-Robot API."""
         try:
-            if not self._session._token:
+            if not self._session.is_token_valid():
                 if username and password:
                     await self._session.login(username=username, password=password)
                 else:
@@ -68,8 +68,7 @@ class Account:
                 raise LitterRobotLoginException(
                     "Unable to login to Litter-Robot with the supplied credentials."
                 ) from ex
-            else:
-                raise LitterRobotException("Unable to login to Litter-Robot.") from ex
+            raise LitterRobotException("Unable to login to Litter-Robot.") from ex
         except ClientConnectorError as ex:
             raise LitterRobotException("Unable to reach the Litter-Robot api.") from ex
 
@@ -79,10 +78,11 @@ class Account:
 
     async def refresh_user(self) -> None:
         """Refresh the logged in user's info."""
-        resp = await self._session.get(
+        data = await self._session.get(
             urljoin(DEFAULT_ENDPOINT, "users"),
         )
-        self._user.update(resp.get("user"))
+        assert isinstance(data, dict)
+        self._user.update(data.get("user", {}))
 
     async def refresh_robots(self) -> None:
         """Get information about robots connected to the account."""
@@ -105,6 +105,7 @@ class Account:
             resp = await asyncio.gather(*all_robots)
 
             def update_or_create_robot(robot_data: dict, cls: type[Robot]) -> None:
+                # pylint: disable=protected-access
                 robot_object = next(
                     filter(
                         lambda robot: (robot.id == robot_data.get(cls._data_id)),

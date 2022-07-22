@@ -1,3 +1,6 @@
+"""pylitterbot exceptions"""
+
+
 class LitterRobotException(Exception):
     """
     General Litter-Robot exception.

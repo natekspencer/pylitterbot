@@ -1,11 +1,10 @@
+"""pylitterbot robots"""
 from __future__ import annotations
 
-import json
 import logging
-import warnings
 from abc import abstractmethod
 from datetime import datetime, time, timedelta, timezone
-from warnings import warn
+from json import dumps as json_dumps
 
 try:
     from zoneinfo import ZoneInfo
@@ -18,8 +17,6 @@ from .exceptions import InvalidCommandException, LitterRobotException
 from .models import LITTER_ROBOT_4_MODEL
 from .session import Session
 from .utils import (
-    DeprecatedClassMeta,
-    DeprecatedList,
     from_litter_robot_timestamp,
     round_time,
     send_deprecation_warning,
@@ -47,9 +44,7 @@ SLEEP_DURATION = timedelta(hours=SLEEP_DURATION_HOURS)
 
 
 # Deprecated, please use Robot.VALID_WAIT_TIMES
-VALID_WAIT_TIMES = DeprecatedList(
-    [3, 7, 15], old_name="VALID_WAIT_TIMES", new_name="Robot.VALID_WAIT_TIMES"
-)
+VALID_WAIT_TIMES = [3, 7, 15]
 
 
 class Robot:
@@ -71,11 +66,15 @@ class Robot:
     _command_power_off = LitterBoxCommand.POWER_OFF
     _command_power_on = LitterBoxCommand.POWER_ON
 
+    _minimum_cycles_left: int = MINIMUM_CYCLES_LEFT_DEFAULT
+    _sleep_mode_start_time: datetime | None = None
+    _sleep_mode_end_time: datetime | None = None
+
     def __init__(
         self,
-        id: str = None,
+        id: str = None,  # pylint:disable=invalid-name,redefined-builtin
         serial: str = None,
-        user_id: str = None,
+        user_id: str = None,  # pylint:disable=unused-argument
         name: str = None,
         session: Session = None,
         data: dict = None,
@@ -94,9 +93,7 @@ class Robot:
                 "An id or data dictionary is required to initilize a Litter-Robot."
             )
 
-        self._data = dict()
-        self._minimum_cycles_left = MINIMUM_CYCLES_LEFT_DEFAULT
-        self._sleep_mode_start_time = self._sleep_mode_end_time = None
+        self._data: dict = {}
 
         self._id = id
         self._name = name
@@ -158,9 +155,9 @@ class Robot:
         return int(self._data.get("DFICycleCount", 0))
 
     @property
-    def id(self) -> str:
+    def id(self) -> str:  # pylint:disable=invalid-name
         """Returns the id of the Litter-Robot."""
-        return self._id if self._id else self._data.get(self._data_id)
+        return self._id if self._id else self._data[self._data_id]
 
     @property
     @abstractmethod
@@ -264,7 +261,7 @@ class Robot:
 
     def _update_data(self, data: dict) -> None:
         """Saves the Litter-Robot info from a data dictionary."""
-        _LOGGER.debug("Robot data: %s", json.dumps(data))
+        _LOGGER.debug("Robot data: %s", json_dumps(data))
         self._data.update(data)
         self._parse_sleep_info()
         self._update_minimum_cycles_left()
@@ -285,14 +282,17 @@ class Robot:
 
     async def _get(self, subpath: str = "", **kwargs) -> dict | list[dict]:
         """Sends a GET request to the Litter-Robot API."""
+        assert self._session and self._path
         return await self._session.get(self._path + subpath, **kwargs)
 
-    async def _patch(self, subpath: str = "", json=None, **kwargs) -> dict:
+    async def _patch(self, subpath: str = "", json=None, **kwargs) -> dict | list[dict]:
         """Sends a PATCH request to the Litter-Robot API."""
+        assert self._session and self._path
         return await self._session.patch(self._path + subpath, json=json, **kwargs)
 
-    async def _post(self, subpath: str = "", json=None, **kwargs) -> dict:
+    async def _post(self, subpath: str = "", json=None, **kwargs) -> dict | list[dict]:
         """Sends a POST request to the Litter-Robot API."""
+        assert self._session and self._path
         return await self._session.post(self._path + subpath, json=json, **kwargs)
 
     @abstractmethod
@@ -352,7 +352,7 @@ class Robot:
         """Returns the activity history."""
 
     @abstractmethod
-    async def get_insight(self, days: int = 30, timezoneOffset: int = None) -> Insight:
+    async def get_insight(self, days: int = 30, timezone_offset: int = None) -> Insight:
         """Returns the insight data."""
 
 
@@ -363,7 +363,7 @@ class LitterRobot3(Robot):
 
     def __init__(
         self,
-        id: str = None,
+        id: str = None,  # pylint:disable=redefined-builtin
         serial: str = None,
         user_id: str = None,
         name: str = None,
@@ -413,7 +413,7 @@ class LitterRobot3(Robot):
         """Returns `True` if the Litter-Robot is currently "sleeping" and won't automatically perform a clean cycle."""
         return (
             self.sleep_mode_enabled
-            and int(self._data.get(SLEEP_MODE_ACTIVE)[1:3]) < SLEEP_DURATION_HOURS
+            and int(self._data[SLEEP_MODE_ACTIVE][1:3]) < SLEEP_DURATION_HOURS
         )
 
     @property
@@ -473,11 +473,13 @@ class LitterRobot3(Robot):
 
         # Handle older API sleep start time
         if self.sleep_mode_enabled and not start_time:
+            assert sleep_mode_active
             try:
                 [hours, minutes, seconds] = list(
                     map(int, sleep_mode_active[1:].split(":"))
                 )
                 # Round to the nearest minute to reduce "drift"
+                assert self.last_seen
                 start_time = round_time(
                     today_at_time(self.last_seen.timetz())
                     + (
@@ -506,8 +508,8 @@ class LitterRobot3(Robot):
         """Sends a command to the Litter-Robot."""
         try:
             await self._post(
-                LitterBoxCommand._ENDPOINT,
-                {"command": f"{LitterBoxCommand._PREFIX}{command}"},
+                LitterBoxCommand.ENDPOINT,
+                {"command": f"{LitterBoxCommand.PREFIX}{command}"},
             )
             return True
         except InvalidCommandException as ex:
@@ -517,6 +519,7 @@ class LitterRobot3(Robot):
     async def refresh(self) -> None:
         """Refresh the Litter-Robot's data from the API."""
         data = await self._get()
+        assert isinstance(data, dict)
         self._update_data(data)
 
     async def reset_settings(self) -> bool:
@@ -540,7 +543,7 @@ class LitterRobot3(Robot):
                 **(
                     {
                         SLEEP_MODE_TIME: (
-                            sleep_time := int(today_at_time(sleep_time).timestamp())
+                            new_sleep_time := int(today_at_time(sleep_time).timestamp())
                         )
                     }
                     if sleep_time
@@ -548,8 +551,9 @@ class LitterRobot3(Robot):
                 ),
             }
         )
+        assert isinstance(data, dict)
         self._update_data(data)
-        return sleep_time is None or self._data[SLEEP_MODE_TIME] == sleep_time
+        return sleep_time is None or self._data[SLEEP_MODE_TIME] == new_sleep_time
 
     async def set_wait_time(self, wait_time: int) -> bool:
         """Sets the wait time on the Litter-Robot."""
@@ -564,6 +568,7 @@ class LitterRobot3(Robot):
     async def set_name(self, name: str) -> bool:
         """Sets the Litter-Robot's name."""
         data = await self._patch(json={self._data_name: name})
+        assert isinstance(data, dict)
         self._update_data(data)
         return self.name == name
 
@@ -576,6 +581,7 @@ class LitterRobot3(Robot):
                 DRAWER_FULL_CYCLES: 0,
             }
         )
+        assert isinstance(data, dict)
         self._update_data(data)
         return self.waste_drawer_level == 0.0
 
@@ -585,28 +591,29 @@ class LitterRobot3(Robot):
             raise InvalidCommandException(
                 f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
             )
-
+        data = await self._get("/activity", params={"limit": limit})
+        assert isinstance(data, dict)
         return [
-            Activity(
-                from_litter_robot_timestamp(activity["timestamp"]),
-                LitterBoxStatus(activity[UNIT_STATUS]),
-            )
-            for activity in (await self._get("/activity", params={"limit": limit}))[
-                "activities"
-            ]
+            Activity(lr_timestamp, LitterBoxStatus(activity[UNIT_STATUS]))
+            for activity in data["activities"]
+            if (lr_timestamp := from_litter_robot_timestamp(activity["timestamp"]))
+            is not None
         ]
 
-    async def get_insight(self, days: int = 30, timezoneOffset: int = None) -> Insight:
+    async def get_insight(self, days: int = 30, timezone_offset: int = None) -> Insight:
         """Returns the insight data."""
         insight = await self._get(
             "/insights",
             params={
                 "days": days,
                 **(
-                    {} if timezoneOffset is None else {"timezoneOffset": timezoneOffset}
+                    {}
+                    if timezone_offset is None
+                    else {"timezoneOffset": timezone_offset}
                 ),
             },
         )
+        assert isinstance(insight, dict)
         return Insight(
             insight["totalCycles"],
             insight["averageCycles"],
@@ -629,7 +636,7 @@ LR4_STATUS_MAP = {
 }
 
 
-class LitterRobot4(Robot):
+class LitterRobot4(Robot):  # pylint:disable=abstract-method
     """Data and methods for interacting with a Litter-Robot 4 automatic, self-cleaning litter box."""
 
     VALID_WAIT_TIMES = [3, 5, 7, 15, 30]
@@ -650,7 +657,7 @@ class LitterRobot4(Robot):
 
     def __init__(
         self,
-        id: str = None,
+        id: str = None,  # pylint:disable=redefined-builtin
         serial: str = None,
         user_id: str = None,
         name: str = None,
@@ -722,9 +729,7 @@ class LitterRobot4(Robot):
     @property
     def status(self) -> LitterBoxStatus:
         """Returns the status of the Litter-Robot."""
-        return LR4_STATUS_MAP.get(
-            self._data.get("robotStatus"), LitterBoxStatus.UNKNOWN
-        )
+        return LR4_STATUS_MAP.get(self._data["robotStatus"], LitterBoxStatus.UNKNOWN)
 
     @property
     def status_code(self) -> str | None:
@@ -744,10 +749,10 @@ class LitterRobot4(Robot):
         """Parses the sleep info of a Litter-Robot."""
         tz_time = time(tzinfo=ZoneInfo(self._data.get("unitTimezone")))
         self._sleep_mode_start_time = today_at_time(tz_time) + timedelta(
-            minutes=self._data.get("panelSleepTime")
+            minutes=self._data.get("panelSleepTime", 0)
         )
         self._sleep_mode_end_time = today_at_time(tz_time) + timedelta(
-            minutes=self._data.get("panelWakeTime")
+            minutes=self._data.get("panelWakeTime", 0)
         )
 
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
@@ -775,6 +780,7 @@ class LitterRobot4(Robot):
                     "variables": {"serial": self.serial, "command": command, **kwargs},
                 }
             )
+            assert isinstance(data, dict)
             if "Error" in (
                 error := data.get("data", {}).get("sendLitterRobot4Command", "")
             ):
@@ -796,7 +802,8 @@ class LitterRobot4(Robot):
                 "variables": {"serial": self.serial},
             },
         )
-        self._update_data(data.get("data").get("getLitterRobot4BySerial"))
+        assert isinstance(data, dict)
+        self._update_data(data.get("data", {}).get("getLitterRobot4BySerial", {}))
 
     async def set_wait_time(self, wait_time: int) -> bool:
         """Sets the wait time on the Litter-Robot."""
@@ -806,7 +813,7 @@ class LitterRobot4(Robot):
             )
         return await self._dispatch_command(
             LitterRobot4Command.SET_CLUMP_TIME,
-            value=json.dumps({"clumpTime": wait_time}),
+            value=json_dumps({"clumpTime": wait_time}),
         )
 
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
@@ -814,7 +821,7 @@ class LitterRobot4(Robot):
         _LOGGER.warning("get_activity_history has not yet been implemented")
         return []
 
-    async def get_insight(self, days: int = 30, timezoneOffset: int = None) -> Insight:
+    async def get_insight(self, days: int = 30, timezone_offset: int = None) -> Insight:
         """Returns the insight data."""
         _LOGGER.warning("get_insight has not yet been implemented")
         return Insight(0, 0, [])

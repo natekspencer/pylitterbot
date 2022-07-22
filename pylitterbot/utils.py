@@ -24,8 +24,9 @@ def from_litter_robot_timestamp(
     so to get the UTC offset-aware datetime, we just append `+00:00` and
     call the `datetime.fromisoformat` method.
     """
-    if timestamp:
-        return datetime.fromisoformat(f"{timestamp.replace('Z','')}+00:00")
+    if not timestamp:
+        return None
+    return datetime.fromisoformat(f"{timestamp.replace('Z','')}+00:00")
 
 
 def utcnow() -> datetime:
@@ -33,83 +34,49 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def today_at_time(tm: time) -> datetime:
+def today_at_time(_time: time) -> datetime:
     """Return a datetime representing today at the passed in time."""
-    return datetime.combine(utcnow().astimezone(tm.tzinfo), tm)
+    return datetime.combine(utcnow().astimezone(_time.tzinfo), _time)
 
 
-def round_time(dt: datetime | None = None, round_to: int = 60) -> datetime:
+def round_time(_datetime: datetime | None = None, round_to: int = 60) -> datetime:
     """Round a datetime to the specified seconds or 1 minute if not specified."""
-    if not dt:
-        dt = utcnow()
+    if not _datetime:
+        _datetime = utcnow()
 
     return datetime.fromtimestamp(
-        (dt.timestamp() + round_to / 2) // round_to * round_to, dt.tzinfo
+        (_datetime.timestamp() + round_to / 2) // round_to * round_to, _datetime.tzinfo
     )
 
 
 def pluralize(word: str, count: int):
+    """Pluralize a word."""
     return f"{count} {word}{'s' if count != 1 else ''}"
 
 
 class DeprecatedClassMeta(type):  # pragma: no cover
-    def __new__(cls, name, bases, classdict, *args, **kwargs):
+    """Deprecated class meta."""
+
+    def __new__(
+        cls, name, bases, classdict, *args, **kwargs
+    ):  # pylint:disable=unused-argument
         alias = classdict.get("_DeprecatedClassMeta__alias")
         classdict["_DeprecatedClassMeta__alias"] = alias
         fixed_bases = tuple([])
         return super().__new__(cls, name, fixed_bases, classdict, *args, **kwargs)
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(cls, name: str) -> Any:
         send_deprecation_warning(
-            f"{self.__module__}.{self.__qualname__}",
-            f"{self._DeprecatedClassMeta__alias.__module__}.{self._DeprecatedClassMeta__alias.__qualname__}",
+            f"{cls.__module__}.{cls.__qualname__}",
+            f"{cls._DeprecatedClassMeta__alias.__module__}.{cls._DeprecatedClassMeta__alias.__qualname__}",
         )
-        return getattr(self._DeprecatedClassMeta__alias, name)
-
-
-# Hacky, but works?
-class DeprecatedList(list):  # pragma: no cover
-    """Deprecated List"""
-
-    def __init__(self, *args, old_name: str, new_name: str) -> None:
-        self._sent_warning = False
-        self._old_name = old_name
-        self._new_name = new_name
-        return super().__init__(*args)
-
-    def __send_deprecation_warning(self) -> None:
-        if not self._sent_warning:
-            self._sent_warning = True
-            send_deprecation_warning(self._old_name, self._new_name)
-
-    def __getitem__(self, i: int):
-        self.__send_deprecation_warning()
-        return super().__getitem__(i)
-
-    def __str__(self):
-        self.__send_deprecation_warning()
-        return super().__str__()
-
-    def __repr__(self):
-        self.__send_deprecation_warning()
-        return super().__repr__()
-
-    def __iter__(self):
-        self.__send_deprecation_warning()
-        return super().__iter__()
-
-    def __mul__(self, n: int):
-        self.__send_deprecation_warning()
-        return super().__mul__(n)
-
-    def __contains__(self, o: object):
-        self.__send_deprecation_warning()
-        return super().__contains__(o)
+        return getattr(cls._DeprecatedClassMeta__alias, name)
 
 
 def send_deprecation_warning(
     old_name: str, new_name: str | None = None
 ):  # pragma: no cover
+    """Log a deprecation warning message."""
     message = f"{old_name} has been deprecated{'' if new_name is None else f' in favor of {new_name}'} and will be removed in a future release"
     warn(
         message,

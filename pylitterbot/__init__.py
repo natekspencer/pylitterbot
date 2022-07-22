@@ -1,3 +1,4 @@
+"""pylitterbot module"""
 __version__ = "2022.7.0"
 
 from .account import Account

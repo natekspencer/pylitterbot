@@ -3,19 +3,17 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any
-from urllib.parse import urljoin
 
 import jwt
-from aiohttp import ClientResponse, ClientResponseError, ClientSession
-from typing_extensions import ParamSpec
+from aiohttp import ClientSession
 
-from .exceptions import InvalidCommandException, LitterRobotException
+from .exceptions import InvalidCommandException
 from .utils import decode
-
-_P = ParamSpec("P")
 
 
 class Session(ABC):
+    """Abstract session class."""
+
     def __init__(self, websession: ClientSession | None = None) -> None:
         """Initialize the session."""
         self._websession = websession
@@ -26,25 +24,23 @@ class Session(ABC):
         if not self._websession_provided and self._websession is not None:
             await self._websession.close()
 
-    async def get(self, path: str, **kwargs: _P.kwargs) -> dict | list[dict]:
+    async def get(self, path: str, **kwargs) -> dict | list[dict]:
         """Send a GET request to the specified path."""
         return await self.request("GET", path, **kwargs)
 
-    async def post(self, path: str, **kwargs: _P.kwargs) -> dict | list[dict]:
+    async def post(self, path: str, **kwargs) -> dict | list[dict]:
         """Send a POST request to the specified path."""
         return await self.request("POST", path, **kwargs)
 
-    async def patch(self, path: str, **kwargs: _P.kwargs) -> dict | list[dict]:
+    async def patch(self, path: str, **kwargs) -> dict | list[dict]:
         """Send a PATCH request to the specified path."""
         return await self.request("PATCH", path, **kwargs)
 
     @abstractmethod
-    async def async_get_access_token(self) -> str:
+    async def async_get_access_token(self, **kwargs) -> str | None:
         """Return a valid access token."""
 
-    async def request(
-        self, method: str, url: str, **kwargs: _P.kwargs
-    ) -> dict | list[dict]:
+    async def request(self, method: str, url: str, **kwargs) -> dict | list[dict]:
         """Make a request."""
         if self._websession is None:
             self._websession = ClientSession()
@@ -85,16 +81,17 @@ class LitterRobotSession(Session):
         super().__init__(websession=websession)
 
         self._token = token
-        self._custom_args = {}
+        self._custom_args: dict = {}
 
-    def generate_args(self, url: str, **kwargs: _P.kwargs) -> dict[str, Any]:
+    def generate_args(self, url: str, **kwargs) -> dict[str, Any]:
         """Generate args."""
-        for k, v in next(
-            (v for k, v in self._custom_args.items() if url.startswith(k)), {}
+        for key, value in next(
+            (value for key, value in self._custom_args.items() if url.startswith(key)),
+            {},
         ).items():
-            if (orig := kwargs.get(k)) is not None:
-                v = {**v, **orig} if isinstance(v, dict) else orig
-            kwargs[k] = v
+            if (orig := kwargs.get(key)) is not None:
+                value = {**value, **orig} if isinstance(value, dict) else orig
+            kwargs[key] = value
         return kwargs
 
     def is_token_valid(self) -> bool:
@@ -105,12 +102,13 @@ class LitterRobotSession(Session):
             jwt.decode(
                 self._token.get("access_token", self._token.get("idToken")),
                 options={"verify_signature": False, "verify_exp": True},
+                leeway=-30,
             )
         except jwt.ExpiredSignatureError:
             return False
         return True
 
-    async def async_get_access_token(self, **kwargs: _P.kwargs) -> str | None:
+    async def async_get_access_token(self, **kwargs) -> str | None:
         """Return a valid access token."""
         if self._token is None or not self.is_token_valid():
             return None
@@ -124,20 +122,23 @@ class LitterRobotSession(Session):
             headers={"x-api-key": decode(self.AUTH_ENDPOINT_KEY)},
             json={"email": username, "password": password},
         )
+        assert isinstance(token, dict)
 
-        self._token = await self.post(
+        data = await self.post(
             self.TOKEN_EXCHANGE_ENDPOINT,
             skip_auth=True,
             headers={"x-ios-bundle-identifier": "com.whisker.ios"},
             params={"key": decode(self.TOKEN_KEY)},
-            json={"returnSecureToken": True, "token": token.get("token")},
+            json={"returnSecureToken": True, "token": token["token"]},
         )
+        assert isinstance(data, dict)
+        self._token = data
 
     async def refresh_token(self) -> None:
         """Refresh the access token."""
         if self._token is None:
             return None
-        self._token = await self.post(
+        data = await self.post(
             self.TOKEN_REFRESH_ENDPOINT,
             skip_auth=True,
             headers={"x-ios-bundle-identifier": "com.whisker.ios"},
@@ -149,10 +150,10 @@ class LitterRobotSession(Session):
                 ),
             },
         )
+        assert isinstance(data, dict)
+        self._token = data
 
-    async def request(
-        self, method: str, url: str, **kwargs: _P.kwargs
-    ) -> dict | list[dict]:
+    async def request(self, method: str, url: str, **kwargs) -> dict | list[dict]:
         """Make a request."""
         kwargs = self.generate_args(url, **kwargs)
         if not kwargs.pop("skip_auth", False) and not self.is_token_valid():

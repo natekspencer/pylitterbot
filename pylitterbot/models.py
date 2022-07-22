@@ -1,3 +1,4 @@
+"""pylitterbot models"""
 LITTER_ROBOT_4_MODEL = """
 {
     unitId
