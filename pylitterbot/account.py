@@ -35,7 +35,7 @@ class Account:
             "headers": {"x-api-key": decode(DEFAULT_ENDPOINT_KEY)}
         }
         self._user: dict = {}
-        self._robots: set[Robot] = set()
+        self._robots: list[Robot] = []
 
     @property
     def user_id(self) -> str | None:
@@ -43,7 +43,7 @@ class Account:
         return self._user.get("userId")
 
     @property
-    def robots(self) -> set[Robot]:
+    def robots(self) -> list[Robot]:
         """Returns the set of robots for the logged in account."""
         return self._robots
 
@@ -74,6 +74,9 @@ class Account:
 
     async def disconnect(self) -> None:
         """Close the underlying session."""
+        for robot in self.robots:
+            if isinstance(robot, LitterRobot4):
+                await robot.unsubscribe_from_updates()
         await self._session.close()
 
     async def refresh_user(self) -> None:
@@ -86,7 +89,7 @@ class Account:
 
     async def refresh_robots(self) -> None:
         """Get information about robots connected to the account."""
-        robots: set[Robot] = set()
+        robots: list[Robot] = []
         try:
             all_robots = [
                 self._session.get(f"{DEFAULT_ENDPOINT}/users/{self.user_id}/robots"),
@@ -104,7 +107,9 @@ class Account:
             ]
             resp = await asyncio.gather(*all_robots)
 
-            def update_or_create_robot(robot_data: dict, cls: type[Robot]) -> None:
+            async def update_or_create_robot(
+                robot_data: dict, cls: type[Robot]
+            ) -> None:
                 # pylint: disable=protected-access
                 robot_object = next(
                     filter(
@@ -121,13 +126,15 @@ class Account:
                         session=self._session,
                         data=robot_data,
                     )
-                robots.add(robot_object)
+                    if isinstance(robot_object, LitterRobot4):
+                        await robot_object.subscribe_for_updates()
+                robots.append(robot_object)
 
             for robot_data in resp[0]:
-                update_or_create_robot(robot_data, LitterRobot3)
+                await update_or_create_robot(robot_data, LitterRobot3)
             for robot_data in resp[1].get("data").get("getLitterRobot4ByUser") or []:
-                update_or_create_robot(robot_data, LitterRobot4)
+                await update_or_create_robot(robot_data, LitterRobot4)
 
             self._robots = robots
-        except (LitterRobotException, ClientResponseError, ClientConnectorError):
-            _LOGGER.exception("Unable to retrieve your robots")
+        except (LitterRobotException, ClientResponseError, ClientConnectorError) as ex:
+            _LOGGER.error("Unable to retrieve your robots: %s", ex)

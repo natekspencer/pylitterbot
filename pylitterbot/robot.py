@@ -1,10 +1,16 @@
 """pylitterbot robots"""
 from __future__ import annotations
 
+import asyncio
 import logging
 from abc import abstractmethod
+from collections.abc import Callable
 from datetime import datetime, time, timedelta, timezone
 from json import dumps as json_dumps
+from json import loads as json_loads
+
+import aiohttp
+from aiohttp import ClientWebSocketResponse
 
 try:
     from zoneinfo import ZoneInfo
@@ -17,6 +23,7 @@ from .exceptions import InvalidCommandException, LitterRobotException
 from .models import LITTER_ROBOT_4_MODEL
 from .session import Session
 from .utils import (
+    encode,
     from_litter_robot_timestamp,
     round_time,
     send_deprecation_warning,
@@ -42,6 +49,7 @@ UNIT_STATUS = "unitStatus"
 SLEEP_DURATION_HOURS = 8
 SLEEP_DURATION = timedelta(hours=SLEEP_DURATION_HOURS)
 
+UPDATE_EVENT = "update"
 
 # Deprecated, please use Robot.VALID_WAIT_TIMES
 VALID_WAIT_TIMES = [3, 7, 15]
@@ -101,10 +109,11 @@ class Robot:
         self._session = session
 
         self._is_loaded = False
+        self._path: str | None = None
+        self._listeners: dict[str, list[Callable]] = {}
+
         if data:
             self._update_data(data)
-
-        self._path: str | None = None
 
     def __str__(self) -> str:
         return f"Name: {self.name}, Serial: {self.serial}, id: {self.id}"
@@ -267,6 +276,7 @@ class Robot:
         self._update_minimum_cycles_left()
 
         self._is_loaded = True
+        self.emit(UPDATE_EVENT)
 
     @abstractmethod
     def _parse_sleep_info(self) -> None:
@@ -354,6 +364,28 @@ class Robot:
     @abstractmethod
     async def get_insight(self, days: int = 30, timezone_offset: int = None) -> Insight:
         """Returns the insight data."""
+
+    def on(  # pylint:disable=invalid-name
+        self, event_name: str, callback: Callable
+    ) -> Callable:
+        """Register an event callback."""
+        listeners: list = self._listeners.setdefault(event_name, [])
+        listeners.append(callback)
+
+        def unsubscribe() -> None:
+            """Unsubscribe listeners."""
+            if callback in listeners:
+                listeners.remove(callback)
+
+        return unsubscribe
+
+    def emit(self, event_name: str, *args, **kwargs) -> None:
+        """Run all callbacks for an event."""
+        for listener in self._listeners.get(event_name, []):
+            try:
+                listener(*args, **kwargs)
+            except:  # pylint:disable=bare-except
+                pass
 
 
 class LitterRobot3(Robot):
@@ -533,7 +565,7 @@ class LitterRobot3(Robot):
             if not sleep_time:
                 sleep_time = (self.sleep_mode_start_time or utcnow()).timetz()
             else:
-                raise InvalidCommandException(
+                raise InvalidCommandException(  # pragma: no cover
                     "An attempt to turn on sleep mode was received with an invalid time. Check the time and try again."
                 )
 
@@ -675,6 +707,7 @@ class LitterRobot4(Robot):  # pylint:disable=abstract-method
         """
         super().__init__(id, serial, user_id, name, session, data)
         self._path = LR4_ENDPOINT
+        self._ws: ClientWebSocketResponse | None = None
 
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
@@ -825,6 +858,72 @@ class LitterRobot4(Robot):  # pylint:disable=abstract-method
         """Returns the insight data."""
         _LOGGER.warning("get_insight has not yet been implemented")
         return Insight(0, 0, [])
+
+    async def subscribe_for_updates(self) -> None:
+        """Open a web socket connection to receive updates."""
+        if self._session is None or self._session.websession is None:
+            _LOGGER.warning("Robot has no session")
+            return
+        authorization = await self._session.get_bearer_authorization()
+
+        async def ws_monitor() -> None:
+            assert self._ws
+            async for msg in self._ws:
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    data = json_loads(msg.data)
+                    if data["type"] == "data":
+                        self._update_data(
+                            data["payload"]["data"][
+                                "litterRobot4StateSubscriptionBySerial"
+                            ]
+                        )
+                    _LOGGER.debug(data)
+                elif msg.type == aiohttp.WSMsgType.ERROR:
+                    break
+            _LOGGER.debug("Web socket stopped")
+
+        try:
+            self._ws = await self._session.websession.ws_connect(
+                f"{self._path}/realtime",
+                params={
+                    "header": encode(
+                        {"Authorization": authorization, "host": "lr4.iothings.site"}
+                    ),
+                    "payload": encode({}),
+                },
+                headers={"sec-websocket-protocol": "graphql-ws"},
+            )
+            asyncio.create_task(ws_monitor())
+            await self._ws.send_json(
+                {
+                    "id": "test-id",
+                    "payload": {
+                        "data": json_dumps(
+                            {
+                                "query": f"""
+                                    subscription GetLR4($serial: String!) {{
+                                        litterRobot4StateSubscriptionBySerial(serial: $serial) {LITTER_ROBOT_4_MODEL}
+                                    }}
+                                """,
+                                "variables": {"serial": self.serial},
+                            }
+                        ),
+                        "extensions": {
+                            "authorization": {"Authorization": authorization}
+                        },
+                    },
+                    "type": "start",
+                }
+            )
+        except Exception as ex:  # pylint:disable=broad-except
+            _LOGGER.error(ex)
+
+    async def unsubscribe_from_updates(self) -> None:
+        """Stop the web socket."""
+        if self._ws is not None:
+            await self._ws.send_json({"id": "test-id", "type": "stop"})
+            await self._ws.close()
+            self._ws = None
 
 
 # FEEDER_ENDPOINT = "https://graphql.whisker.iothings.site/v1/graphql"

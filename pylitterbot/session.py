@@ -1,6 +1,7 @@
 """Session handling for litter-robot endpoint."""
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -8,7 +9,9 @@ import jwt
 from aiohttp import ClientSession
 
 from .exceptions import InvalidCommandException
-from .utils import decode
+from .utils import decode, utcnow
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class Session(ABC):
@@ -18,6 +21,11 @@ class Session(ABC):
         """Initialize the session."""
         self._websession = websession
         self._websession_provided = websession is not None
+
+    @property
+    def websession(self) -> ClientSession | None:
+        """Get websession."""
+        return self._websession
 
     async def close(self) -> None:
         """Close the session."""
@@ -40,6 +48,12 @@ class Session(ABC):
     async def async_get_access_token(self, **kwargs) -> str | None:
         """Return a valid access token."""
 
+    async def get_bearer_authorization(self) -> str | None:
+        """Get the bearer authorization."""
+        if (access_token := await self.async_get_access_token()) is None:
+            return None
+        return f"Bearer {access_token}"
+
     async def request(self, method: str, url: str, **kwargs) -> dict | list[dict]:
         """Make a request."""
         if self._websession is None:
@@ -48,14 +62,29 @@ class Session(ABC):
         if "headers" not in kwargs:
             kwargs["headers"] = {}
 
-        if (access_token := await self.async_get_access_token()) is not None:
-            kwargs["headers"]["authorization"] = f"Bearer {access_token}"
+        if (authorization := await self.get_bearer_authorization()) is not None:
+            kwargs["headers"]["authorization"] = authorization
 
         async with self._websession.request(method, url, **kwargs) as resp:
             if resp.status == 500:
                 if (data := await resp.json()).get("type") == "InvalidCommandException":
                     raise InvalidCommandException(data.get("developerMessage", data))
                 raise InvalidCommandException(data)
+            if resp.status == 401:
+                if authorization is not None:
+                    _LOGGER.error(
+                        "Now: %s, Expiration: %s, Difference: %s",
+                        (now := utcnow().timestamp()),
+                        (
+                            expires := jwt.decode(
+                                authorization,
+                                options={"verify_signature": False},
+                            )["exp"]
+                        ),
+                        expires - now,
+                    )
+                _LOGGER.error("Unauthorized")
+
             resp.raise_for_status()
             data = await resp.json()
             return data

@@ -1,22 +1,16 @@
-import re
-from unittest.mock import Mock, patch
+"""Test account module."""
+from unittest.mock import patch
 
 import pytest
-from aiohttp import ClientResponse, web
-from aiohttp.test_utils import TestClient
 from aioresponses import aioresponses
 
-from pylitterbot import Account
 from pylitterbot.exceptions import LitterRobotException, LitterRobotLoginException
 from pylitterbot.robot import LR4_ENDPOINT
 
 from .common import (
     LITTER_ROBOT_4_DATA,
     PASSWORD,
-    ROBOT_DATA,
-    ROBOT_FULL_DATA,
     USER_ID,
-    USER_RESPONSE,
     USERNAME,
     get_account,
     mock_client_connector_error,
@@ -30,7 +24,7 @@ async def test_account(mock_aioresponse: aioresponses) -> None:
     """Tests that an account is properly setup."""
     account = await get_account()
     assert account.user_id is None
-    assert account.robots == set()
+    assert account.robots == []
 
     with pytest.raises(LitterRobotLoginException):
         await account.connect()
@@ -64,7 +58,7 @@ async def test_account(mock_aioresponse: aioresponses) -> None:
         (mock_client_connector_error(), LitterRobotException),
     ],
 )
-async def test_account_connect_exceptions(mock_aioresponse, side_effect, exception):
+async def test_account_connect_exceptions(side_effect, exception):
     """Tests the expected outcome of various exceptions that may occur on `account.connect()`."""
     account = await get_account()
 

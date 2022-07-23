@@ -1,3 +1,4 @@
+"""Test enums module."""
 from pylitterbot.enums import LitterBoxStatus
 
 

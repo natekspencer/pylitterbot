@@ -1,18 +1,28 @@
 """Utilities module."""
 from __future__ import annotations
 
+import json
 import logging
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from datetime import datetime, time, timezone
 from typing import Any
 from warnings import warn
 
 _LOGGER = logging.getLogger(__name__)
 
+ENCODING = "utf-8"
+
 
 def decode(value: str) -> str:
     """Decode a value."""
-    return b64decode(value).decode("utf-8")
+    return b64decode(value).decode(ENCODING)
+
+
+def encode(value: str | dict) -> str:
+    """Encode a value."""
+    if isinstance(value, dict):
+        value = json.dumps(value)
+    return b64encode(value.encode(ENCODING)).decode(ENCODING)
 
 
 def from_litter_robot_timestamp(

@@ -1,9 +1,9 @@
+"""Common test module."""
 from __future__ import annotations
 
 from unittest.mock import Mock, patch
 
-import pytest
-from aiohttp import ClientConnectorError, ClientResponseError, web
+from aiohttp import ClientConnectorError, ClientResponseError, ClientWebSocketResponse
 
 from pylitterbot import Account
 from pylitterbot.robot import Robot
@@ -168,12 +168,18 @@ LITTER_ROBOT_4_DATA = {
 
 async def get_account(logged_in: bool = False, load_robots: bool = False) -> Account:
     """Gets an account that has the underlying API patched."""
-    account = Account()
-    if logged_in:
-        await account.connect(
-            username=USERNAME, password=PASSWORD, load_robots=load_robots
-        )
-    return account
+    with patch(
+        "pylitterbot.session.ClientSession.ws_connect",
+        return_value=ClientWebSocketResponse(
+            Mock(), Mock(), Mock(), Mock(), Mock(), Mock(), Mock(), Mock()
+        ),
+    ):
+        account = Account()
+        if logged_in:
+            await account.connect(
+                username=USERNAME, password=PASSWORD, load_robots=load_robots
+            )
+        return account
 
 
 async def get_robot(robot_id: str = ROBOT_ID) -> Robot:
@@ -190,6 +196,6 @@ def mock_client_response_error(status: int | None = None) -> ClientResponseError
     return ClientResponseError(Mock(), Mock(), status=status)
 
 
-def mock_client_connector_error(status: int | None = None) -> ClientConnectorError:
+def mock_client_connector_error() -> ClientConnectorError:
     """Returns a mocked `aiohttp.ClientConnectorError`."""
     return ClientConnectorError(Mock(), Mock())
