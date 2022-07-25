@@ -250,13 +250,8 @@ class Robot:
             _LOGGER.debug(
                 "%s updated: %s",
                 self.name,
-                diff.pretty()
-                if (
-                    diff := DeepDiff(
-                        self._data, data, ignore_order=True, report_repetition=True
-                    )
-                )
-                else "no changes detected",
+                DeepDiff(self._data, data, ignore_order=True, report_repetition=True)
+                or "no changes detected",
             )
 
         self._data.update(data)
