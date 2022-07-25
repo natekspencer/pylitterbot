@@ -2,8 +2,8 @@
 import asyncio
 import logging
 import random
-import string
 from datetime import datetime, time, timedelta, timezone
+from string import ascii_letters
 from unittest.mock import patch
 
 import pytest
@@ -12,21 +12,12 @@ from aioresponses import CallbackResult, aioresponses
 
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
-from pylitterbot.robot import (
-    DEFAULT_ENDPOINT,
-    EVENT_UPDATE,
-    LR4_ENDPOINT,
-    UNIT_STATUS,
-    LitterRobot3,
-    LitterRobot4,
-    Robot,
-)
-from pylitterbot.session import LitterRobotSession
+from pylitterbot.robot import DEFAULT_ENDPOINT, EVENT_UPDATE, LitterRobot3, Robot
+from pylitterbot.robot.litterrobot3 import UNIT_STATUS
 
 from .common import (
     COMMAND_RESPONSE,
     INVALID_COMMAND_RESPONSE,
-    LITTER_ROBOT_4_DATA,
     ROBOT_DATA,
     ROBOT_FULL_ID,
     ROBOT_ID,
@@ -78,111 +69,11 @@ def test_robot_setup():
     assert robot.waste_drawer_level == 50
 
 
-async def test_litter_robot_4_setup(
-    mock_aioresponse: aioresponses, caplog: pytest.LogCaptureFixture
-):
-    """Tests that a Litter-Robot 4 setup is successful and parses as expected."""
-    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)
-    await robot.subscribe_for_updates()
-
-    session = LitterRobotSession()
-    robot = LitterRobot4(session=session, data=LITTER_ROBOT_4_DATA)
-    await robot.subscribe_for_updates()
-    await robot.unsubscribe_from_updates()
-    assert str(robot) == "Name: Litter-Robot 4, Serial: LR4C000001, id: LR4ID"
-    assert robot.auto_offline_disabled
-    assert robot.clean_cycle_wait_time_minutes == 7
-    assert robot.cycle_capacity == 58
-    assert robot.cycle_count == 93
-    assert robot.cycles_after_drawer_full == 0
-    assert robot.device_type is None
-    assert not robot.did_notify_offline
-    assert robot.drawer_full_indicator_cycle_count == 0
-    assert not robot.is_drawer_full_indicator_triggered
-    assert robot.is_onboarded
-    assert not robot.is_sleeping
-    assert not robot.is_waste_drawer_full
-    assert robot.last_seen == datetime(
-        year=2022, month=7, day=20, minute=13, tzinfo=timezone.utc
-    )
-    assert robot.model == "Litter-Robot 4"
-    assert robot.name == "Litter-Robot 4"
-    assert robot.night_light_mode_enabled
-    assert not robot.panel_lock_enabled
-    assert robot.power_status == "AC"
-    assert robot.setup_date == datetime(
-        year=2022, month=7, day=16, hour=21, minute=40, second=50, tzinfo=timezone.utc
-    )
-    assert robot.status == LitterBoxStatus.READY
-    assert robot.status_code == LitterBoxStatus.READY.value
-    assert robot.status_text == LitterBoxStatus.READY.text
-    assert robot.waste_drawer_level == 91
-
-    assert await robot.get_activity_history() == []
-    insight = await robot.get_insight()
-    assert insight.cycle_history == []
-
-    assert await robot.start_cleaning()
-
-    mock_aioresponse.post(
-        LR4_ENDPOINT,
-        payload={"data": {"sendLitterRobot4Command": "Error sending a command"}},
-        status=200,
-    )
-    assert not await robot._dispatch_command("12")
-    assert caplog.messages[-1] == "Error sending a command"
-
-    mock_aioresponse.post(
-        LR4_ENDPOINT,
-        payload={
-            "data": {
-                "getLitterRobot4BySerial": {
-                    **LITTER_ROBOT_4_DATA,
-                    "DFILevelPercent": 99,
-                }
-            }
-        },
-    )
-    await robot.refresh()
-    assert robot.waste_drawer_level == 99
-
-    mock_aioresponse.post(
-        LR4_ENDPOINT,
-        payload={
-            "data": {
-                "sendLitterRobot4Command": 'command "setClumpTime (0x02160007)" sent'
-            }
-        },
-    )
-    await robot.set_wait_time(7)
-    with pytest.raises(InvalidCommandException):
-        await robot.set_wait_time(-1)
-
-
-def test_litter_robot_4_sleep_time(freezer):
-    """Tests that a Litter-Robot 4 parses sleep time as expected."""
-    freezer.move_to("2022-07-21 12:00:00")
-    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)
-    assert robot.sleep_mode_enabled
-    assert robot.sleep_mode_start_time
-    assert robot.sleep_mode_start_time.isoformat() == "2022-07-20T23:30:00-06:00"
-    assert robot.sleep_mode_end_time
-    assert robot.sleep_mode_end_time.isoformat() == "2022-07-21T07:30:00-06:00"
-
-    freezer.move_to("2022-07-23 12:00:00")
-    # robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)
-    assert robot.sleep_mode_enabled
-    assert robot.sleep_mode_start_time
-    assert robot.sleep_mode_start_time.isoformat() == "2022-07-24T23:30:00-06:00"
-    assert robot.sleep_mode_end_time
-    assert robot.sleep_mode_end_time.isoformat() == "2022-07-25T07:30:00-06:00"
-
-
 def test_robot_with_sleep_mode_time():
     """Tests that robot with `sleepModeTime` is setup correctly."""
     for hour in range(-12, 25, 12):
         with patch(
-            "pylitterbot.robot.utcnow",
+            "pylitterbot.utils.utcnow",
             return_value=datetime.now(timezone.utc) + timedelta(hours=hour),
         ):
             start_time = datetime.combine(
@@ -201,7 +92,7 @@ def test_robot_with_invalid_sleep_mode_active(caplog):
     robot = LitterRobot3(data={**ROBOT_DATA, "sleepModeActive": invalid_value})
     assert caplog.record_tuples == [
         (
-            "pylitterbot.robot",
+            "pylitterbot.robot.litterrobot3",
             logging.ERROR,
             f"Unable to parse sleep mode start time from value '{invalid_value}'",
         )
@@ -212,7 +103,7 @@ def test_robot_with_invalid_sleep_mode_active(caplog):
 def test_robot_with_unknown_status():
     """Tests that a robot with an unknown `unitStatus` is setup correctly."""
 
-    random_status = "_" + "".join(random.sample(string.ascii_letters, 3))
+    random_status = "_" + "".join(random.sample(ascii_letters, 3))
 
     robot = LitterRobot3(data={**ROBOT_DATA, "unitStatus": random_status})
     assert robot.status_code == random_status
