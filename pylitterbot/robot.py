@@ -8,6 +8,7 @@ from collections.abc import Callable
 from datetime import datetime, time, timedelta, timezone
 from json import dumps as json_dumps
 from json import loads as json_loads
+from uuid import uuid4
 
 import aiohttp
 from aiohttp import ClientWebSocketResponse
@@ -37,10 +38,6 @@ DEFAULT_ENDPOINT = "https://v2.api.whisker.iothings.site"
 DEFAULT_ENDPOINT_KEY = "cDduZE1vajYxbnBSWlA1Q1Z6OXY0VWowYkc3Njl4eTY3NThRUkJQYg=="
 LR4_ENDPOINT = "https://lr4.iothings.site/graphql"
 
-CYCLE_CAPACITY = "cycleCapacity"
-CYCLE_CAPACITY_DEFAULT = 30
-CYCLE_COUNT = "cycleCount"
-DRAWER_FULL_CYCLES = "cyclesAfterDrawerFull"
 MINIMUM_CYCLES_LEFT_DEFAULT = 3
 SLEEP_MODE_ACTIVE = "sleepModeActive"
 SLEEP_MODE_TIME = "sleepModeTime"
@@ -49,7 +46,7 @@ UNIT_STATUS = "unitStatus"
 SLEEP_DURATION_HOURS = 8
 SLEEP_DURATION = timedelta(hours=SLEEP_DURATION_HOURS)
 
-UPDATE_EVENT = "update"
+EVENT_UPDATE = "update"
 
 # Deprecated, please use Robot.VALID_WAIT_TIMES
 VALID_WAIT_TIMES = [3, 7, 15]
@@ -60,6 +57,10 @@ class Robot:
 
     VALID_WAIT_TIMES = [3, 7, 15]
 
+    _data_cycle_capacity = "cycleCapacity"
+    _data_cycle_capacity_default = 30
+    _data_cycle_count = "cycleCount"
+    _data_drawer_full_cycles = "cyclesAfterDrawerFull"
     _data_id = "litterRobotId"
     _data_name = "litterRobotNickname"
     _data_power_status = "powerStatus"
@@ -130,20 +131,21 @@ class Robot:
         """Returns the number of minutes after a cat uses the Litter-Robot to begin an automatic clean cycle."""
 
     @property
-    @abstractmethod
     def cycle_capacity(self) -> int:
         """Returns the cycle capacity of the Litter-Robot."""
+        return int(
+            self._data.get(self._data_cycle_capacity, self._data_cycle_capacity_default)
+        )
 
     @property
-    @abstractmethod
     def cycle_count(self) -> int:
         """Returns the cycle count since the last time the waste drawer was reset."""
+        return int(self._data.get(self._data_cycle_count, 0))
 
     @property
     def cycles_after_drawer_full(self) -> int:
         """Returns the cycles after the drawer is full."""
-        send_deprecation_warning("cycles_after_drawer_full")
-        return int(self._data.get(DRAWER_FULL_CYCLES, 0))
+        return int(self._data.get(self._data_drawer_full_cycles, 0))
 
     @property
     def device_type(self) -> str | None:
@@ -276,7 +278,7 @@ class Robot:
         self._update_minimum_cycles_left()
 
         self._is_loaded = True
-        self.emit(UPDATE_EVENT)
+        self.emit(EVENT_UPDATE)
 
     @abstractmethod
     def _parse_sleep_info(self) -> None:
@@ -425,15 +427,7 @@ class LitterRobot3(Robot):
         minimum_capacity = self.cycle_count + self._minimum_cycles_left
         if self._minimum_cycles_left < MINIMUM_CYCLES_LEFT_DEFAULT:
             return minimum_capacity
-        return max(
-            int(self._data.get(CYCLE_CAPACITY, CYCLE_CAPACITY_DEFAULT)),
-            minimum_capacity,
-        )
-
-    @property
-    def cycle_count(self) -> int:
-        """Returns the cycle count since the last time the waste drawer was reset."""
-        return int(self._data.get(CYCLE_COUNT, 0))
+        return max(super().cycle_capacity, minimum_capacity)
 
     @property
     def is_drawer_full_indicator_triggered(self) -> bool:
@@ -608,9 +602,9 @@ class LitterRobot3(Robot):
         """Resets the Litter-Robot's cycle counts and capacity."""
         data = await self._patch(
             json={
-                CYCLE_COUNT: 0,
-                CYCLE_CAPACITY: self.cycle_capacity,
-                DRAWER_FULL_CYCLES: 0,
+                self._data_cycle_count: 0,
+                self._data_cycle_capacity: self.cycle_capacity,
+                self._data_drawer_full_cycles: 0,
             }
         )
         assert isinstance(data, dict)
@@ -673,6 +667,9 @@ class LitterRobot4(Robot):  # pylint:disable=abstract-method
 
     VALID_WAIT_TIMES = [3, 5, 7, 15, 30]
 
+    _data_cycle_capacity = "DFINumberOfCycles"
+    _data_cycle_count = "odometerCleanCycles"
+    _data_drawer_full_cycles = "DFIFullCounter"
     _data_id = "unitId"
     _data_name = "name"
     _data_power_status = "unitPowerType"
@@ -708,21 +705,13 @@ class LitterRobot4(Robot):  # pylint:disable=abstract-method
         super().__init__(id, serial, user_id, name, session, data)
         self._path = LR4_ENDPOINT
         self._ws: ClientWebSocketResponse | None = None
+        self._ws_subscription_id: str | None = None
+        self._ws_last_received: datetime | None = None
 
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
         """Returns the number of minutes after a cat uses the Litter-Robot to begin an automatic clean cycle."""
         return self._data.get("cleanCycleWaitTime", 7)
-
-    @property
-    def cycle_capacity(self) -> int:
-        """Returns the cycle capacity of the Litter-Robot."""
-        return self._data.get("DFINumberOfCycles", CYCLE_CAPACITY_DEFAULT)
-
-    @property
-    def cycle_count(self) -> int:
-        """Returns the cycle count since the last time the waste drawer was reset."""
-        return self._data.get("odometerCleanCycles", 0)
 
     @property
     def is_drawer_full_indicator_triggered(self) -> bool:
@@ -757,11 +746,26 @@ class LitterRobot4(Robot):  # pylint:disable=abstract-method
     @property
     def sleep_mode_enabled(self) -> bool:
         """Returns `True` if sleep mode is enabled."""
-        return self._data.get("isPanelSleepMode", False)
+        sleep_schedule = self._data["weekdaySleepModeEnabled"]
+        return any(day["isEnabled"] for day in sleep_schedule.values())
+
+    @property
+    def sleep_mode_start_time(self) -> datetime | None:
+        """Returns the sleep mode start time, if any."""
+        self._revalidate_sleep_info()
+        return self._sleep_mode_start_time
+
+    @property
+    def sleep_mode_end_time(self) -> datetime | None:
+        """Returns the sleep mode end time, if any."""
+        self._revalidate_sleep_info()
+        return self._sleep_mode_end_time
 
     @property
     def status(self) -> LitterBoxStatus:
         """Returns the status of the Litter-Robot."""
+        if self.is_waste_drawer_full:
+            return LitterBoxStatus.DRAWER_FULL
         return LR4_STATUS_MAP.get(self._data["robotStatus"], LitterBoxStatus.UNKNOWN)
 
     @property
@@ -778,15 +782,42 @@ class LitterRobot4(Robot):  # pylint:disable=abstract-method
         """Returns the approximate waste drawer level."""
         return self._data.get("DFILevelPercent", 0)
 
+    def _revalidate_sleep_info(self) -> None:
+        """Revalidate sleep info."""
+        if (
+            self.sleep_mode_enabled
+            and (now := utcnow()) > (self._sleep_mode_start_time or now)
+            and now > (self._sleep_mode_end_time or now)
+        ):
+            self._parse_sleep_info()
+
     def _parse_sleep_info(self) -> None:
         """Parses the sleep info of a Litter-Robot."""
         tz_time = time(tzinfo=ZoneInfo(self._data.get("unitTimezone")))
-        self._sleep_mode_start_time = today_at_time(tz_time) + timedelta(
-            minutes=self._data.get("panelSleepTime", 0)
-        )
-        self._sleep_mode_end_time = today_at_time(tz_time) + timedelta(
-            minutes=self._data.get("panelWakeTime", 0)
-        )
+        sleep_schedule = self._data["weekdaySleepModeEnabled"]
+        if not any(sleep_schedule[day]["isEnabled"] for day in sleep_schedule):
+            self._sleep_mode_start_time = None
+            self._sleep_mode_end_time = None
+            return
+        for i in range(7):
+            if not (
+                schedule := sleep_schedule[
+                    (next_day := (today_at_time(tz_time) + timedelta(days=i))).strftime(
+                        "%A"
+                    )
+                ]
+            )["isEnabled"]:
+                continue
+            if (wake_time := schedule["wakeTime"]) < (
+                sleep_time := schedule["sleepTime"]
+            ):
+                self._sleep_mode_start_time = next_day - timedelta(
+                    minutes=1440 - sleep_time
+                )
+            else:
+                self._sleep_mode_start_time = next_day + timedelta(minutes=sleep_time)
+            self._sleep_mode_end_time = next_day + timedelta(minutes=wake_time)
+            return
 
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
         """Sends a command to the Litter-Robot."""
@@ -864,64 +895,100 @@ class LitterRobot4(Robot):  # pylint:disable=abstract-method
         if self._session is None or self._session.websession is None:
             _LOGGER.warning("Robot has no session")
             return
-        authorization = await self._session.get_bearer_authorization()
 
-        async def ws_monitor() -> None:
+        async def _authorization() -> str:
+            assert self._session
+            if not self._session.is_token_valid():
+                await self._session.refresh_token()
+            return await self._session.get_bearer_authorization()
+
+        async def _subscribe(send_stop: bool = False) -> None:
             assert self._ws
-            async for msg in self._ws:
-                if msg.type == aiohttp.WSMsgType.TEXT:
-                    data = json_loads(msg.data)
-                    if data["type"] == "data":
-                        self._update_data(
-                            data["payload"]["data"][
-                                "litterRobot4StateSubscriptionBySerial"
-                            ]
-                        )
-                    _LOGGER.debug(data)
-                elif msg.type == aiohttp.WSMsgType.ERROR:
-                    break
-            _LOGGER.debug("Web socket stopped")
+            if send_stop:
+                await self._ws.send_json(
+                    {"id": self._ws_subscription_id, "type": "stop"}
+                )
+            self._ws_subscription_id = str(uuid4())
+
+            await self._ws.send_json(
+                {
+                    "id": self._ws_subscription_id,
+                    "payload": {
+                        "data": json_dumps(
+                            {
+                                "query": f"""
+                                        subscription GetLR4($serial: String!) {{
+                                            litterRobot4StateSubscriptionBySerial(serial: $serial) {LITTER_ROBOT_4_MODEL}
+                                        }}
+                                    """,
+                                "variables": {"serial": self.serial},
+                            }
+                        ),
+                        "extensions": {
+                            "authorization": {"Authorization": await _authorization()}
+                        },
+                    },
+                    "type": "start",
+                }
+            )
+
+        async def _monitor() -> None:
+            assert self._ws
+            while True:
+                try:
+                    msg = await self._ws.receive(timeout=80)
+                    if msg.type in (
+                        aiohttp.WSMsgType.CLOSE,
+                        aiohttp.WSMsgType.CLOSING,
+                        aiohttp.WSMsgType.CLOSED,
+                    ):
+                        break
+                    self._ws_last_received = utcnow()
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        data = json_loads(msg.data)
+                        if (data_type := data["type"]) == "data":
+                            self._update_data(
+                                data["payload"]["data"][
+                                    "litterRobot4StateSubscriptionBySerial"
+                                ]
+                            )
+                        elif data_type == "error":
+                            _LOGGER.error(data)
+                        elif data_type not in ("start_ack", "ka", "complete"):
+                            _LOGGER.debug(data)
+                    elif msg.type == aiohttp.WSMsgType.ERROR:
+                        _LOGGER.error(msg)
+                        break
+                except asyncio.TimeoutError:
+                    _LOGGER.debug(
+                        "Web socket monitor did not receive a message in time"
+                    )
+                    await _subscribe(send_stop=True)
+            _LOGGER.debug("Web socket monitor stopped")
 
         try:
             self._ws = await self._session.websession.ws_connect(
                 f"{self._path}/realtime",
                 params={
                     "header": encode(
-                        {"Authorization": authorization, "host": "lr4.iothings.site"}
+                        {
+                            "Authorization": await _authorization(),
+                            "host": "lr4.iothings.site",
+                        }
                     ),
                     "payload": encode({}),
                 },
                 headers={"sec-websocket-protocol": "graphql-ws"},
             )
-            asyncio.create_task(ws_monitor())
-            await self._ws.send_json(
-                {
-                    "id": "test-id",
-                    "payload": {
-                        "data": json_dumps(
-                            {
-                                "query": f"""
-                                    subscription GetLR4($serial: String!) {{
-                                        litterRobot4StateSubscriptionBySerial(serial: $serial) {LITTER_ROBOT_4_MODEL}
-                                    }}
-                                """,
-                                "variables": {"serial": self.serial},
-                            }
-                        ),
-                        "extensions": {
-                            "authorization": {"Authorization": authorization}
-                        },
-                    },
-                    "type": "start",
-                }
-            )
+            asyncio.create_task(_monitor())
+            await _subscribe()
         except Exception as ex:  # pylint:disable=broad-except
             _LOGGER.error(ex)
 
     async def unsubscribe_from_updates(self) -> None:
         """Stop the web socket."""
         if self._ws is not None:
-            await self._ws.send_json({"id": "test-id", "type": "stop"})
+            await self._ws.send_json({"id": self._ws_subscription_id, "type": "stop"})
             await self._ws.close()
             self._ws = None
 

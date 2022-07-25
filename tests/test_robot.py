@@ -1,4 +1,5 @@
 """Test robot module."""
+import asyncio
 import logging
 import random
 import string
@@ -13,6 +14,7 @@ from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
 from pylitterbot.robot import (
     DEFAULT_ENDPOINT,
+    EVENT_UPDATE,
     LR4_ENDPOINT,
     UNIT_STATUS,
     LitterRobot3,
@@ -87,7 +89,6 @@ async def test_litter_robot_4_setup(
     robot = LitterRobot4(session=session, data=LITTER_ROBOT_4_DATA)
     await robot.subscribe_for_updates()
     await robot.unsubscribe_from_updates()
-    assert robot
     assert str(robot) == "Name: Litter-Robot 4, Serial: LR4C000001, id: LR4ID"
     assert robot.auto_offline_disabled
     assert robot.clean_cycle_wait_time_minutes == 7
@@ -112,11 +113,6 @@ async def test_litter_robot_4_setup(
     assert robot.setup_date == datetime(
         year=2022, month=7, day=16, hour=21, minute=40, second=50, tzinfo=timezone.utc
     )
-    assert not robot.sleep_mode_enabled
-    assert robot.sleep_mode_start_time
-    assert robot.sleep_mode_start_time.strftime("%H:%M") == "00:00"
-    assert robot.sleep_mode_end_time
-    assert robot.sleep_mode_end_time.strftime("%H:%M") == "00:00"
     assert robot.status == LitterBoxStatus.READY
     assert robot.status_code == LitterBoxStatus.READY.value
     assert robot.status_text == LitterBoxStatus.READY.text
@@ -161,6 +157,25 @@ async def test_litter_robot_4_setup(
     await robot.set_wait_time(7)
     with pytest.raises(InvalidCommandException):
         await robot.set_wait_time(-1)
+
+
+def test_litter_robot_4_sleep_time(freezer):
+    """Tests that a Litter-Robot 4 parses sleep time as expected."""
+    freezer.move_to("2022-07-21 12:00:00")
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)
+    assert robot.sleep_mode_enabled
+    assert robot.sleep_mode_start_time
+    assert robot.sleep_mode_start_time.isoformat() == "2022-07-20T23:30:00-06:00"
+    assert robot.sleep_mode_end_time
+    assert robot.sleep_mode_end_time.isoformat() == "2022-07-21T07:30:00-06:00"
+
+    freezer.move_to("2022-07-23 12:00:00")
+    # robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)
+    assert robot.sleep_mode_enabled
+    assert robot.sleep_mode_start_time
+    assert robot.sleep_mode_start_time.isoformat() == "2022-07-24T23:30:00-06:00"
+    assert robot.sleep_mode_end_time
+    assert robot.sleep_mode_end_time.isoformat() == "2022-07-25T07:30:00-06:00"
 
 
 def test_robot_with_sleep_mode_time():
@@ -367,3 +382,18 @@ async def test_invalid_commands(mock_aioresponse, caplog: pytest.LogCaptureFixtu
         await robot.get_activity_history(0)
     assert robot._session
     await robot._session.close()
+
+
+async def test_robot_update_event():
+    """Test robot emits an update event."""
+    robot = LitterRobot3(data=ROBOT_DATA)
+    assert not robot._listeners
+    event = asyncio.Event()
+    unsub = robot.on(EVENT_UPDATE, event.set)
+
+    assert not event.is_set()
+    robot._update_data({**ROBOT_DATA, "foo": "bar"})
+    assert event.is_set()
+
+    unsub()
+    assert not robot._listeners[EVENT_UPDATE]
