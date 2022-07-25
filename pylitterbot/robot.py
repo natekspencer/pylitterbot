@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import aiohttp
 from aiohttp import ClientWebSocketResponse
+from deepdiff import DeepDiff
 
 try:
     from zoneinfo import ZoneInfo
@@ -272,7 +273,14 @@ class Robot:
 
     def _update_data(self, data: dict) -> None:
         """Saves the Litter-Robot info from a data dictionary."""
-        _LOGGER.debug("Robot data: %s", json_dumps(data))
+        if self._is_loaded:
+            _LOGGER.debug(
+                "Robot data: %s",
+                DeepDiff(
+                    self._data, data, ignore_order=True, report_repetition=True
+                ).pretty(),
+            )
+
         self._data.update(data)
         self._parse_sleep_info()
         self._update_minimum_cycles_left()
