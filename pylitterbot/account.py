@@ -60,7 +60,7 @@ class Account:
 
             if load_robots:
                 await self.refresh_user()
-                await self.refresh_robots(subscribe_for_updates)
+                await self.load_robots(subscribe_for_updates)
         except ClientResponseError as ex:
             if ex.status == 401:
                 raise LitterRobotLoginException(
@@ -85,7 +85,7 @@ class Account:
         assert isinstance(data, dict)
         self._user.update(data.get("user", {}))
 
-    async def refresh_robots(self, subscribe_for_updates: bool = False) -> None:
+    async def load_robots(self, subscribe_for_updates: bool = False) -> None:
         """Get information about robots connected to the account."""
         robots: list[Robot] = []
         try:
@@ -136,3 +136,10 @@ class Account:
             self._robots = robots
         except (LitterRobotException, ClientResponseError, ClientConnectorError) as ex:
             _LOGGER.error("Unable to retrieve your robots: %s", ex)
+
+    async def refresh_robots(self) -> None:
+        """Refresh known robots."""
+        try:
+            await asyncio.gather(*[robot.refresh() for robot in self.robots])
+        except (LitterRobotException, ClientResponseError, ClientConnectorError) as ex:
+            _LOGGER.error("Unable to refresh your robots: %s", ex)

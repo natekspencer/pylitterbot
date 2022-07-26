@@ -69,7 +69,7 @@ class DeprecatedClassMeta(type):  # pragma: no cover
 
     def __new__(
         cls, name, bases, classdict, *args, **kwargs
-    ):  # pylint:disable=unused-argument
+    ):  # pylint: disable=unused-argument
         alias = classdict.get("_DeprecatedClassMeta__alias")
         classdict["_DeprecatedClassMeta__alias"] = alias
         fixed_bases = tuple([])

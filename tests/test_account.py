@@ -10,6 +10,9 @@ from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
 from .common import (
     LITTER_ROBOT_4_DATA,
     PASSWORD,
+    ROBOT_ENDPOINT,
+    ROBOT_FULL_ID,
+    ROBOT_ID,
     USER_ID,
     USERNAME,
     get_account,
@@ -35,11 +38,22 @@ async def test_account(mock_aioresponse: aioresponses) -> None:
 
     mock_aioresponse.post(
         LR4_ENDPOINT,
-        status=200,
         payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_DATA]}},
+        repeat=True,
     )
+    await account.load_robots()
+    assert len(account.robots) == 3
+
+    mock_aioresponse.get(ROBOT_ENDPOINT % ROBOT_ID, payload={})
+    mock_aioresponse.get(ROBOT_ENDPOINT % ROBOT_FULL_ID, payload={})
     await account.refresh_robots()
     assert len(account.robots) == 3
+
+    with patch(
+        "pylitterbot.session.Session.request",
+        side_effect=mock_client_response_error(),
+    ):
+        await account.load_robots()
 
     with patch(
         "pylitterbot.session.Session.request",

@@ -31,7 +31,7 @@ class LitterRobot3(LitterRobot):
 
     def __init__(
         self,
-        id: str = None,  # pylint:disable=redefined-builtin
+        id: str = None,  # pylint: disable=redefined-builtin
         serial: str = None,
         user_id: str = None,
         name: str = None,

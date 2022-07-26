@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from abc import abstractmethod
 from collections.abc import Callable
 
 from deepdiff import DeepDiff
@@ -23,9 +24,9 @@ class Robot:
 
     def __init__(
         self,
-        id: str = None,  # pylint:disable=invalid-name,redefined-builtin
+        id: str = None,  # pylint: disable=invalid-name,redefined-builtin
         serial: str = None,
-        user_id: str = None,  # pylint:disable=unused-argument
+        user_id: str = None,  # pylint: disable=unused-argument
         name: str = None,
         session: Session = None,
         data: dict = None,
@@ -59,7 +60,7 @@ class Robot:
             self._update_data(data)
 
     @property
-    def id(self) -> str:  # pylint:disable=invalid-name
+    def id(self) -> str:  # pylint: disable=invalid-name
         """Returns the id of the Litter-Robot."""
         return self._id if self._id else self._data[self._data_id]
 
@@ -78,10 +79,10 @@ class Robot:
         for listener in self._listeners.get(event_name, []):
             try:
                 listener(*args, **kwargs)
-            except:  # pylint:disable=bare-except
+            except:  # pragma: no cover, pylint: disable=bare-except
                 pass
 
-    def on(  # pylint:disable=invalid-name
+    def on(  # pylint: disable=invalid-name
         self, event_name: str, callback: Callable
     ) -> Callable:
         """Register an event callback."""
@@ -94,6 +95,10 @@ class Robot:
                 listeners.remove(callback)
 
         return unsubscribe
+
+    @abstractmethod
+    async def refresh(self) -> None:
+        """Refresh the robot data from the API."""
 
     def _update_data(self, data: dict) -> None:
         """Saves the robot info from a data dictionary."""

@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from aiohttp import ClientConnectorError, ClientResponseError, ClientWebSocketResponse
 
 from pylitterbot import Account, LitterRobot
+from pylitterbot.robot.litterrobot3 import DEFAULT_ENDPOINT
 
 USERNAME = "username@username.com"
 PASSWORD = "password"
@@ -71,6 +72,9 @@ ROBOT_FULL_DATA = {
     "isOnboarded": True,
     "setupDate": "2021-01-01T00:00:00.000000",
 }
+
+ROBOT_ENDPOINT = f"{DEFAULT_ENDPOINT}/users/{USER_ID}/robots/%s"
+
 
 COMMAND_RESPONSE = {
     "_developerMessage": "Command: <COMMAND> posted to litterRobotId: <LR-ID>",

@@ -34,7 +34,7 @@ LR4_STATUS_MAP = {
 }
 
 
-class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
+class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     """Data and methods for interacting with a Litter-Robot 4 automatic, self-cleaning litter box."""
 
     VALID_WAIT_TIMES = [3, 5, 7, 15, 30]
@@ -58,7 +58,7 @@ class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
 
     def __init__(
         self,
-        id: str = None,  # pylint:disable=redefined-builtin
+        id: str = None,  # pylint: disable=redefined-builtin
         serial: str = None,
         user_id: str = None,
         name: str = None,
@@ -349,7 +349,7 @@ class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
             )
             asyncio.create_task(_monitor())
             await _subscribe()
-        except Exception as ex:  # pylint:disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except
             _LOGGER.error(ex)
 
     async def unsubscribe_from_updates(self) -> None:

@@ -223,10 +223,6 @@ class LitterRobot(Robot):
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
         """Sends a command to the Litter-Robot."""
 
-    @abstractmethod
-    async def refresh(self) -> None:
-        """Refresh the Litter-Robot's data from the API."""
-
     async def start_cleaning(self) -> bool:
         """Starts a cleaning cycle."""
         return await self._dispatch_command(self._command_clean)

@@ -1,4 +1,5 @@
 """Test litterrobot4 module."""
+# pylint: disable=protected-access
 from datetime import datetime, timezone
 
 import pytest
@@ -24,14 +25,18 @@ async def test_litter_robot_4_setup(
     await robot.subscribe_for_updates()
     await robot.unsubscribe_from_updates()
     assert str(robot) == "Name: Litter-Robot 4, Serial: LR4C000001, id: LR4ID"
-    assert robot.auto_offline_disabled
+    with pytest.warns(DeprecationWarning):
+        assert robot.auto_offline_disabled
     assert robot.clean_cycle_wait_time_minutes == 7
     assert robot.cycle_capacity == 58
     assert robot.cycle_count == 93
     assert robot.cycles_after_drawer_full == 0
-    assert robot.device_type is None
-    assert not robot.did_notify_offline
-    assert robot.drawer_full_indicator_cycle_count == 0
+    with pytest.warns(DeprecationWarning):
+        assert robot.device_type is None
+    with pytest.warns(DeprecationWarning):
+        assert not robot.did_notify_offline
+    with pytest.warns(DeprecationWarning):
+        assert robot.drawer_full_indicator_cycle_count == 0
     assert not robot.is_drawer_full_indicator_triggered
     assert robot.is_onboarded
     assert not robot.is_sleeping
@@ -91,6 +96,9 @@ async def test_litter_robot_4_setup(
     await robot.set_wait_time(7)
     with pytest.raises(InvalidCommandException):
         await robot.set_wait_time(-1)
+
+    assert robot._session
+    await robot._session.close()
 
 
 def test_litter_robot_4_sleep_time(freezer):
