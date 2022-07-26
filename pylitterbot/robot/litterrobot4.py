@@ -165,18 +165,12 @@ class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
 
     def _parse_sleep_info(self) -> None:
         """Parses the sleep info of a Litter-Robot."""
-        if not self.sleep_mode_enabled:
-            self._sleep_mode_start_time = None
-            self._sleep_mode_end_time = None
-            return
-
+        start = end = None
         now = datetime.now(ZoneInfo(self._data["unitTimezone"]))
         sleep_schedule = self._data["weekdaySleepModeEnabled"]
-
-        def _mapper(idx):
+        for idx in range(0, 8):
             day = now + timedelta(days=idx)
-            schedule = sleep_schedule[day.strftime("%A")]
-            if schedule["isEnabled"]:
+            if (schedule := sleep_schedule[day.strftime("%A")])["isEnabled"]:
                 start_of_day = datetime.combine(day, time(), day.tzinfo)
                 if (wake_time := schedule["wakeTime"]) < (
                     sleep_time := schedule["sleepTime"]
@@ -184,24 +178,13 @@ class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
                     start = start_of_day - timedelta(minutes=1440 - sleep_time)
                 else:
                     start = start_of_day + timedelta(minutes=sleep_time)
-                end = start_of_day + timedelta(minutes=wake_time)
-                return (start, end)
-            return None
-
-        schedule = map(_mapper, range(0, 8))
-
-        def get_next():
-            return next(
-                (start_end for start_end in schedule if start_end), (None, None)
-            )
-
-        self._sleep_mode_start_time, self._sleep_mode_end_time = get_next()
-        assert self._sleep_mode_start_time and self._sleep_mode_end_time
-        if now > max(self._sleep_mode_start_time, self._sleep_mode_end_time):
-            self._sleep_mode_start_time, next_end = get_next()
-            assert self._sleep_mode_start_time
-            if now > self._sleep_mode_start_time:
-                self._sleep_mode_end_time = next_end
+                if end is None or now > start:
+                    end = start_of_day + timedelta(minutes=wake_time)
+                if now > max(start, end):
+                    continue
+                break
+        self._sleep_mode_start_time = start
+        self._sleep_mode_end_time = end
 
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
         """Sends a command to the Litter-Robot."""
