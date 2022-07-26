@@ -42,7 +42,11 @@ class Account:
         return self._robots
 
     async def connect(
-        self, username: str = None, password: str = None, load_robots: bool = False
+        self,
+        username: str = None,
+        password: str = None,
+        load_robots: bool = False,
+        subscribe_for_updates: bool = False,
     ) -> None:
         """Connect to the Litter-Robot API."""
         try:
@@ -56,7 +60,7 @@ class Account:
 
             if load_robots:
                 await self.refresh_user()
-                await self.refresh_robots()
+                await self.refresh_robots(subscribe_for_updates)
         except ClientResponseError as ex:
             if ex.status == 401:
                 raise LitterRobotLoginException(
@@ -81,7 +85,7 @@ class Account:
         assert isinstance(data, dict)
         self._user.update(data.get("user", {}))
 
-    async def refresh_robots(self) -> None:
+    async def refresh_robots(self, subscribe_for_updates: bool = False) -> None:
         """Get information about robots connected to the account."""
         robots: list[Robot] = []
         try:
@@ -120,7 +124,7 @@ class Account:
                         session=self._session,
                         data=robot_data,
                     )
-                    if isinstance(robot_object, LitterRobot4):
+                    if subscribe_for_updates and isinstance(robot_object, LitterRobot4):
                         await robot_object.subscribe_for_updates()
                 robots.append(robot_object)
 

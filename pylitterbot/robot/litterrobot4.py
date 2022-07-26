@@ -168,7 +168,7 @@ class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
         start = end = None
         now = datetime.now(ZoneInfo(self._data["unitTimezone"]))
         sleep_schedule = self._data["weekdaySleepModeEnabled"]
-        for idx in range(0, 8):
+        for idx in range(-7, 8):
             day = now + timedelta(days=idx)
             if (schedule := sleep_schedule[day.strftime("%A")])["isEnabled"]:
                 start_of_day = datetime.combine(day, time(), day.tzinfo)

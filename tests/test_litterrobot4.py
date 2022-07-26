@@ -109,4 +109,4 @@ def test_litter_robot_4_sleep_time(freezer):
     assert robot.sleep_mode_start_time
     assert robot.sleep_mode_start_time.isoformat() == "2022-07-24T23:30:00-06:00"
     assert robot.sleep_mode_end_time
-    assert robot.sleep_mode_end_time.isoformat() == "2022-07-25T07:30:00-06:00"
+    assert robot.sleep_mode_end_time.isoformat() == "2022-07-22T07:30:00-06:00"
