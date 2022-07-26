@@ -165,10 +165,15 @@ class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
 
     def _parse_sleep_info(self) -> None:
         """Parses the sleep info of a Litter-Robot."""
+        if not self.sleep_mode_enabled:
+            self._sleep_mode_start_time = None
+            self._sleep_mode_end_time = None
+            return
+
         now = datetime.now(ZoneInfo(self._data["unitTimezone"]))
         sleep_schedule = self._data["weekdaySleepModeEnabled"]
 
-        def mapper(idx):
+        def _mapper(idx):
             day = now + timedelta(days=idx)
             schedule = sleep_schedule[day.strftime("%A")]
             if schedule["isEnabled"]:
@@ -182,13 +187,17 @@ class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
                 end = start_of_day + timedelta(minutes=wake_time)
                 return (start, end)
 
-        schedule = map(mapper, range(0, 8))
+        schedule = map(_mapper, range(0, 8))
         get_next = lambda: next(
             (start_end for start_end in schedule if start_end), (None, None)
         )
         self._sleep_mode_start_time, self._sleep_mode_end_time = get_next()
         if now > max(self._sleep_mode_start_time, self._sleep_mode_end_time):
-            self._sleep_mode_start_time, _ = get_next()
+            next_start, next_end = get_next()
+            if self._sleep_mode_start_time > self._sleep_mode_end_time:
+                self._sleep_mode_end_time = next_end
+            else:
+                self._sleep_mode_start_time = next_start
 
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
         """Sends a command to the Litter-Robot."""
