@@ -147,11 +147,6 @@ class LitterRobot(Robot):
         return self._data.get(self._data_power_status)
 
     @property
-    def serial(self) -> str | None:
-        """Returns the serial of the Litter-Robot, if any."""
-        return self._serial if self._serial else self._data.get(self._data_serial)
-
-    @property
     def setup_date(self) -> datetime | None:
         """Returns the datetime the Litter-Robot was onboarded, if any."""
         return from_litter_robot_timestamp(self._data.get(self._data_setup_date))

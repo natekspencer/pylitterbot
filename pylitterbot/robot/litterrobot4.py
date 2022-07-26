@@ -165,31 +165,30 @@ class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
 
     def _parse_sleep_info(self) -> None:
         """Parses the sleep info of a Litter-Robot."""
-        tz_time = time(tzinfo=ZoneInfo(self._data.get("unitTimezone")))
+        now = datetime.now(ZoneInfo(self._data["unitTimezone"]))
         sleep_schedule = self._data["weekdaySleepModeEnabled"]
-        if not any(sleep_schedule[day]["isEnabled"] for day in sleep_schedule):
-            self._sleep_mode_start_time = None
-            self._sleep_mode_end_time = None
-            return
-        for i in range(7):
-            if not (
-                schedule := sleep_schedule[
-                    (next_day := (today_at_time(tz_time) + timedelta(days=i))).strftime(
-                        "%A"
-                    )
-                ]
-            )["isEnabled"]:
-                continue
-            if (wake_time := schedule["wakeTime"]) < (
-                sleep_time := schedule["sleepTime"]
-            ):
-                self._sleep_mode_start_time = next_day - timedelta(
-                    minutes=1440 - sleep_time
-                )
-            else:
-                self._sleep_mode_start_time = next_day + timedelta(minutes=sleep_time)
-            self._sleep_mode_end_time = next_day + timedelta(minutes=wake_time)
-            return
+
+        def mapper(idx):
+            day = now + timedelta(days=idx)
+            schedule = sleep_schedule[day.strftime("%A")]
+            if schedule["isEnabled"]:
+                start_of_day = datetime.combine(day, time(), day.tzinfo)
+                if (wake_time := schedule["wakeTime"]) < (
+                    sleep_time := schedule["sleepTime"]
+                ):
+                    start = start_of_day - timedelta(minutes=1440 - sleep_time)
+                else:
+                    start = start_of_day + timedelta(minutes=sleep_time)
+                end = start_of_day + timedelta(minutes=wake_time)
+                return (start, end)
+
+        schedule = map(mapper, range(0, 8))
+        get_next = lambda: next(
+            (start_end for start_end in schedule if start_end), (None, None)
+        )
+        self._sleep_mode_start_time, self._sleep_mode_end_time = get_next()
+        if now > max(self._sleep_mode_start_time, self._sleep_mode_end_time):
+            self._sleep_mode_start_time, _ = get_next()
 
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
         """Sends a command to the Litter-Robot."""

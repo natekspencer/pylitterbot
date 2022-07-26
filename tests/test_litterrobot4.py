@@ -95,15 +95,15 @@ async def test_litter_robot_4_setup(
 
 def test_litter_robot_4_sleep_time(freezer):
     """Tests that a Litter-Robot 4 parses sleep time as expected."""
-    freezer.move_to("2022-07-21 12:00:00")
+    freezer.move_to("2022-07-21 12:00:00-06:00")
     robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)
     assert robot.sleep_mode_enabled
     assert robot.sleep_mode_start_time
-    assert robot.sleep_mode_start_time.isoformat() == "2022-07-20T23:30:00-06:00"
+    assert robot.sleep_mode_start_time.isoformat() == "2022-07-21T23:30:00-06:00"
     assert robot.sleep_mode_end_time
     assert robot.sleep_mode_end_time.isoformat() == "2022-07-21T07:30:00-06:00"
 
-    freezer.move_to("2022-07-23 12:00:00")
+    freezer.move_to("2022-07-23 12:00:00-06:00")
     # robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)
     assert robot.sleep_mode_enabled
     assert robot.sleep_mode_start_time
