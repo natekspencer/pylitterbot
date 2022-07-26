@@ -12,8 +12,13 @@ from aioresponses import CallbackResult, aioresponses
 
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
-from pylitterbot.robot import DEFAULT_ENDPOINT, EVENT_UPDATE, LitterRobot, LitterRobot3
-from pylitterbot.robot.litterrobot3 import UNIT_STATUS
+from pylitterbot.robot import EVENT_UPDATE
+from pylitterbot.robot.litterrobot3 import (
+    DEFAULT_ENDPOINT,
+    UNIT_STATUS,
+    LitterRobot,
+    LitterRobot3,
+)
 
 from .common import (
     COMMAND_RESPONSE,

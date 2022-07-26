@@ -8,15 +8,9 @@ from urllib.parse import urljoin
 from aiohttp import ClientConnectorError, ClientResponseError, ClientSession
 
 from .exceptions import LitterRobotException, LitterRobotLoginException
-from .robot import (
-    DEFAULT_ENDPOINT,
-    DEFAULT_ENDPOINT_KEY,
-    LITTER_ROBOT_4_MODEL,
-    LR4_ENDPOINT,
-    LitterRobot3,
-    LitterRobot4,
-    Robot,
-)
+from .robot import Robot
+from .robot.litterrobot3 import DEFAULT_ENDPOINT, DEFAULT_ENDPOINT_KEY, LitterRobot3
+from .robot.litterrobot4 import LITTER_ROBOT_4_MODEL, LR4_ENDPOINT, LitterRobot4
 from .session import LitterRobotSession
 from .utils import decode
 

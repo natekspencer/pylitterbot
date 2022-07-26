@@ -8,7 +8,7 @@ from datetime import datetime, time
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
 from ..utils import from_litter_robot_timestamp, send_deprecation_warning
-from .robot import Robot
+from . import Robot
 
 _LOGGER = logging.getLogger(__name__)
 

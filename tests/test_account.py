@@ -5,7 +5,7 @@ import pytest
 from aioresponses import aioresponses
 
 from pylitterbot.exceptions import LitterRobotException, LitterRobotLoginException
-from pylitterbot.robot import LR4_ENDPOINT
+from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
 
 from .common import (
     LITTER_ROBOT_4_DATA,

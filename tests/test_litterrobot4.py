@@ -6,7 +6,7 @@ from aioresponses import aioresponses
 
 from pylitterbot.enums import LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException
-from pylitterbot.robot import LR4_ENDPOINT, LitterRobot4
+from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT, LitterRobot4
 from pylitterbot.session import LitterRobotSession
 
 from .common import LITTER_ROBOT_4_DATA
