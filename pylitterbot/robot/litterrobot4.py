@@ -18,7 +18,7 @@ from ..activity import Activity, Insight
 from ..enums import LitterBoxStatus, LitterRobot4Command
 from ..exceptions import InvalidCommandException
 from ..session import Session
-from ..utils import encode, today_at_time, utcnow
+from ..utils import encode, utcnow
 from .litterrobot import LitterRobot
 from .models import LITTER_ROBOT_4_MODEL
 
@@ -186,18 +186,22 @@ class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
                     start = start_of_day + timedelta(minutes=sleep_time)
                 end = start_of_day + timedelta(minutes=wake_time)
                 return (start, end)
+            return None
 
         schedule = map(_mapper, range(0, 8))
-        get_next = lambda: next(
-            (start_end for start_end in schedule if start_end), (None, None)
-        )
+
+        def get_next():
+            return next(
+                (start_end for start_end in schedule if start_end), (None, None)
+            )
+
         self._sleep_mode_start_time, self._sleep_mode_end_time = get_next()
+        assert self._sleep_mode_start_time and self._sleep_mode_end_time
         if now > max(self._sleep_mode_start_time, self._sleep_mode_end_time):
-            next_start, next_end = get_next()
-            if self._sleep_mode_start_time > self._sleep_mode_end_time:
+            self._sleep_mode_start_time, next_end = get_next()
+            assert self._sleep_mode_start_time
+            if now > self._sleep_mode_start_time:
                 self._sleep_mode_end_time = next_end
-            else:
-                self._sleep_mode_start_time = next_start
 
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
         """Sends a command to the Litter-Robot."""
