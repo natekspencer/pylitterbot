@@ -358,6 +358,3 @@ class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
             await self._ws.send_json({"id": self._ws_subscription_id, "type": "stop"})
             await self._ws.close()
             self._ws = None
-
-
-# FEEDER_ENDPOINT = "https://graphql.whisker.iothings.site/v1/graphql"
