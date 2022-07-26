@@ -5,8 +5,7 @@ from unittest.mock import Mock, patch
 
 from aiohttp import ClientConnectorError, ClientResponseError, ClientWebSocketResponse
 
-from pylitterbot import Account
-from pylitterbot.robot import Robot
+from pylitterbot import Account, LitterRobot
 
 USERNAME = "username@username.com"
 PASSWORD = "password"
@@ -191,10 +190,15 @@ async def get_account(logged_in: bool = False, load_robots: bool = False) -> Acc
         return account
 
 
-async def get_robot(robot_id: str = ROBOT_ID) -> Robot:
+async def get_robot(robot_id: str = ROBOT_ID) -> LitterRobot:
     """Gets a robot that has the underlying API patched."""
     account = await get_account(logged_in=True, load_robots=True)
-    robot = next(filter(lambda robot: (robot.id == robot_id), account.robots))
+    robot = next(
+        filter(
+            lambda robot: (robot.id == robot_id),
+            [robot for robot in account.robots if isinstance(robot, LitterRobot)],
+        )
+    )
     assert robot
 
     return robot

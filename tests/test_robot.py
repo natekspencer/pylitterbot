@@ -12,7 +12,7 @@ from aioresponses import CallbackResult, aioresponses
 
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
-from pylitterbot.robot import DEFAULT_ENDPOINT, EVENT_UPDATE, LitterRobot3, Robot
+from pylitterbot.robot import DEFAULT_ENDPOINT, EVENT_UPDATE, LitterRobot, LitterRobot3
 from pylitterbot.robot.litterrobot3 import UNIT_STATUS
 
 from .common import (
@@ -151,17 +151,17 @@ def test_robot_creation_fails():
 @pytest.mark.parametrize(
     "method_call,dispatch_command,args",
     [
-        (Robot.reset_settings, LitterBoxCommand.DEFAULT_SETTINGS, {}),
-        (Robot.start_cleaning, LitterBoxCommand.CLEAN, {}),
-        (Robot.set_night_light, LitterBoxCommand.NIGHT_LIGHT_ON, {True}),
-        (Robot.set_night_light, LitterBoxCommand.NIGHT_LIGHT_OFF, {False}),
-        (Robot.set_panel_lockout, LitterBoxCommand.LOCK_ON, {True}),
-        (Robot.set_panel_lockout, LitterBoxCommand.LOCK_OFF, {False}),
-        (Robot.set_power_status, LitterBoxCommand.POWER_ON, {True}),
-        (Robot.set_power_status, LitterBoxCommand.POWER_OFF, {False}),
-        (Robot.set_wait_time, LitterBoxCommand.WAIT_TIME + "3", {3}),
-        (Robot.set_wait_time, LitterBoxCommand.WAIT_TIME + "7", {7}),
-        (Robot.set_wait_time, LitterBoxCommand.WAIT_TIME + "F", {15}),
+        (LitterRobot.reset_settings, LitterBoxCommand.DEFAULT_SETTINGS, {}),
+        (LitterRobot.start_cleaning, LitterBoxCommand.CLEAN, {}),
+        (LitterRobot.set_night_light, LitterBoxCommand.NIGHT_LIGHT_ON, {True}),
+        (LitterRobot.set_night_light, LitterBoxCommand.NIGHT_LIGHT_OFF, {False}),
+        (LitterRobot.set_panel_lockout, LitterBoxCommand.LOCK_ON, {True}),
+        (LitterRobot.set_panel_lockout, LitterBoxCommand.LOCK_OFF, {False}),
+        (LitterRobot.set_power_status, LitterBoxCommand.POWER_ON, {True}),
+        (LitterRobot.set_power_status, LitterBoxCommand.POWER_OFF, {False}),
+        (LitterRobot.set_wait_time, LitterBoxCommand.WAIT_TIME + "3", {3}),
+        (LitterRobot.set_wait_time, LitterBoxCommand.WAIT_TIME + "7", {7}),
+        (LitterRobot.set_wait_time, LitterBoxCommand.WAIT_TIME + "F", {15}),
     ],
 )
 async def test_dispatch_commands(mock_aioresponse, method_call, dispatch_command, args):

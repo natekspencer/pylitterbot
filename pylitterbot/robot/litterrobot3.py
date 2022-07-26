@@ -9,7 +9,7 @@ from ..enums import LitterBoxCommand, LitterBoxStatus
 from ..exceptions import InvalidCommandException
 from ..session import Session
 from ..utils import from_litter_robot_timestamp, round_time, today_at_time, utcnow
-from .robot import MINIMUM_CYCLES_LEFT_DEFAULT, Robot
+from .litterrobot import MINIMUM_CYCLES_LEFT_DEFAULT, LitterRobot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ SLEEP_DURATION_HOURS = 8
 SLEEP_DURATION = timedelta(hours=SLEEP_DURATION_HOURS)
 
 
-class LitterRobot3(Robot):
+class LitterRobot3(LitterRobot):
     """Data and methods for interacting with a Litter-Robot 3 automatic, self-cleaning litter box."""
 
     VALID_WAIT_TIMES = [3, 7, 15]

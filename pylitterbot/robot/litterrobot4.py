@@ -19,8 +19,8 @@ from ..enums import LitterBoxStatus, LitterRobot4Command
 from ..exceptions import InvalidCommandException
 from ..session import Session
 from ..utils import encode, today_at_time, utcnow
+from .litterrobot import LitterRobot
 from .models import LITTER_ROBOT_4_MODEL
-from .robot import Robot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ LR4_STATUS_MAP = {
 }
 
 
-class LitterRobot4(Robot):  # pylint:disable=abstract-method
+class LitterRobot4(LitterRobot):  # pylint:disable=abstract-method
     """Data and methods for interacting with a Litter-Robot 4 automatic, self-cleaning litter box."""
 
     VALID_WAIT_TIMES = [3, 5, 7, 15, 30]
