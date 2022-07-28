@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, time, timedelta, timezone
+from typing import TYPE_CHECKING
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
@@ -10,6 +11,9 @@ from ..exceptions import InvalidCommandException
 from ..session import Session
 from ..utils import from_litter_robot_timestamp, round_time, today_at_time, utcnow
 from .litterrobot import MINIMUM_CYCLES_LEFT_DEFAULT, LitterRobot
+
+if TYPE_CHECKING:
+    from ..account import Account
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +41,7 @@ class LitterRobot3(LitterRobot):
         name: str = None,
         session: Session = None,
         data: dict = None,
+        account: Account | None = None,
     ) -> None:
         """Initialize an instance of a Litter-Robot with individual attributes or a data dictionary.
 
@@ -47,7 +52,7 @@ class LitterRobot3(LitterRobot):
         :param session: user's session to interact with this Litter-Robot (optional)
         :param data: optional data to pre-populate Litter-Robot's attributes (optional)
         """
-        super().__init__(id, serial, user_id, name, session, data)
+        super().__init__(id, serial, user_id, name, session, data, account)
         self._path = f"{DEFAULT_ENDPOINT}/users/{user_id}/robots/{self.id}"
 
     @property

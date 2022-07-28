@@ -4,11 +4,15 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from deepdiff import DeepDiff
 
 from ..exceptions import LitterRobotException
 from ..session import Session
+
+if TYPE_CHECKING:
+    from ..account import Account
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +34,7 @@ class Robot:
         name: str = None,
         session: Session = None,
         data: dict = None,
+        account: Account | None = None,
     ) -> None:
         """Initialize an instance of a robot with individual attributes or a data dictionary.
 
@@ -51,6 +56,7 @@ class Robot:
         self._name = name
         self._serial = serial
         self._session = session
+        self._account = account
 
         self._is_loaded = False
         self._path: str | None = None

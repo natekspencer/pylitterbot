@@ -138,7 +138,7 @@ LITTER_ROBOT_4_DATA = {
     "panelSleepTime": 0,
     "panelWakeTime": 0,
     "weekdaySleepModeEnabled": {
-        "Sunday": {"sleepTime": 1380, "wakeTime": 510, "isEnabled": False},
+        "Sunday": {"sleepTime": 0, "wakeTime": 510, "isEnabled": True},
         "Monday": {"sleepTime": 1410, "wakeTime": 450, "isEnabled": True},
         "Tuesday": {"sleepTime": 1410, "wakeTime": 450, "isEnabled": True},
         "Wednesday": {"sleepTime": 1410, "wakeTime": 450, "isEnabled": True},

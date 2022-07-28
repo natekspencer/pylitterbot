@@ -3,9 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from urllib.parse import urljoin
 
-from aiohttp import ClientConnectorError, ClientResponseError, ClientSession
+from aiohttp import (
+    ClientConnectorError,
+    ClientResponseError,
+    ClientSession,
+    ClientWebSocketResponse,
+)
 
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .robot import Robot
@@ -30,6 +36,7 @@ class Account:
         }
         self._user: dict = {}
         self._robots: list[Robot] = []
+        self._ws_connections: dict[str, tuple[ClientWebSocketResponse, list[str]]] = {}
 
     @property
     def user_id(self) -> str | None:
@@ -75,6 +82,8 @@ class Account:
         for robot in self.robots:
             if isinstance(robot, LitterRobot4):
                 await robot.unsubscribe_from_updates()
+        for websocket, _ in self._ws_connections.values():
+            await websocket.close()
         await self._session.close()
 
     async def refresh_user(self) -> None:
@@ -106,32 +115,33 @@ class Account:
             resp = await asyncio.gather(*all_robots)
 
             async def update_or_create_robot(
-                robot_data: dict, cls: type[Robot]
+                robot_cls: type[Robot], data: dict
             ) -> None:
                 # pylint: disable=protected-access
                 robot_object = next(
                     filter(
-                        lambda robot: (robot.id == robot_data.get(cls._data_id)),
+                        lambda robot: (robot.id == data.get(robot_cls._data_id)),
                         self._robots,
                     ),
                     None,
                 )
                 if robot_object:
-                    robot_object._update_data(robot_data)
+                    robot_object._update_data(data)
                 else:
-                    robot_object = cls(
+                    robot_object = robot_cls(
                         user_id=self.user_id,
                         session=self._session,
-                        data=robot_data,
+                        data=data,
+                        account=self,
                     )
                     if subscribe_for_updates and isinstance(robot_object, LitterRobot4):
                         await robot_object.subscribe_for_updates()
                 robots.append(robot_object)
 
             for robot_data in resp[0]:
-                await update_or_create_robot(robot_data, LitterRobot3)
+                await update_or_create_robot(LitterRobot3, robot_data)
             for robot_data in resp[1].get("data").get("getLitterRobot4ByUser") or []:
-                await update_or_create_robot(robot_data, LitterRobot4)
+                await update_or_create_robot(LitterRobot4, robot_data)
 
             self._robots = robots
         except (LitterRobotException, ClientResponseError, ClientConnectorError) as ex:
@@ -143,3 +153,39 @@ class Account:
             await asyncio.gather(*[robot.refresh() for robot in self.robots])
         except (LitterRobotException, ClientResponseError, ClientConnectorError) as ex:
             _LOGGER.error("Unable to refresh your robots: %s", ex)
+
+    async def ws_connect(
+        self,
+        url: str,
+        params: Mapping[str, str],
+        headers: Mapping[str, str],
+        subscriber_id: str,
+    ) -> ClientWebSocketResponse:
+        """Initiate websocket connection."""
+        websocket, subscribers = self._ws_connections.setdefault(
+            url,
+            (
+                await self._session.websession.ws_connect(
+                    url=url, params=params, headers=headers
+                ),
+                [subscriber_id],
+            ),
+        )
+        if subscriber_id not in subscribers:
+            subscribers.append(subscriber_id)
+        return websocket
+
+    async def ws_disconnect(self, subscriber_id: str) -> None:
+        """Disconnect a subscriber from a websocket.
+
+        Close websocket if no longer used.
+        """
+        closed_ws_urls: list[str] = []
+        for url, (websocket, subscribers) in self._ws_connections.items():
+            if subscriber_id in subscribers:
+                subscribers.remove(subscriber_id)
+            if not subscribers and not websocket.closed:
+                await websocket.close()
+                closed_ws_urls.append(url)
+        for url in closed_ws_urls:
+            self._ws_connections.pop(url)

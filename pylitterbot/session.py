@@ -3,13 +3,16 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from types import TracebackType
+from typing import Any, TypeVar
 
 import jwt
 from aiohttp import ClientSession
 
 from .exceptions import InvalidCommandException
 from .utils import decode, utcnow
+
+T = TypeVar("T", bound="Session")
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,6 +91,17 @@ class Session(ABC):
             resp.raise_for_status()
             data = await resp.json()
             return data
+
+    async def __aenter__(self: T) -> T:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        await self.close()
 
 
 class LitterRobotSession(Session):

@@ -5,6 +5,7 @@ import asyncio
 import logging
 from datetime import datetime, time, timedelta
 from json import dumps, loads
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from aiohttp import ClientWebSocketResponse, WSMsgType
@@ -21,6 +22,9 @@ from ..session import Session
 from ..utils import encode, utcnow
 from .litterrobot import LitterRobot
 from .models import LITTER_ROBOT_4_MODEL
+
+if TYPE_CHECKING:
+    from ..account import Account
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,6 +68,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         name: str = None,
         session: Session = None,
         data: dict = None,
+        account: Account | None = None,
     ) -> None:
         """Initialize an instance of a Litter-Robot with individual attributes or a data dictionary.
 
@@ -74,7 +79,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         :param session: user's session to interact with this Litter-Robot (optional)
         :param data: optional data to pre-populate Litter-Robot's attributes (optional)
         """
-        super().__init__(id, serial, user_id, name, session, data)
+        super().__init__(id, serial, user_id, name, session, data, account)
         self._path = LR4_ENDPOINT
         self._ws: ClientWebSocketResponse | None = None
         self._ws_subscription_id: str | None = None
@@ -332,9 +337,17 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                     )
                     await _subscribe(send_stop=True)
             _LOGGER.debug("Web socket monitor stopped")
+            if self._ws is not None:
+                if self._ws.closed:
+                    await self.subscribe_for_updates()
+                    _LOGGER.debug("restarted connection")
+                else:
+                    asyncio.create_task(_monitor())
+                    await _subscribe()
+                    _LOGGER.debug("resubscribed")
 
         try:
-            self._ws = await self._session.websession.ws_connect(
+            self._ws = await self._account.ws_connect(
                 f"{self._path}/realtime",
                 params={
                     "header": encode(
@@ -346,6 +359,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                     "payload": encode({}),
                 },
                 headers={"sec-websocket-protocol": "graphql-ws"},
+                subscriber_id=self.id,
             )
             asyncio.create_task(_monitor())
             await _subscribe()
@@ -354,7 +368,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     async def unsubscribe_from_updates(self) -> None:
         """Stop the web socket."""
-        if self._ws is not None:
-            await self._ws.send_json({"id": self._ws_subscription_id, "type": "stop"})
-            await self._ws.close()
+        if (websocket := self._ws) is not None and not websocket.closed:
             self._ws = None
+            await websocket.send_json({"id": self._ws_subscription_id, "type": "stop"})
+            await self._account.ws_disconnect(self.id)
+            _LOGGER.debug("Unsubscribed from updates")
