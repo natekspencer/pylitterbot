@@ -133,6 +133,14 @@ class Robot:
     async def refresh(self) -> None:
         """Refresh the robot data from the API."""
 
+    @abstractmethod
+    async def subscribe_for_updates(self) -> None:
+        """Open a web socket connection to receive updates."""
+
+    @abstractmethod
+    async def unsubscribe_from_updates(self) -> None:
+        """Stop the web socket."""
+
     def _update_data(self, data: dict) -> None:
         """Saves the robot info from a data dictionary."""
         if self._is_loaded:

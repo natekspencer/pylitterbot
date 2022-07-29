@@ -305,10 +305,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             )
 
         async def _monitor() -> None:
-            assert self._ws
+            assert (websocket := self._ws)
             while True:
                 try:
-                    msg = await self._ws.receive(timeout=80)
+                    msg = await websocket.receive(timeout=80)
                     if msg.type in (
                         WSMsgType.CLOSE,
                         WSMsgType.CLOSING,
