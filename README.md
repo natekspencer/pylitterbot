@@ -5,16 +5,13 @@
 
 # pylitterbot
 
-Python package for controlling Litter-Robot self-cleaning litter boxes
+Python package for controlling Whisker automated robots
 
-This is an unofficial API for controlling Litter-Robot self-cleaning litter boxes.
-The code is based on https://github.com/natekspencer/LitterRobotManager, which in turn was
-based on the discussions from https://community.smartthings.com/t/litter-robot-connect/106882
-and my own reverse engineering of the API via the android APK.
+This is an unofficial API for controlling various Whisker automated robots. It currently supports Litter-Robot 3, Litter-Robot 4 and Feeder-Robot.
 
 ## Disclaimer
 
-This API is experimental. Use at your own risk. Feel free to contribute if things are not working.
+This API is experimental and was reverse-engineered by monitoring network traffic and decompiling source code from the Whisker app since no public API is currently available at this time. It may cease to work at any time. Use at your own risk.
 
 ## Installation
 
@@ -96,14 +93,14 @@ Currently the following methods are available in the Robot class:
 
 ## TODO
 
-- Add additional support for Litter-Robot 4 data
-- Add support for Feeder Robots
+- Improve support for Litter-Robot 4
+- Improve support for Feeder-Robot
 
 ---
 
 ## Support Me
 
-I'm not employed by Litter-Robot, and provide this python package as-is.
+I'm not employed by Whisker and provide this python package as-is.
 
 If you don't already own a Litter-Robot, please consider using [my affiliate link](https://www.gopjn.com/t/SENKTktMR0lDSEtJTklPQ0hKS05HTQ) to purchase your own robot and save $25!
 

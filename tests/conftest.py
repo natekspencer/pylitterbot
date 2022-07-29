@@ -8,6 +8,7 @@ import jwt
 import pytest
 from aioresponses import aioresponses
 
+from pylitterbot.robot.feederrobot import FEEDER_ENDPOINT
 from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
 from pylitterbot.session import LitterRobotSession
 
@@ -27,13 +28,11 @@ def mock_aioresponse():
     with aioresponses() as mock:
         mock.post(
             LitterRobotSession.AUTH_ENDPOINT,
-            status=200,
             payload={"token": "tokenResponse"},
             repeat=True,
         )
         mock.post(
             re.compile(re.escape(LitterRobotSession.TOKEN_EXCHANGE_ENDPOINT)),
-            status=200,
             payload={
                 "kind": "kindResponse",
                 "idToken": jwt.encode(
@@ -48,7 +47,6 @@ def mock_aioresponse():
         )
         mock.post(
             re.compile(re.escape(LitterRobotSession.TOKEN_REFRESH_ENDPOINT)),
-            status=200,
             payload={
                 "access_token": (
                     token := jwt.encode(
@@ -65,36 +63,26 @@ def mock_aioresponse():
             },
             repeat=True,
         )
-        mock.get(re.compile(".*/users$"), status=200, payload=USER_RESPONSE)
+        mock.get(re.compile(".*/users$"), payload=USER_RESPONSE)
         mock.get(
-            re.compile(".*/robots$"),
-            status=200,
-            payload=[ROBOT_DATA, ROBOT_FULL_DATA],
-            repeat=True,
+            re.compile(".*/robots$"), payload=[ROBOT_DATA, ROBOT_FULL_DATA], repeat=True
         )
-        mock.get(
-            re.compile(".*/activity?.*$"),
-            status=200,
-            payload=ACTIVITY_RESPONSE,
-            repeat=True,
-        )
-        mock.get(
-            re.compile(".*/insights?.*$"),
-            status=200,
-            payload=INSIGHT_RESPONSE,
-            repeat=True,
-        )
+        mock.get(re.compile(".*/activity?.*$"), payload=ACTIVITY_RESPONSE, repeat=True)
+        mock.get(re.compile(".*/insights?.*$"), payload=INSIGHT_RESPONSE, repeat=True)
         mock.post(
             LR4_ENDPOINT,
-            status=200,
             payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_DATA]}},
             repeat=False,
         )
-
         mock.get(
             re.compile(f"^{LR4_ENDPOINT}/realtime?.*$"),
             # payload={},
             repeat=True,
             # callback=ws_callback,
+        )
+        mock.post(
+            FEEDER_ENDPOINT,
+            payload={"data": {"feeder_unit": []}},
+            repeat=True,
         )
         yield mock

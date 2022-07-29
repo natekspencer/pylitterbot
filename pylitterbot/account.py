@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Mapping
-from urllib.parse import urljoin
 
 from aiohttp import (
     ClientConnectorError,
@@ -15,10 +14,11 @@ from aiohttp import (
 
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .robot import Robot
+from .robot.feederrobot import FEEDER_ENDPOINT, FEEDER_ROBOT_MODEL, FeederRobot
 from .robot.litterrobot3 import DEFAULT_ENDPOINT, DEFAULT_ENDPOINT_KEY, LitterRobot3
 from .robot.litterrobot4 import LITTER_ROBOT_4_MODEL, LR4_ENDPOINT, LitterRobot4
 from .session import LitterRobotSession
-from .utils import decode
+from .utils import decode, urljoin
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ class Account:
     async def disconnect(self) -> None:
         """Close the underlying session."""
         for robot in self.robots:
-            if isinstance(robot, LitterRobot4):
+            if isinstance(robot, (FeederRobot, LitterRobot4)):
                 await robot.unsubscribe_from_updates()
         for websocket, _ in self._ws_connections.values():
             await websocket.close()
@@ -88,9 +88,7 @@ class Account:
 
     async def refresh_user(self) -> None:
         """Refresh the logged in user's info."""
-        data = await self._session.get(
-            urljoin(DEFAULT_ENDPOINT, "users"),
-        )
+        data = await self._session.get(urljoin(DEFAULT_ENDPOINT, "users"))
         assert isinstance(data, dict)
         self._user.update(data.get("user", {}))
 
@@ -99,16 +97,28 @@ class Account:
         robots: list[Robot] = []
         try:
             all_robots = [
-                self._session.get(f"{DEFAULT_ENDPOINT}/users/{self.user_id}/robots"),
+                self._session.get(
+                    urljoin(DEFAULT_ENDPOINT, f"users/{self.user_id}/robots")
+                ),
                 self._session.post(
                     LR4_ENDPOINT,
                     json={
                         "query": f"""
-                        query GetLR4($userId: String!) {{
-                            getLitterRobot4ByUser(userId: $userId) {LITTER_ROBOT_4_MODEL}
-                        }}
+                            query GetLR4($userId: String!) {{
+                                getLitterRobot4ByUser(userId: $userId) {LITTER_ROBOT_4_MODEL}
+                            }}
                         """,
                         "variables": {"userId": self.user_id},
+                    },
+                ),
+                self._session.post(
+                    FEEDER_ENDPOINT,
+                    json={
+                        "query": f"""
+                            query GetFeeders {{
+                                feeder_unit {FEEDER_ROBOT_MODEL}
+                            }}
+                        """
                     },
                 ),
             ]
@@ -134,7 +144,9 @@ class Account:
                         data=data,
                         account=self,
                     )
-                    if subscribe_for_updates and isinstance(robot_object, LitterRobot4):
+                    if subscribe_for_updates and isinstance(
+                        robot_object, (FeederRobot, LitterRobot4)
+                    ):
                         await robot_object.subscribe_for_updates()
                 robots.append(robot_object)
 
@@ -142,6 +154,8 @@ class Account:
                 await update_or_create_robot(LitterRobot3, robot_data)
             for robot_data in resp[1].get("data").get("getLitterRobot4ByUser") or []:
                 await update_or_create_robot(LitterRobot4, robot_data)
+            for robot_data in resp[2].get("data").get("feeder_unit") or []:
+                await update_or_create_robot(FeederRobot, robot_data)
 
             self._robots = robots
         except (LitterRobotException, ClientResponseError, ClientConnectorError) as ex:
@@ -157,20 +171,24 @@ class Account:
     async def ws_connect(
         self,
         url: str,
-        params: Mapping[str, str],
+        params: Mapping[str, str] | None,
         headers: Mapping[str, str],
         subscriber_id: str,
     ) -> ClientWebSocketResponse:
         """Initiate websocket connection."""
+        assert self._session.websession
+
+        async def _new_ws_connection():
+            return await self._session.websession.ws_connect(
+                url=url, params=params, headers=headers
+            )
+
         websocket, subscribers = self._ws_connections.setdefault(
-            url,
-            (
-                await self._session.websession.ws_connect(
-                    url=url, params=params, headers=headers
-                ),
-                [subscriber_id],
-            ),
+            url, (await _new_ws_connection(), [subscriber_id])
         )
+        if websocket.closed:
+            websocket = await _new_ws_connection()
+            self._ws_connections[url] = (websocket, subscribers)
         if subscriber_id not in subscribers:
             subscribers.append(subscriber_id)
         return websocket

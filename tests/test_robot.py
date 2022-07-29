@@ -33,7 +33,10 @@ def test_robot_setup():
     """Tests that robot setup is successful and parses as expected."""
     robot = LitterRobot3(data=ROBOT_DATA)
     assert robot
-    assert str(robot) == f"Name: {ROBOT_NAME}, Serial: {ROBOT_SERIAL}, id: {ROBOT_ID}"
+    assert (
+        str(robot)
+        == f"Name: {ROBOT_NAME}, Model: Litter-Robot 3, Serial: {ROBOT_SERIAL}, id: {ROBOT_ID}"
+    )
     with pytest.warns(DeprecationWarning):
         assert robot.auto_offline_disabled
     assert robot.clean_cycle_wait_time_minutes == 7
@@ -172,8 +175,7 @@ async def test_dispatch_commands(mock_aioresponse, method_call, dispatch_command
     robot = await get_robot()
 
     mock_aioresponse.post(
-        f"{ROBOT_ENDPOINT % robot.id}{LitterBoxCommand.ENDPOINT}",
-        status=200,
+        f"{ROBOT_ENDPOINT % robot.id}/{LitterBoxCommand.ENDPOINT}",
         payload=COMMAND_RESPONSE,
     )
     await getattr(robot, method_call.__name__)(*args)
@@ -259,7 +261,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
 async def test_invalid_commands(mock_aioresponse, caplog: pytest.LogCaptureFixture):
     """Tests expected exceptions/responses for invalid commands."""
     robot = await get_robot()
-    url = f"{ROBOT_ENDPOINT % robot.id}{LitterBoxCommand.ENDPOINT}"
+    url = f"{ROBOT_ENDPOINT % robot.id}/{LitterBoxCommand.ENDPOINT}"
 
     with pytest.raises(InvalidCommandException):
         await robot.set_wait_time(12)

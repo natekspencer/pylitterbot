@@ -1,4 +1,23 @@
 """pylitterbot robot models"""
+
+FEEDER_ROBOT_MODEL = """
+{
+    id
+    name
+    serial
+    timezone
+    isEighthCupEnabled
+    created_at
+    household_id
+    state {
+        id
+        info
+        active_schedule_id
+        updated_at
+    }
+}
+"""
+
 LITTER_ROBOT_4_MODEL = """
 {
     unitId

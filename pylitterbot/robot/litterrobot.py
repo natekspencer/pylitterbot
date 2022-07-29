@@ -47,9 +47,6 @@ class LitterRobot(Robot):
     _sleep_mode_start_time: datetime | None = None
     _sleep_mode_end_time: datetime | None = None
 
-    def __str__(self) -> str:
-        return f"Name: {self.name}, Serial: {self.serial}, id: {self.id}"
-
     @property
     def auto_offline_disabled(self) -> bool:
         """Returns `True` if the Litter-Robot's automatic offline status is disabled."""
@@ -122,21 +119,6 @@ class LitterRobot(Robot):
         return from_litter_robot_timestamp(self._data.get("lastSeen"))
 
     @property
-    @abstractmethod
-    def model(self) -> str:
-        """Return the Litter-Robot model."""
-
-    @property
-    @abstractmethod
-    def night_light_mode_enabled(self) -> bool:
-        """Returns `True` if night light mode is enabled."""
-
-    @property
-    @abstractmethod
-    def panel_lock_enabled(self) -> bool:
-        """Returns `True` if the front panel buttons are locked on the Litter-Robot."""
-
-    @property
     def power_status(self) -> str | None:
         """Returns the power status of the Litter-Robot.
 
@@ -145,11 +127,6 @@ class LitterRobot(Robot):
         `NC` = not connected or off
         """
         return self._data.get(self._data_power_status)
-
-    @property
-    def setup_date(self) -> datetime | None:
-        """Returns the datetime the Litter-Robot was onboarded, if any."""
-        return from_litter_robot_timestamp(self._data.get(self._data_setup_date))
 
     @property
     @abstractmethod
@@ -203,21 +180,6 @@ class LitterRobot(Robot):
             or self._minimum_cycles_left > self.status.minimum_cycles_left
         ):
             self._minimum_cycles_left = self.status.minimum_cycles_left
-
-    async def _get(self, subpath: str = "", **kwargs) -> dict | list[dict]:
-        """Sends a GET request to the Litter-Robot API."""
-        assert self._session and self._path
-        return await self._session.get(self._path + subpath, **kwargs)
-
-    async def _patch(self, subpath: str = "", json=None, **kwargs) -> dict | list[dict]:
-        """Sends a PATCH request to the Litter-Robot API."""
-        assert self._session and self._path
-        return await self._session.patch(self._path + subpath, json=json, **kwargs)
-
-    async def _post(self, subpath: str = "", json=None, **kwargs) -> dict | list[dict]:
-        """Sends a POST request to the Litter-Robot API."""
-        assert self._session and self._path
-        return await self._session.post(self._path + subpath, json=json, **kwargs)
 
     @abstractmethod
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
