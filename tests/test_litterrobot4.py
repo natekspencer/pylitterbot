@@ -69,7 +69,6 @@ async def test_litter_robot_4_setup(
     mock_aioresponse.post(
         LR4_ENDPOINT,
         payload={"data": {"sendLitterRobot4Command": "Error sending a command"}},
-        status=200,
     )
     assert not await robot._dispatch_command("12")
     assert caplog.messages[-1] == "Error sending a command"

@@ -35,15 +35,15 @@ class Session(ABC):
         if not self._websession_provided and self._websession is not None:
             await self._websession.close()
 
-    async def get(self, path: str, **kwargs) -> dict | list[dict]:
+    async def get(self, path: str, **kwargs) -> dict | list[dict] | None:
         """Send a GET request to the specified path."""
         return await self.request("GET", path, **kwargs)
 
-    async def post(self, path: str, **kwargs) -> dict | list[dict]:
+    async def post(self, path: str, **kwargs) -> dict | list[dict] | None:
         """Send a POST request to the specified path."""
         return await self.request("POST", path, **kwargs)
 
-    async def patch(self, path: str, **kwargs) -> dict | list[dict]:
+    async def patch(self, path: str, **kwargs) -> dict | list[dict] | None:
         """Send a PATCH request to the specified path."""
         return await self.request("PATCH", path, **kwargs)
 
@@ -65,7 +65,9 @@ class Session(ABC):
             return None
         return f"Bearer {access_token}"
 
-    async def request(self, method: str, url: str, **kwargs) -> dict | list[dict]:
+    async def request(
+        self, method: str, url: str, **kwargs
+    ) -> dict | list[dict] | None:
         """Make a request."""
         if self._websession is None:
             self._websession = ClientSession()
@@ -204,7 +206,9 @@ class LitterRobotSession(Session):
         assert isinstance(data, dict)
         self._token = data
 
-    async def request(self, method: str, url: str, **kwargs) -> dict | list[dict]:
+    async def request(
+        self, method: str, url: str, **kwargs
+    ) -> dict | list[dict] | None:
         """Make a request."""
         kwargs = self.generate_args(url, **kwargs)
         if not kwargs.pop("skip_auth", False) and not self.is_token_valid():

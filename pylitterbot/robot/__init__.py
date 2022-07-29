@@ -11,7 +11,7 @@ from deepdiff import DeepDiff
 
 from ..exceptions import LitterRobotException
 from ..session import Session
-from ..utils import from_litter_robot_timestamp
+from ..utils import from_litter_robot_timestamp, urljoin
 
 if TYPE_CHECKING:
     from ..account import Account
@@ -147,17 +147,27 @@ class Robot:
         self._is_loaded = True
         self.emit(EVENT_UPDATE)
 
-    async def _get(self, subpath: str = "", **kwargs) -> dict | list[dict]:
+    async def _get(
+        self, subpath: str | None = None, **kwargs
+    ) -> dict | list[dict] | None:
         """Sends a GET request to the Litter-Robot API."""
-        assert self._session and self._path
-        return await self._session.get(self._path + subpath, **kwargs)
+        assert self._session
+        return await self._session.get(urljoin(self._path, subpath), **kwargs)
 
-    async def _patch(self, subpath: str = "", json=None, **kwargs) -> dict | list[dict]:
+    async def _patch(
+        self, subpath: str | None = None, json=None, **kwargs
+    ) -> dict | list[dict] | None:
         """Sends a PATCH request to the Litter-Robot API."""
-        assert self._session and self._path
-        return await self._session.patch(self._path + subpath, json=json, **kwargs)
+        assert self._session
+        return await self._session.patch(
+            urljoin(self._path, subpath), json=json, **kwargs
+        )
 
-    async def _post(self, subpath: str = "", json=None, **kwargs) -> dict | list[dict]:
+    async def _post(
+        self, subpath: str | None = None, json=None, **kwargs
+    ) -> dict | list[dict] | None:
         """Sends a POST request to the Litter-Robot API."""
-        assert self._session and self._path
-        return await self._session.post(self._path + subpath, json=json, **kwargs)
+        assert self._session
+        return await self._session.post(
+            urljoin(self._path, subpath), json=json, **kwargs
+        )

@@ -6,6 +6,7 @@ import logging
 from base64 import b64decode, b64encode
 from datetime import datetime, time, timezone
 from typing import Any
+from urllib.parse import urljoin as _urljoin
 from warnings import warn
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,14 +39,9 @@ def from_litter_robot_timestamp(
     return datetime.fromisoformat(timestamp)
 
 
-def utcnow() -> datetime:
-    """Return the current UTC offset-aware datetime."""
-    return datetime.now(timezone.utc)
-
-
-def today_at_time(_time: time) -> datetime:
-    """Return a datetime representing today at the passed in time."""
-    return datetime.combine(utcnow().astimezone(_time.tzinfo), _time)
+def pluralize(word: str, count: int):
+    """Pluralize a word."""
+    return f"{count} {word}{'s' if count != 1 else ''}"
 
 
 def round_time(_datetime: datetime | None = None, round_to: int = 60) -> datetime:
@@ -58,9 +54,23 @@ def round_time(_datetime: datetime | None = None, round_to: int = 60) -> datetim
     )
 
 
-def pluralize(word: str, count: int):
-    """Pluralize a word."""
-    return f"{count} {word}{'s' if count != 1 else ''}"
+def today_at_time(_time: time) -> datetime:
+    """Return a datetime representing today at the passed in time."""
+    return datetime.combine(utcnow().astimezone(_time.tzinfo), _time)
+
+
+def urljoin(base: str, subpath_or_url: str | None) -> str:
+    """Join a base URL and subpath or URL to form an absolute interpretation of the latter."""
+    if not subpath_or_url:
+        return base
+    if not base.endswith("/"):
+        base += "/"
+    return _urljoin(base, subpath_or_url)
+
+
+def utcnow() -> datetime:
+    """Return the current UTC offset-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class DeprecatedClassMeta(type):  # pragma: no cover

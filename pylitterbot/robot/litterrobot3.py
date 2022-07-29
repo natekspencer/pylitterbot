@@ -9,7 +9,13 @@ from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
 from ..exceptions import InvalidCommandException
 from ..session import Session
-from ..utils import from_litter_robot_timestamp, round_time, today_at_time, utcnow
+from ..utils import (
+    from_litter_robot_timestamp,
+    round_time,
+    today_at_time,
+    urljoin,
+    utcnow,
+)
 from .litterrobot import MINIMUM_CYCLES_LEFT_DEFAULT, LitterRobot
 
 if TYPE_CHECKING:
@@ -53,7 +59,7 @@ class LitterRobot3(LitterRobot):
         :param data: optional data to pre-populate Litter-Robot's attributes (optional)
         """
         super().__init__(id, serial, user_id, name, session, data, account)
-        self._path = f"{DEFAULT_ENDPOINT}/users/{user_id}/robots/{self.id}"
+        self._path = urljoin(DEFAULT_ENDPOINT, f"users/{user_id}/robots/{self.id}")
 
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
@@ -256,7 +262,7 @@ class LitterRobot3(LitterRobot):
             raise InvalidCommandException(
                 f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
             )
-        data = await self._get("/activity", params={"limit": limit})
+        data = await self._get("activity", params={"limit": limit})
         assert isinstance(data, dict)
         return [
             Activity(lr_timestamp, LitterBoxStatus(activity[UNIT_STATUS]))
@@ -268,7 +274,7 @@ class LitterRobot3(LitterRobot):
     async def get_insight(self, days: int = 30, timezone_offset: int = None) -> Insight:
         """Returns the insight data."""
         insight = await self._get(
-            "/insights",
+            "insights",
             params={
                 "days": days,
                 **(

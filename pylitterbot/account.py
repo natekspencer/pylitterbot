@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Mapping
-from urllib.parse import urljoin
 
 from aiohttp import (
     ClientConnectorError,
@@ -19,7 +18,7 @@ from .robot.feederrobot import FEEDER_ENDPOINT, FEEDER_ROBOT_MODEL, FeederRobot
 from .robot.litterrobot3 import DEFAULT_ENDPOINT, DEFAULT_ENDPOINT_KEY, LitterRobot3
 from .robot.litterrobot4 import LITTER_ROBOT_4_MODEL, LR4_ENDPOINT, LitterRobot4
 from .session import LitterRobotSession
-from .utils import decode
+from .utils import decode, urljoin
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,9 +88,7 @@ class Account:
 
     async def refresh_user(self) -> None:
         """Refresh the logged in user's info."""
-        data = await self._session.get(
-            urljoin(DEFAULT_ENDPOINT, "users"),
-        )
+        data = await self._session.get(urljoin(DEFAULT_ENDPOINT, "users"))
         assert isinstance(data, dict)
         self._user.update(data.get("user", {}))
 
@@ -100,7 +97,9 @@ class Account:
         robots: list[Robot] = []
         try:
             all_robots = [
-                self._session.get(f"{DEFAULT_ENDPOINT}/users/{self.user_id}/robots"),
+                self._session.get(
+                    urljoin(DEFAULT_ENDPOINT, f"users/{self.user_id}/robots")
+                ),
                 self._session.post(
                     LR4_ENDPOINT,
                     json={

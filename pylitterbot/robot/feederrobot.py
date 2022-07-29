@@ -11,8 +11,10 @@ from uuid import uuid4
 from aiohttp import ClientWebSocketResponse, WSMsgType
 
 from ..activity import Activity, Insight
+from ..enums import FeederRobotCommand, FeederRobotMealInsertSize
+from ..exceptions import InvalidCommandException
 from ..session import Session
-from ..utils import utcnow
+from ..utils import decode, utcnow
 from . import Robot
 from .models import FEEDER_ROBOT_MODEL
 
@@ -22,6 +24,12 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 FEEDER_ENDPOINT = "https://graphql.whisker.iothings.site/v1/graphql"
+COMMAND_ENDPOINT = (
+    "https://42nk7qrhdg.execute-api.us-east-1.amazonaws.com/prod/command/feeder"
+)
+COMMAND_ENDPOINT_KEY = decode(
+    "dzJ0UEZiamxQMTNHVW1iOGRNalVMNUIyWXlQVkQzcEo3RXk2Zno4dg=="
+)
 
 
 class FeederRobot(Robot):  # pylint: disable=abstract-method
@@ -64,6 +72,11 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         return int(round(self._state_info("level") / 9 * 100, -1))
 
     @property
+    def meal_insert_size(self) -> FeederRobotMealInsertSize:
+        """Return the meal insert size."""
+        return FeederRobotMealInsertSize(self._state_info("mealInsertSize"))
+
+    @property
     def model(self) -> str:
         """Return the robot model."""
         return "Feeder-Robot"
@@ -77,6 +90,28 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     def panel_lock_enabled(self) -> bool:
         """Returns `True` if the buttons on the robot are disabled."""
         return self._state_info("panelLockout")
+
+    async def _dispatch_command(self, command: str, value: bool) -> bool:
+        """Sends a command to the Feeder-Robot."""
+        try:
+            await self._post(
+                COMMAND_ENDPOINT,
+                json={
+                    "command": command,
+                    "id": str(uuid4()),
+                    "serial": self.serial,
+                    "value": 1 if value else 0,
+                },
+                headers={"x-api-key": COMMAND_ENDPOINT_KEY},
+            )
+            return True
+        except InvalidCommandException as ex:
+            _LOGGER.error(ex)
+            return False
+
+    async def give_snack(self) -> bool:
+        """Dispense a snack."""
+        return await self._dispatch_command(FeederRobotCommand.GIVE_SNACK, True)
 
     async def refresh(self) -> None:
         """Refresh the Feeder-Robot's data from the API."""
@@ -92,6 +127,73 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         )
         assert isinstance(data, dict)
         self._update_data(data.get("data", {}).get("feeder_unit_by_pk", {}))
+
+    async def set_meal_insert_size(
+        self, meal_insert_size: FeederRobotMealInsertSize | int
+    ) -> bool:
+        """Set the meal insert size."""
+        data = await self._post(
+            json={
+                "query": """
+                    mutation UpdateFeederState($id: Int!, $state: jsonb) {
+                        update_feeder_unit_state_by_pk(pk_columns: {id: $id}, _append: {info: $state}) {
+                            info
+                            updated_at
+                        }
+                    }
+                """,
+                "variables": {
+                    "id": self._data["state"]["id"],
+                    "state": {
+                        "mealInsertSize": int(meal_insert_size),
+                        "historyInvalidationDate": utcnow().strftime(
+                            "%Y-%m-%dT%H:%M:%S.%fZ"
+                        ),
+                    },
+                },
+            }
+        )
+        assert isinstance(data, dict)
+        self._update_data(
+            {
+                **self._data,
+                "state": {
+                    **self._data["state"],
+                    **data.get("data", {}).get("update_feeder_unit_state_by_pk", {}),
+                },
+            }
+        )
+        return int(self.meal_insert_size) == int(meal_insert_size)
+
+    async def set_name(self, name: str) -> bool:
+        """Set the name."""
+        data = await self._post(
+            json={
+                "query": """
+                    mutation UpdateFeeder($id: Int!, $name: String!) {
+                        update_feeder_unit_by_pk(pk_columns: {id: $id}, _set: {name: $name}) {
+                            name
+                        }
+                    }
+                """,
+                "variables": {"id": self.id, "name": name},
+            }
+        )
+        assert isinstance(data, dict)
+        self._update_data(
+            {**self._data, **data.get("data", {}).get("update_feeder_unit_by_pk", {})}
+        )
+        return self.name == name
+
+    async def set_night_light(self, value: bool) -> bool:
+        """Turns the night light mode on or off."""
+        return await self._dispatch_command(
+            FeederRobotCommand.SET_AUTO_NIGHT_MODE, value
+        )
+
+    async def set_panel_lockout(self, value: bool) -> bool:
+        """Turns the panel lock on or off."""
+        return await self._dispatch_command(FeederRobotCommand.SET_PANEL_LOCKOUT, value)
 
     async def get_activity_history(
         self, limit: int = 100  # pylint: disable=unused-argument
