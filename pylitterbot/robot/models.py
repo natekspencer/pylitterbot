@@ -12,8 +12,8 @@ FEEDER_ROBOT_MODEL = """
     state {
         id
         info
-        serial
         active_schedule_id
+        updated_at
     }
 }
 """

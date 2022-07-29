@@ -178,15 +178,18 @@ class Account:
     ) -> ClientWebSocketResponse:
         """Initiate websocket connection."""
         assert self._session.websession
+
+        async def _new_ws_connection():
+            return await self._session.websession.ws_connect(
+                url=url, params=params, headers=headers
+            )
+
         websocket, subscribers = self._ws_connections.setdefault(
-            url,
-            (
-                await self._session.websession.ws_connect(
-                    url=url, params=params, headers=headers
-                ),
-                [subscriber_id],
-            ),
+            url, (await _new_ws_connection(), [subscriber_id])
         )
+        if websocket.closed:
+            websocket = await _new_ws_connection()
+            self._ws_connections[url] = (websocket, subscribers)
         if subscriber_id not in subscribers:
             subscribers.append(subscriber_id)
         return websocket
