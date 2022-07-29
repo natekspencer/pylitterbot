@@ -1,0 +1,20 @@
+[MASTER]
+#ignore=tests
+# Use a conservative default here; 2 should speed up most setups and not hurt
+# any too bad. Override on command line as appropriate.
+jobs=2
+persistent=no
+
+[MESSAGES CONTROL]
+# Reasons disabled:
+# line-too-long is not enforced since it is handled via black
+# too-few-public-methods is not enforced
+# too-many-* - are not enforced for the sake of readability
+disable=
+  line-too-long,
+  too-few-public-methods,
+  too-many-ancestors,
+  too-many-arguments,
+  too-many-instance-attributes,
+  too-many-public-methods,
+  too-many-statements

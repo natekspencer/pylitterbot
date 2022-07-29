@@ -1,9 +1,12 @@
+"""Common test module."""
+from __future__ import annotations
+
 from unittest.mock import Mock, patch
 
-from httpx._exceptions import ConnectError, HTTPStatusError
+from aiohttp import ClientConnectorError, ClientResponseError, ClientWebSocketResponse
 
-from pylitterbot import Account
-from pylitterbot.robot import Robot
+from pylitterbot import Account, LitterRobot
+from pylitterbot.robot.litterrobot3 import DEFAULT_ENDPOINT
 
 USERNAME = "username@username.com"
 PASSWORD = "password"
@@ -70,6 +73,9 @@ ROBOT_FULL_DATA = {
     "setupDate": "2021-01-01T00:00:00.000000",
 }
 
+ROBOT_ENDPOINT = f"{DEFAULT_ENDPOINT}/users/{USER_ID}/robots/%s"
+
+
 COMMAND_RESPONSE = {
     "_developerMessage": "Command: <COMMAND> posted to litterRobotId: <LR-ID>",
 }
@@ -117,12 +123,69 @@ INSIGHT_RESPONSE = {
     ],
 }
 
+LITTER_ROBOT_4_DATA = {
+    "unitId": "LR4ID",
+    "name": "Litter-Robot 4",
+    "serial": "LR4C000001",
+    "userId": "000001",
+    "unitPowerType": "AC",
+    "unitTimezone": "America/Denver",
+    "cleanCycleWaitTime": 7,
+    "isKeypadLockout": False,
+    "nightLightMode": "AUTO",
+    "nightLightBrightness": 255,
+    "isPanelSleepMode": False,
+    "panelSleepTime": 0,
+    "panelWakeTime": 0,
+    "weekdaySleepModeEnabled": {
+        "Sunday": {"sleepTime": 0, "wakeTime": 510, "isEnabled": True},
+        "Monday": {"sleepTime": 1410, "wakeTime": 450, "isEnabled": True},
+        "Tuesday": {"sleepTime": 1410, "wakeTime": 450, "isEnabled": True},
+        "Wednesday": {"sleepTime": 1410, "wakeTime": 450, "isEnabled": True},
+        "Thursday": {"sleepTime": 1410, "wakeTime": 450, "isEnabled": True},
+        "Friday": {"sleepTime": 1410, "wakeTime": 450, "isEnabled": True},
+        "Saturday": {"sleepTime": 1380, "wakeTime": 510, "isEnabled": False},
+    },
+    "unitPowerStatus": "ON",
+    "sleepStatus": "WAKE",
+    "robotStatus": "ROBOT_IDLE",
+    "globeMotorFaultStatus": "FAULT_CLEAR",
+    "pinchStatus": "CLEAR",
+    "catDetect": "CAT_DETECT_SCALE_CLEAR",
+    "isBonnetRemoved": False,
+    "isNightLightLEDOn": True,
+    "odometerPowerCycles": 9,
+    "odometerCleanCycles": 93,
+    "odometerEmptyCycles": 0,
+    "odometerFilterCycles": 0,
+    "isDFIResetPending": False,
+    "DFINumberOfCycles": 58,
+    "DFILevelPercent": 91,
+    "isDFIFull": False,
+    "DFIFullCounter": 0,
+    "DFITriggerCount": 33,
+    "litterLevel": 475,
+    "DFILevelMM": 115,
+    "isCatDetectPending": False,
+    "globeMotorRetractFaultStatus": "FAULT_CLEAR",
+    "robotCycleStatus": "CYCLE_IDLE",
+    "robotCycleState": "CYCLE_STATE_WAIT_ON",
+    "weightSensor": 0.9,
+    "isOnline": True,
+    "isOnboarded": True,
+    "lastSeen": "2022-07-20T00:13:00.000Z",
+    "setupDateTime": "2022-07-16T21:40:50.000Z",
+}
 
-async def get_account(
-    mock_client, logged_in: bool = False, load_robots: bool = False
-) -> Account:
+
+async def get_account(logged_in: bool = False, load_robots: bool = False) -> Account:
     """Gets an account that has the underlying API patched."""
-    with patch("pylitterbot.session.AsyncOAuth2Client", mock_client):
+    with patch(
+        "pylitterbot.session.ClientSession.ws_connect",
+        return_value=ClientWebSocketResponse(
+            Mock(), Mock(), Mock(), Mock(), Mock(), Mock(), Mock(), Mock()
+        ),
+    ):
         account = Account()
         if logged_in:
             await account.connect(
@@ -131,22 +194,25 @@ async def get_account(
         return account
 
 
-async def get_robot(mock_client, robot_id: str = ROBOT_ID) -> Robot:
+async def get_robot(robot_id: str = ROBOT_ID) -> LitterRobot:
     """Gets a robot that has the underlying API patched."""
-    account = await get_account(mock_client, logged_in=True, load_robots=True)
-    robot = next(filter(lambda robot: (robot.id == robot_id), account.robots))
+    account = await get_account(logged_in=True, load_robots=True)
+    robot = next(
+        filter(
+            lambda robot: (robot.id == robot_id),
+            [robot for robot in account.robots if isinstance(robot, LitterRobot)],
+        )
+    )
     assert robot
 
     return robot
 
 
-def mock_http_status_error(status_code):
-    """Returns a mocked `httpx._exceptions.HTTPStatusError`."""
-    return HTTPStatusError(
-        Mock(), request=Mock(), response=Mock(status_code=status_code)
-    )
+def mock_client_response_error(status: int | None = None) -> ClientResponseError:
+    """Returns a mocked `aiohttp.ClientResponseError`."""
+    return ClientResponseError(Mock(), Mock(), status=status)
 
 
-def mock_connect_error():
-    """Returns a mocked `httpx._exceptions.ConnectError`."""
-    return ConnectError(Mock(), request=Mock())
+def mock_client_connector_error() -> ClientConnectorError:
+    """Returns a mocked `aiohttp.ClientConnectorError`."""
+    return ClientConnectorError(Mock(), Mock())

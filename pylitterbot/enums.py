@@ -1,37 +1,61 @@
+"""pylitterbot enums"""
 from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Any, List
+from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class LitterBoxCommand:
-    """Known commands that can be sent to trigger an action or setting for a Litter-Robot Connect self-cleaning litter box."""
+    """Known commands that can be sent to trigger an action or setting for Litter-Robot 3."""
 
-    _ENDPOINT = "/dispatch-commands"  # the endpoint to send commands to
-    _PREFIX = "<"  # prefix sent in front of commands
+    ENDPOINT = "/dispatch-commands"
+    PREFIX = "<"
 
-    CLEAN = "C"  # start cleaning cycle: unitStatus changes from RDY to CCP; upon completion, cycleCount += 1 and unitStatus briefly goes to CCC and panelLockActive = 1 then typically returns to unitStatus of RDY and panelLockActive of previous state
-    DEFAULT_SETTINGS = "D"  # reset settings to defaults: sleepModeActive = 0, panelLockActive = 0, nightLightActive = 1, cleanCycleWaitTimeMinutes = 7
-    LOCK_OFF = "L0"  # panel lock off: panelLockActive = 0
-    LOCK_ON = "L1"  # panel lock active: panelLockActive = 1
-    NIGHT_LIGHT_OFF = "N0"  # night light off: nightLightActive = 0
-    NIGHT_LIGHT_ON = "N1"  # night light on: nightLightActive = 1
-    POWER_OFF = "P0"  # turn power off: unitStatus changes = OFF; on the next report from the unit, powerStatus changes to NC and cleanCycleWaitTimeMinutes shows as 7; device is still wifi connected, but won't respond to any commands except P1 (power on), sleepModeActive and panelLockActive reset to 0
-    POWER_ON = "P1"  # turn power on: powerStatus goes from NC -> AC; cleanCycleWaitTimeMinutes returns to previous value; starts clean cycle (see details on "C" command above)
-    # REFRESH = "R"  # valid command, not sure what it does though, reset or refresh maybe? weirdly a new parameter showed up called "cyclesUntilFull" after posting this, but still not sure how it is utilized
-    SLEEP_MODE_OFF = "S0"  # turn off sleep mode: sleepModeActive = 0
-    SLEEP_MODE_ON = "S1"  # this command is invalid on its own and must be combined with a time component so that it forms the syntax S1HH:MI:SS - turn on sleep mode: sleepModeActive = 1HH:MI:SS; HH:MI:SS is a 24 hour clock that enters sleep mode from 00:00:00-08:00:00, so if at midnight you set sleep mode to 122:30:00, then sleep mode will being in 1.5 hours or 1:30am; when coming out of sleep state, a clean cycle is performed (see details on "C" command above)
-    WAIT_TIME = "W"  # set wait time to [3, 7 or 15] minutes: cleanCycleWaitTimeMinutes = [3, 7 or F] (hexadecimal representation of minutes)
+    CLEAN = "C"
+    DEFAULT_SETTINGS = "D"
+    LOCK_OFF = "L0"
+    LOCK_ON = "L1"
+    NIGHT_LIGHT_OFF = "N0"
+    NIGHT_LIGHT_ON = "N1"
+    POWER_OFF = "P0"
+    POWER_ON = "P1"
+    # REFRESH = "R"  # valid command, not sure what it does though, reset or refresh maybe
+    SLEEP_MODE_OFF = "S0"
+    SLEEP_MODE_ON = "S1"
+    WAIT_TIME = "W"
 
 
-class LitterBoxStatus(Enum):
+class LitterRobot4Command:
+    """Known commands that can be sent to trigger an action or setting for a Litter-Robot 4."""
+
+    CLEAN_CYCLE = "cleanCycle"
+    KEY_PAD_LOCK_OUT_OFF = "keyPadLockOutOff"
+    KEY_PAD_LOCK_OUT_ON = "keyPadLockOutOn"
+    NIGHT_LIGHT_MODE_AUTO = "nightLightModeAuto"
+    NIGHT_LIGHT_MODE_OFF = "nightLightModeOff"
+    NIGHT_LIGHT_MODE_ON = "nightLightModeOn"
+    POWER_OFF = "powerOff"
+    POWER_ON = "powerOn"
+    REQUEST_STATE = "requestState"
+    SET_CLUMP_TIME = "setClumpTime"
+    SET_NIGHT_LIGHT_VALUE = "setNightLightValue"
+
+
+class LitterBoxStatusMixIn:
+    """Litter box status mixin."""
+
+    _text: str | None
+    _minimum_cycles_left: int
+
+
+class LitterBoxStatus(LitterBoxStatusMixIn, Enum):
     """Representation of a Litter-Robot status."""
 
     def __new__(
-        cls, value: str, text: str, minimum_cycles_left: int = 3
+        cls, value: str | None, text: str | None = None, minimum_cycles_left: int = 3
     ) -> LitterBoxStatus:
         obj = object.__new__(cls)
         obj._value_ = value
@@ -71,7 +95,7 @@ class LitterBoxStatus(Enum):
         return cls.UNKNOWN
 
     @property
-    def text(self) -> str:
+    def text(self) -> str | None:
         """Returns the textual representation of a litter box's status."""
         return self._text
 
@@ -86,7 +110,7 @@ class LitterBoxStatus(Enum):
         completely_full: bool = True,
         almost_full: bool = True,
         codes_only: bool = False,
-    ) -> List[LitterBoxStatus | str]:
+    ) -> list[LitterBoxStatus | str]:
         """Returns the statuses that represent that the waste drawer is full."""
         return [
             status.value if codes_only else status

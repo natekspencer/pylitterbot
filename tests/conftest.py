@@ -1,103 +1,100 @@
-from typing import Optional
-from unittest.mock import patch
+"""Conftest."""
+from __future__ import annotations
 
+import re
+from datetime import datetime, timedelta, timezone
+
+import jwt
 import pytest
-from httpx import HTTPStatusError
+from aioresponses import aioresponses
 
-from pylitterbot.session import AsyncOAuth2Client
+from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
+from pylitterbot.session import LitterRobotSession
 
 from .common import (
-    ACTIVITY_FULL_RESPONSE,
     ACTIVITY_RESPONSE,
-    COMMAND_RESPONSE,
     INSIGHT_RESPONSE,
-    INVALID_COMMAND_RESPONSE,
+    LITTER_ROBOT_4_DATA,
     ROBOT_DATA,
     ROBOT_FULL_DATA,
-    ROBOT_FULL_ID,
-    ROBOT_ID,
-    TOKEN_RESPONSE,
     USER_RESPONSE,
 )
 
 
-async def fetch_token(self, **kwargs):
-    self.parse_response_token(TOKEN_RESPONSE)
-
-
-class MockResponse:
-    def __init__(self, json_data, status_code):
-        self.json_data = json_data
-        self.status_code = status_code
-
-    def json(self):
-        return self.json_data
-
-    def raise_for_status(self):
-        if self.status_code != 200:
-            raise HTTPStatusError("Error in request", request=None, response=self)
-
-
-class MockedResponses:
-    def __init__(self, robot_data: Optional[dict] = None) -> None:
-        self.robot_data = robot_data if robot_data else {}
-
-    def mocked_requests_get(self, *args, **kwargs):
-        if args[0].endswith("/users"):
-            return MockResponse(USER_RESPONSE, 200)
-        elif args[0].endswith("/robots"):
-            return MockResponse([ROBOT_DATA, ROBOT_FULL_DATA], 200)
-        elif args[0].endswith(f"/robots/{ROBOT_ID}"):
-            return MockResponse({**ROBOT_DATA, **self.robot_data}, 200)
-        elif args[0].endswith(f"/robots/{ROBOT_FULL_ID}"):
-            return MockResponse({**ROBOT_FULL_DATA, **self.robot_data}, 200)
-        elif args[0].endswith(f"/robots/{ROBOT_ID}/activity"):
-            return MockResponse(ACTIVITY_RESPONSE, 200)
-        elif args[0].endswith(f"/robots/{ROBOT_FULL_ID}/activity"):
-            return MockResponse(ACTIVITY_FULL_RESPONSE, 200)
-        elif args[0].endswith("/insights"):
-            return MockResponse(INSIGHT_RESPONSE, 200)
-
-        return MockResponse(None, 404)
-
-    def mocked_requests_patch(self, *args, **kwargs):
-        if args[0].endswith(f"/robots/{ROBOT_ID}"):
-            return MockResponse({**ROBOT_DATA, **kwargs.get("json")}, 200)
-        elif args[0].endswith(f"/robots/{ROBOT_FULL_ID}"):
-            return MockResponse({**ROBOT_FULL_DATA, **kwargs.get("json")}, 200)
-
-        return MockResponse(None, 404)
-
-    def mocked_requests_post(self, *args, **kwargs):
-        if args[0].endswith("/dispatch-commands"):
-            if (kwargs.get("json") or {}).get("command") == "<W12":
-                return MockResponse(
-                    INVALID_COMMAND_RESPONSE,
-                    int(INVALID_COMMAND_RESPONSE["status_code"]),
-                )
-            if (kwargs.get("json") or {}).get("command") == "<BAD":
-                return MockResponse(
-                    {"oops": "no developerMessage"},
-                    int(INVALID_COMMAND_RESPONSE["status_code"]),
-                )
-            return MockResponse(COMMAND_RESPONSE, 200)
-
-        return MockResponse(None, 404)
-
-
 @pytest.fixture
-def mock_client():
-    responses = MockedResponses()
-    with patch(
-        "pylitterbot.session.AsyncOAuth2Client.get",
-        side_effect=responses.mocked_requests_get,
-    ), patch(
-        "pylitterbot.session.AsyncOAuth2Client.patch",
-        side_effect=responses.mocked_requests_patch,
-    ), patch(
-        "pylitterbot.session.AsyncOAuth2Client.post",
-        side_effect=responses.mocked_requests_post,
-    ):
-        client = AsyncOAuth2Client
-        client.fetch_token = fetch_token
-        yield client
+def mock_aioresponse():
+    """Mock aioresponses fixture."""
+    with aioresponses() as mock:
+        mock.post(
+            LitterRobotSession.AUTH_ENDPOINT,
+            status=200,
+            payload={"token": "tokenResponse"},
+            repeat=True,
+        )
+        mock.post(
+            re.compile(re.escape(LitterRobotSession.TOKEN_EXCHANGE_ENDPOINT)),
+            status=200,
+            payload={
+                "kind": "kindResponse",
+                "idToken": jwt.encode(
+                    {"exp": datetime.now(tz=timezone.utc) + timedelta(hours=1)},
+                    "secret",
+                ),
+                "refreshToken": "refreshTokenResponse",
+                "expiresIn": "3600",
+                "isNewUser": False,
+            },
+            repeat=True,
+        )
+        mock.post(
+            re.compile(re.escape(LitterRobotSession.TOKEN_REFRESH_ENDPOINT)),
+            status=200,
+            payload={
+                "access_token": (
+                    token := jwt.encode(
+                        {"exp": datetime.now(tz=timezone.utc) + timedelta(hours=1)},
+                        "secret",
+                    )
+                ),
+                "expires_in": "3600",
+                "token_type": "Bearer",
+                "refresh_token": "refreshTokenResponse",
+                "id_token": token,
+                "user_id": "userIdResponse",
+                "project_id": "projectId",
+            },
+            repeat=True,
+        )
+        mock.get(re.compile(".*/users$"), status=200, payload=USER_RESPONSE)
+        mock.get(
+            re.compile(".*/robots$"),
+            status=200,
+            payload=[ROBOT_DATA, ROBOT_FULL_DATA],
+            repeat=True,
+        )
+        mock.get(
+            re.compile(".*/activity?.*$"),
+            status=200,
+            payload=ACTIVITY_RESPONSE,
+            repeat=True,
+        )
+        mock.get(
+            re.compile(".*/insights?.*$"),
+            status=200,
+            payload=INSIGHT_RESPONSE,
+            repeat=True,
+        )
+        mock.post(
+            LR4_ENDPOINT,
+            status=200,
+            payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_DATA]}},
+            repeat=False,
+        )
+
+        mock.get(
+            re.compile(f"^{LR4_ENDPOINT}/realtime?.*$"),
+            # payload={},
+            repeat=True,
+            # callback=ws_callback,
+        )
+        yield mock
