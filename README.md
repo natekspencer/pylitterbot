@@ -100,7 +100,7 @@ Currently the following methods are available in the Robot class:
 
 ## Support Me
 
-I'm not employed by Litter-Robot and provide this python package as-is.
+I'm not employed by Whisker and provide this python package as-is.
 
 If you don't already own a Litter-Robot, please consider using [my affiliate link](https://www.gopjn.com/t/SENKTktMR0lDSEtJTklPQ0hKS05HTQ) to purchase your own robot and save $25!
 
