@@ -80,8 +80,7 @@ class Account:
     async def disconnect(self) -> None:
         """Close the underlying session."""
         for robot in self.robots:
-            if isinstance(robot, (FeederRobot, LitterRobot4)):
-                await robot.unsubscribe_from_updates()
+            await robot.unsubscribe_from_updates()
         for websocket, _ in self._ws_connections.values():
             await websocket.close()
         await self._session.close()
@@ -144,9 +143,7 @@ class Account:
                         data=data,
                         account=self,
                     )
-                    if subscribe_for_updates and isinstance(
-                        robot_object, (FeederRobot, LitterRobot4)
-                    ):
+                    if subscribe_for_updates:
                         await robot_object.subscribe_for_updates()
                 robots.append(robot_object)
 

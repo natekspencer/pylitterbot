@@ -1,9 +1,13 @@
 """Litter-Robot 3"""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, time, timedelta, timezone
+from json import loads
 from typing import TYPE_CHECKING
+
+from aiohttp import ClientWebSocketResponse, WSMsgType
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
@@ -25,6 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_ENDPOINT = "https://v2.api.whisker.iothings.site"
 DEFAULT_ENDPOINT_KEY = "cDduZE1vajYxbnBSWlA1Q1Z6OXY0VWowYkc3Njl4eTY3NThRUkJQYg=="
+WEBSOCKET_ENDPOINT = "https://8s1fz54a82.execute-api.us-east-1.amazonaws.com/prod"
 
 SLEEP_MODE_ACTIVE = "sleepModeActive"
 SLEEP_MODE_TIME = "sleepModeTime"
@@ -60,6 +65,8 @@ class LitterRobot3(LitterRobot):
         """
         super().__init__(id, serial, user_id, name, session, data, account)
         self._path = urljoin(DEFAULT_ENDPOINT, f"users/{user_id}/robots/{self.id}")
+        self._ws: ClientWebSocketResponse | None = None
+        self._ws_last_received: datetime | None = None
 
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
@@ -296,3 +303,80 @@ class LitterRobot3(LitterRobot):
                 for cycle in insight["cycleHistory"]
             ],
         )
+
+    async def subscribe_for_updates(self) -> None:
+        """Open a web socket connection to receive updates."""
+        if self._session is None or self._session.websession is None:
+            _LOGGER.warning("Robot has no session")
+            return
+
+        async def _authorization() -> str:
+            assert self._session
+            if not self._session.is_token_valid():
+                await self._session.refresh_token()
+            assert (authorization := await self._session.get_bearer_authorization())
+            return authorization
+
+        async def _subscribe() -> None:
+            assert self._ws
+            await self._ws.send_json({"action": "ping"})
+
+        async def _monitor() -> None:
+            assert (websocket := self._ws)
+            while True:
+                try:
+                    msg = await websocket.receive(timeout=80)
+                    if msg.type in (
+                        WSMsgType.CLOSE,
+                        WSMsgType.CLOSING,
+                        WSMsgType.CLOSED,
+                    ):
+                        break
+                    self._ws_last_received = utcnow()
+                    if msg.type == WSMsgType.TEXT:
+                        data = loads(msg.data)
+                        if data["type"] == "MODIFY" and data["name"] == "LitterRobot":
+                            if (data := data["data"])["litterRobotId"] == self.id:
+                                self._update_data(data)
+                            else:
+                                pass  # This update was not meant for me
+                        else:
+                            _LOGGER.debug(data)
+                    elif msg.type == WSMsgType.ERROR:
+                        _LOGGER.error(msg)
+                        break
+                except asyncio.TimeoutError:
+                    _LOGGER.debug(
+                        "Web socket monitor did not receive a message in time"
+                    )
+                    await _subscribe()
+            _LOGGER.debug("Web socket monitor stopped")
+            if self._ws is not None:
+                if self._ws.closed:
+                    await self.subscribe_for_updates()
+                    _LOGGER.debug("restarted connection")
+                else:
+                    asyncio.create_task(_monitor())
+                    await _subscribe()
+                    _LOGGER.debug("resubscribed")
+
+        try:
+            assert self._account
+            self._ws = await self._account.ws_connect(
+                WEBSOCKET_ENDPOINT,
+                params=None,
+                headers={"authorization": await _authorization()},
+                subscriber_id=self.id,
+            )
+            asyncio.create_task(_monitor())
+            await _subscribe()
+        except Exception as ex:  # pylint: disable=broad-except
+            _LOGGER.error(ex)
+
+    async def unsubscribe_from_updates(self) -> None:
+        """Stop the web socket."""
+        if (websocket := self._ws) is not None and not websocket.closed:
+            self._ws = None
+            assert self._account
+            await self._account.ws_disconnect(self.id)
+            _LOGGER.debug("Unsubscribed from updates")
