@@ -33,7 +33,10 @@ def test_robot_setup():
     """Tests that robot setup is successful and parses as expected."""
     robot = LitterRobot3(data=ROBOT_DATA)
     assert robot
-    assert str(robot) == f"Name: {ROBOT_NAME}, Serial: {ROBOT_SERIAL}, id: {ROBOT_ID}"
+    assert (
+        str(robot)
+        == f"Name: {ROBOT_NAME}, Model: Litter-Robot 3, Serial: {ROBOT_SERIAL}, id: {ROBOT_ID}"
+    )
     with pytest.warns(DeprecationWarning):
         assert robot.auto_offline_disabled
     assert robot.clean_cycle_wait_time_minutes == 7

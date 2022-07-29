@@ -24,7 +24,10 @@ async def test_litter_robot_4_setup(
     robot = LitterRobot4(session=session, data=LITTER_ROBOT_4_DATA)
     await robot.subscribe_for_updates()
     await robot.unsubscribe_from_updates()
-    assert str(robot) == "Name: Litter-Robot 4, Serial: LR4C000001, id: LR4ID"
+    assert (
+        str(robot)
+        == "Name: Litter-Robot 4, Model: Litter-Robot 4, Serial: LR4C000001, id: LR4ID"
+    )
     with pytest.warns(DeprecationWarning):
         assert robot.auto_offline_disabled
     assert robot.clean_cycle_wait_time_minutes == 7

@@ -107,7 +107,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def model(self) -> str:
-        """Return the Litter-Robot model."""
+        """Return the robot model."""
         return "Litter-Robot 4"
 
     @property
@@ -117,7 +117,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def panel_lock_enabled(self) -> bool:
-        """Returns `True` if the front panel buttons are locked on the Litter-Robot."""
+        """Returns `True` if the buttons on the robot are disabled."""
         return self._data.get("isKeypadLockout", False)
 
     @property
@@ -268,7 +268,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             _LOGGER.warning("Robot has no session")
             return
 
-        async def _authorization() -> str:
+        async def _authorization() -> str | None:
             assert self._session
             if not self._session.is_token_valid():
                 await self._session.refresh_token()
@@ -347,6 +347,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                     _LOGGER.debug("resubscribed")
 
         try:
+            assert self._account
             self._ws = await self._account.ws_connect(
                 f"{self._path}/realtime",
                 params={
@@ -371,5 +372,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         if (websocket := self._ws) is not None and not websocket.closed:
             self._ws = None
             await websocket.send_json({"id": self._ws_subscription_id, "type": "stop"})
+            assert self._account
             await self._account.ws_disconnect(self.id)
             _LOGGER.debug("Unsubscribed from updates")

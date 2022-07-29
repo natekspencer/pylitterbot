@@ -90,7 +90,7 @@ class LitterRobot3(LitterRobot):
 
     @property
     def model(self) -> str:
-        """Return the Litter-Robot model."""
+        """Return the robot model."""
         return "Litter-Robot 3"
 
     @property
@@ -100,7 +100,7 @@ class LitterRobot3(LitterRobot):
 
     @property
     def panel_lock_enabled(self) -> bool:
-        """Returns `True` if the front panel buttons are locked on the Litter-Robot."""
+        """Returns `True` if the buttons on the robot are disabled."""
         return self._data.get("panelLockActive", "0") != "0"
 
     @property

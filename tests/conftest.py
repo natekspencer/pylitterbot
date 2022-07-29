@@ -8,6 +8,7 @@ import jwt
 import pytest
 from aioresponses import aioresponses
 
+from pylitterbot.robot.feederrobot import FEEDER_ENDPOINT
 from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
 from pylitterbot.session import LitterRobotSession
 
@@ -90,11 +91,15 @@ def mock_aioresponse():
             payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_DATA]}},
             repeat=False,
         )
-
         mock.get(
             re.compile(f"^{LR4_ENDPOINT}/realtime?.*$"),
             # payload={},
             repeat=True,
             # callback=ws_callback,
+        )
+        mock.post(
+            FEEDER_ENDPOINT,
+            payload={"data": {"feeder_unit": []}},
+            repeat=True,
         )
         yield mock

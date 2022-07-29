@@ -28,15 +28,14 @@ def encode(value: str | dict) -> str:
 def from_litter_robot_timestamp(
     timestamp: str | None,
 ) -> datetime | None:
-    """Construct a UTC offset-aware datetime from a Litter-Robot API timestamp.
-
-    Litter-Robot timestamps are in the format `YYYY-MM-DDTHH:MM:SS.ffffff`,
-    so to get the UTC offset-aware datetime, we just append `+00:00` and
-    call the `datetime.fromisoformat` method.
-    """
+    """Construct a UTC offset-aware datetime from a Litter-Robot API timestamp."""
     if not timestamp:
         return None
-    return datetime.fromisoformat(f"{timestamp.replace('Z','')}+00:00")
+    if "Z" in timestamp:
+        timestamp = timestamp.replace("Z", "")
+    if (utc_offset := "+00:00") not in timestamp:
+        timestamp += utc_offset
+    return datetime.fromisoformat(timestamp)
 
 
 def utcnow() -> datetime:

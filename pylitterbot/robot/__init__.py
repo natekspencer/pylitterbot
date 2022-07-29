@@ -4,12 +4,14 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod
 from collections.abc import Callable
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from deepdiff import DeepDiff
 
 from ..exceptions import LitterRobotException
 from ..session import Session
+from ..utils import from_litter_robot_timestamp
 
 if TYPE_CHECKING:
     from ..account import Account
@@ -22,9 +24,12 @@ EVENT_UPDATE = "update"
 class Robot:
     """Robot base class."""
 
-    _data_id = "robotId"
-    _data_name = "robotName"
-    _data_serial = "robotSerial"
+    _data_id: str
+    _data_name: str
+    _data_serial: str
+    _data_setup_date: str
+
+    _path: str
 
     def __init__(
         self,
@@ -59,26 +64,48 @@ class Robot:
         self._account = account
 
         self._is_loaded = False
-        self._path: str | None = None
         self._listeners: dict[str, list[Callable]] = {}
 
         if data:
             self._update_data(data)
 
+    def __str__(self) -> str:
+        return f"Name: {self.name}, Model: {self.model}, Serial: {self.serial}, id: {self.id}"
+
     @property
     def id(self) -> str:  # pylint: disable=invalid-name
-        """Returns the id of the Litter-Robot."""
+        """Return the id of the robot."""
         return self._id if self._id else self._data[self._data_id]
 
     @property
+    @abstractmethod
+    def model(self) -> str:
+        """Return the robot model."""
+
+    @property
     def name(self) -> str | None:
-        """Returns the name of the Litter-Robot, if any."""
+        """Return the name of the robot, if any."""
         return self._name if self._name else self._data.get(self._data_name)
 
     @property
+    @abstractmethod
+    def night_light_mode_enabled(self) -> bool:
+        """Return `True` if night light mode is enabled."""
+
+    @property
+    @abstractmethod
+    def panel_lock_enabled(self) -> bool:
+        """Returns `True` if the buttons on the robot are disabled."""
+
+    @property
     def serial(self) -> str | None:
-        """Returns the serial of the Litter-Robot, if any."""
+        """Return the serial of the robot, if any."""
         return self._serial if self._serial else self._data.get(self._data_serial)
+
+    @property
+    def setup_date(self) -> datetime | None:
+        """Return the datetime the robot was onboarded, if any."""
+        return from_litter_robot_timestamp(self._data.get(self._data_setup_date))
 
     def emit(self, event_name: str, *args, **kwargs) -> None:
         """Run all callbacks for an event."""
@@ -119,3 +146,18 @@ class Robot:
         self._data.update(data)
         self._is_loaded = True
         self.emit(EVENT_UPDATE)
+
+    async def _get(self, subpath: str = "", **kwargs) -> dict | list[dict]:
+        """Sends a GET request to the Litter-Robot API."""
+        assert self._session and self._path
+        return await self._session.get(self._path + subpath, **kwargs)
+
+    async def _patch(self, subpath: str = "", json=None, **kwargs) -> dict | list[dict]:
+        """Sends a PATCH request to the Litter-Robot API."""
+        assert self._session and self._path
+        return await self._session.patch(self._path + subpath, json=json, **kwargs)
+
+    async def _post(self, subpath: str = "", json=None, **kwargs) -> dict | list[dict]:
+        """Sends a POST request to the Litter-Robot API."""
+        assert self._session and self._path
+        return await self._session.post(self._path + subpath, json=json, **kwargs)

@@ -51,6 +51,14 @@ class Session(ABC):
     async def async_get_access_token(self, **kwargs) -> str | None:
         """Return a valid access token."""
 
+    @abstractmethod
+    def is_token_valid(self) -> bool:
+        """Return `True` if the token is stills valid."""
+
+    @abstractmethod
+    async def refresh_token(self) -> None:
+        """Refresh the access token."""
+
     async def get_bearer_authorization(self) -> str | None:
         """Get the bearer authorization."""
         if (access_token := await self.async_get_access_token()) is None:
