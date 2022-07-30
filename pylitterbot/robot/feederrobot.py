@@ -1,4 +1,4 @@
-"""Feeder-Robot"""
+"""Feeder-Robot."""
 from __future__ import annotations
 
 import asyncio
@@ -58,7 +58,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         self._ws_last_received: datetime | None = None
 
     def _state_info(self, key: str) -> Any:
-        """Helper to get an attribute from the data.state.info section."""
+        """Get an attribute from the data.state.info section."""
         return self._data["state"]["info"][key]
 
     @property
@@ -88,11 +88,11 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
 
     @property
     def panel_lock_enabled(self) -> bool:
-        """Returns `True` if the buttons on the robot are disabled."""
+        """Return `True` if the buttons on the robot are disabled."""
         return self._state_info("panelLockout")
 
     async def _dispatch_command(self, command: str, value: bool) -> bool:
-        """Sends a command to the Feeder-Robot."""
+        """Send a command to the Feeder-Robot."""
         try:
             await self._post(
                 COMMAND_ENDPOINT,
@@ -186,19 +186,19 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         return self.name == name
 
     async def set_night_light(self, value: bool) -> bool:
-        """Turns the night light mode on or off."""
+        """Turn the night light mode on or off."""
         return await self._dispatch_command(
             FeederRobotCommand.SET_AUTO_NIGHT_MODE, value
         )
 
     async def set_panel_lockout(self, value: bool) -> bool:
-        """Turns the panel lock on or off."""
+        """Turn the panel lock on or off."""
         return await self._dispatch_command(FeederRobotCommand.SET_PANEL_LOCKOUT, value)
 
     async def get_activity_history(
         self, limit: int = 100  # pylint: disable=unused-argument
     ) -> list[Activity]:
-        """Returns the activity history."""
+        """Return the activity history."""
         _LOGGER.warning("get_activity_history has not yet been implemented")
         return []
 
@@ -207,7 +207,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         days: int = 30,  # pylint: disable=unused-argument
         timezone_offset: int = None,  # pylint: disable=unused-argument
     ) -> Insight:
-        """Returns the insight data."""
+        """Return the insight data."""
         _LOGGER.warning("get_insight has not yet been implemented")
         return Insight(0, 0, [])
 

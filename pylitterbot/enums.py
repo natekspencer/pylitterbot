@@ -1,4 +1,4 @@
-"""pylitterbot enums"""
+"""pylitterbot enums."""
 from __future__ import annotations
 
 import logging
@@ -80,6 +80,7 @@ class LitterBoxStatus(LitterBoxStatusMixIn, Enum):
     def __new__(
         cls, value: str | None, text: str | None = None, minimum_cycles_left: int = 3
     ) -> LitterBoxStatus:
+        """Create and return a new Litter Box Status."""
         obj = object.__new__(cls)
         obj._value_ = value
         obj._text = text
@@ -119,12 +120,12 @@ class LitterBoxStatus(LitterBoxStatusMixIn, Enum):
 
     @property
     def text(self) -> str | None:
-        """Returns the textual representation of a litter box's status."""
+        """Return the textual representation of a litter box's status."""
         return self._text
 
     @property
     def minimum_cycles_left(self) -> int:
-        """Returns the minimum number of cycles left based on a litter box's status."""
+        """Return the minimum number of cycles left based on a litter box's status."""
         return self._minimum_cycles_left
 
     @classmethod
@@ -134,7 +135,7 @@ class LitterBoxStatus(LitterBoxStatusMixIn, Enum):
         almost_full: bool = True,
         codes_only: bool = False,
     ) -> list[LitterBoxStatus | str]:
-        """Returns the statuses that represent that the waste drawer is full."""
+        """Return the statuses that represent that the waste drawer is full."""
         return [
             status.value if codes_only else status
             for status in (

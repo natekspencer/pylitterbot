@@ -40,12 +40,12 @@ class Account:
 
     @property
     def user_id(self) -> str | None:
-        """Returns the logged in user's id."""
+        """Return the logged in user's id."""
         return self._user.get("userId")
 
     @property
     def robots(self) -> list[Robot]:
-        """Returns the set of robots for the logged in account."""
+        """Return the set of robots for the logged in account."""
         return self._robots
 
     async def connect(

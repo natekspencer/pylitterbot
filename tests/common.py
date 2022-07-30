@@ -179,7 +179,7 @@ LITTER_ROBOT_4_DATA = {
 
 
 async def get_account(logged_in: bool = False, load_robots: bool = False) -> Account:
-    """Gets an account that has the underlying API patched."""
+    """Get an account that has the underlying API patched."""
     with patch(
         "pylitterbot.session.ClientSession.ws_connect",
         return_value=ClientWebSocketResponse(
@@ -195,7 +195,7 @@ async def get_account(logged_in: bool = False, load_robots: bool = False) -> Acc
 
 
 async def get_robot(robot_id: str = ROBOT_ID) -> LitterRobot:
-    """Gets a robot that has the underlying API patched."""
+    """Get a robot that has the underlying API patched."""
     account = await get_account(logged_in=True, load_robots=True)
     robot = next(
         filter(
@@ -209,10 +209,10 @@ async def get_robot(robot_id: str = ROBOT_ID) -> LitterRobot:
 
 
 def mock_client_response_error(status: int | None = None) -> ClientResponseError:
-    """Returns a mocked `aiohttp.ClientResponseError`."""
+    """Return a mocked `aiohttp.ClientResponseError`."""
     return ClientResponseError(Mock(), Mock(), status=status)
 
 
 def mock_client_connector_error() -> ClientConnectorError:
-    """Returns a mocked `aiohttp.ClientConnectorError`."""
+    """Return a mocked `aiohttp.ClientConnectorError`."""
     return ClientConnectorError(Mock(), Mock())

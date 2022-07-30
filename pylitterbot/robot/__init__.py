@@ -1,4 +1,4 @@
-"""Robot base"""
+"""Robot base class."""
 from __future__ import annotations
 
 import logging
@@ -70,6 +70,7 @@ class Robot:
             self._update_data(data)
 
     def __str__(self) -> str:
+        """Return str(self)."""
         return f"Name: {self.name}, Model: {self.model}, Serial: {self.serial}, id: {self.id}"
 
     @property
@@ -95,7 +96,7 @@ class Robot:
     @property
     @abstractmethod
     def panel_lock_enabled(self) -> bool:
-        """Returns `True` if the buttons on the robot are disabled."""
+        """Return `True` if the buttons on the robot are disabled."""
 
     @property
     def serial(self) -> str | None:
@@ -112,7 +113,7 @@ class Robot:
         for listener in self._listeners.get(event_name, []):
             try:
                 listener(*args, **kwargs)
-            except:  # pragma: no cover, pylint: disable=bare-except
+            except:  # pragma: no cover # pylint: disable=bare-except # noqa: E722
                 pass
 
     def on(  # pylint: disable=invalid-name
@@ -142,7 +143,7 @@ class Robot:
         """Stop the web socket."""
 
     def _update_data(self, data: dict) -> None:
-        """Saves the robot info from a data dictionary."""
+        """Save the robot info from a data dictionary."""
         if self._is_loaded:
             _LOGGER.debug(
                 "%s updated: %s",
@@ -158,14 +159,14 @@ class Robot:
     async def _get(
         self, subpath: str | None = None, **kwargs
     ) -> dict | list[dict] | None:
-        """Sends a GET request to the Litter-Robot API."""
+        """Send a GET request to the Litter-Robot API."""
         assert self._session
         return await self._session.get(urljoin(self._path, subpath), **kwargs)
 
     async def _patch(
         self, subpath: str | None = None, json=None, **kwargs
     ) -> dict | list[dict] | None:
-        """Sends a PATCH request to the Litter-Robot API."""
+        """Send a PATCH request to the Litter-Robot API."""
         assert self._session
         return await self._session.patch(
             urljoin(self._path, subpath), json=json, **kwargs
@@ -174,7 +175,7 @@ class Robot:
     async def _post(
         self, subpath: str | None = None, json=None, **kwargs
     ) -> dict | list[dict] | None:
-        """Sends a POST request to the Litter-Robot API."""
+        """Send a POST request to the Litter-Robot API."""
         assert self._session
         return await self._session.post(
             urljoin(self._path, subpath), json=json, **kwargs
