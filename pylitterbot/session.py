@@ -103,6 +103,7 @@ class Session(ABC):
             return data
 
     async def __aenter__(self: T) -> T:
+        """Async enter."""
         return self
 
     async def __aexit__(
@@ -111,6 +112,7 @@ class Session(ABC):
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
+        """Async exit."""
         await self.close()
 
 

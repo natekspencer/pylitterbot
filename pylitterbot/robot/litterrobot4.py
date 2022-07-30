@@ -1,4 +1,4 @@
-"""Litter-Robot 4"""
+"""Litter-Robot 4."""
 from __future__ import annotations
 
 import asyncio
@@ -13,7 +13,7 @@ from aiohttp import ClientWebSocketResponse, WSMsgType
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
-    from backports.zoneinfo import ZoneInfo
+    from backports.zoneinfo import ZoneInfo  # type: ignore
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxStatus, LitterRobot4Command
@@ -87,22 +87,22 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
-        """Returns the number of minutes after a cat uses the Litter-Robot to begin an automatic clean cycle."""
+        """Return the number of minutes after a cat uses the Litter-Robot to begin an automatic clean cycle."""
         return self._data.get("cleanCycleWaitTime", 7)
 
     @property
     def is_drawer_full_indicator_triggered(self) -> bool:
-        """Returns `True` if the drawer full indicator has been triggered."""
+        """Return `True` if the drawer full indicator has been triggered."""
         return self._data.get("isDFIFull", False)
 
     @property
     def is_sleeping(self) -> bool:
-        """Returns `True` if the Litter-Robot is currently "sleeping" and won't automatically perform a clean cycle."""
+        """Return `True` if the Litter-Robot is currently "sleeping" and won't automatically perform a clean cycle."""
         return self._data.get("sleepStatus", "WAKE") != "WAKE"
 
     @property
     def is_waste_drawer_full(self) -> bool:
-        """Returns `True` if the Litter-Robot is reporting that the waste drawer is full."""
+        """Return `True` if the Litter-Robot is reporting that the waste drawer is full."""
         return self._data.get("isDFIFull", False)
 
     @property
@@ -112,42 +112,42 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def night_light_mode_enabled(self) -> bool:
-        """Returns `True` if night light mode is enabled."""
+        """Return `True` if night light mode is enabled."""
         return self._data.get("nightLightMode", "OFF") != "OFF"
 
     @property
     def panel_lock_enabled(self) -> bool:
-        """Returns `True` if the buttons on the robot are disabled."""
+        """Return `True` if the buttons on the robot are disabled."""
         return self._data.get("isKeypadLockout", False)
 
     @property
     def sleep_mode_enabled(self) -> bool:
-        """Returns `True` if sleep mode is enabled."""
+        """Return `True` if sleep mode is enabled."""
         sleep_schedule = self._data["weekdaySleepModeEnabled"]
         return any(day["isEnabled"] for day in sleep_schedule.values())
 
     @property
     def sleep_mode_start_time(self) -> datetime | None:
-        """Returns the sleep mode start time, if any."""
+        """Return the sleep mode start time, if any."""
         self._revalidate_sleep_info()
         return self._sleep_mode_start_time
 
     @property
     def sleep_mode_end_time(self) -> datetime | None:
-        """Returns the sleep mode end time, if any."""
+        """Return the sleep mode end time, if any."""
         self._revalidate_sleep_info()
         return self._sleep_mode_end_time
 
     @property
     def status(self) -> LitterBoxStatus:
-        """Returns the status of the Litter-Robot."""
+        """Return the status of the Litter-Robot."""
         if self.is_waste_drawer_full:
             return LitterBoxStatus.DRAWER_FULL
         return LR4_STATUS_MAP.get(self._data["robotStatus"], LitterBoxStatus.UNKNOWN)
 
     @property
     def status_code(self) -> str | None:
-        """Returns the status code of the Litter-Robot."""
+        """Return the status code of the Litter-Robot."""
         return (
             self.status.value
             if self.status != LitterBoxStatus.UNKNOWN
@@ -156,7 +156,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def waste_drawer_level(self) -> float:
-        """Returns the approximate waste drawer level."""
+        """Return the approximate waste drawer level."""
         return self._data.get("DFILevelPercent", 0)
 
     def _revalidate_sleep_info(self) -> None:
@@ -169,7 +169,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             self._parse_sleep_info()
 
     def _parse_sleep_info(self) -> None:
-        """Parses the sleep info of a Litter-Robot."""
+        """Parse the sleep info of a Litter-Robot."""
         start = end = None
         now = datetime.now(ZoneInfo(self._data["unitTimezone"]))
         sleep_schedule = self._data["weekdaySleepModeEnabled"]
@@ -192,7 +192,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         self._sleep_mode_end_time = end
 
     async def _dispatch_command(self, command: str, **kwargs) -> bool:
-        """Sends a command to the Litter-Robot."""
+        """Send a command to the Litter-Robot."""
         try:
             data = await self._post(
                 json={
@@ -242,7 +242,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         self._update_data(data.get("data", {}).get("getLitterRobot4BySerial", {}))
 
     async def set_wait_time(self, wait_time: int) -> bool:
-        """Sets the wait time on the Litter-Robot."""
+        """Set the wait time on the Litter-Robot."""
         if wait_time not in self.VALID_WAIT_TIMES:
             raise InvalidCommandException(
                 f"Attempt to send an invalid wait time to Litter-Robot. Wait time must be one of: {self.VALID_WAIT_TIMES}, but received {wait_time}"
@@ -253,12 +253,12 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         )
 
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
-        """Returns the activity history."""
+        """Return the activity history."""
         _LOGGER.warning("get_activity_history has not yet been implemented")
         return []
 
     async def get_insight(self, days: int = 30, timezone_offset: int = None) -> Insight:
-        """Returns the insight data."""
+        """Return the insight data."""
         _LOGGER.warning("get_insight has not yet been implemented")
         return Insight(0, 0, [])
 

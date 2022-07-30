@@ -1,4 +1,4 @@
-"""pylitterbot robot models"""
+"""pylitterbot robot models."""
 
 FEEDER_ROBOT_MODEL = """
 {

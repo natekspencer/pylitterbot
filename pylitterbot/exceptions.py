@@ -1,4 +1,4 @@
-"""pylitterbot exceptions"""
+"""pylitterbot exceptions."""
 
 
 class LitterRobotException(Exception):
