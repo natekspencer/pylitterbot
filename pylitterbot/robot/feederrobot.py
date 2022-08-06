@@ -11,7 +11,7 @@ from uuid import uuid4
 from aiohttp import ClientWebSocketResponse, WSMsgType
 
 from ..activity import Activity, Insight
-from ..enums import FeederRobotCommand, FeederRobotMealInsertSize
+from ..enums import FeederRobotCommand
 from ..exceptions import InvalidCommandException
 from ..session import Session
 from ..utils import decode, utcnow
@@ -30,6 +30,10 @@ COMMAND_ENDPOINT = (
 COMMAND_ENDPOINT_KEY = decode(
     "dzJ0UEZiamxQMTNHVW1iOGRNalVMNUIyWXlQVkQzcEo3RXk2Zno4dg=="
 )
+
+# FOOD_LEVEL_PERCENT_MAP = {9: 100, 8: 70, 7: 60, 6: 50, 5: 40, 4: 30, 3: 20, 2: 10, 1: 5, 0: 0}
+MEAL_INSERT_SIZE_CUPS_MAP = {0: 1 / 4, 1: 1 / 8}
+MEAL_INSERT_SIZE_CUPS_REVERSE_MAP = {v: k for k, v in MEAL_INSERT_SIZE_CUPS_MAP.items()}
 
 
 class FeederRobot(Robot):  # pylint: disable=abstract-method
@@ -72,9 +76,12 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         return int(round(self._state_info("level") / 9 * 100, -1))
 
     @property
-    def meal_insert_size(self) -> FeederRobotMealInsertSize:
-        """Return the meal insert size."""
-        return FeederRobotMealInsertSize(self._state_info("mealInsertSize"))
+    def meal_insert_size(self) -> float:
+        """Return the meal insert size in cups."""
+        meal_insert_size = self._state_info("mealInsertSize")
+        if not (cups := MEAL_INSERT_SIZE_CUPS_MAP.get(meal_insert_size, 0)):
+            _LOGGER.error('Unknown meal insert size "%s"', meal_insert_size)
+        return cups
 
     @property
     def model(self) -> str:
@@ -128,10 +135,13 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         assert isinstance(data, dict)
         self._update_data(data.get("data", {}).get("feeder_unit_by_pk", {}))
 
-    async def set_meal_insert_size(
-        self, meal_insert_size: FeederRobotMealInsertSize | int
-    ) -> bool:
+    async def set_meal_insert_size(self, meal_insert_size: float) -> bool:
         """Set the meal insert size."""
+        if not (value := MEAL_INSERT_SIZE_CUPS_REVERSE_MAP.get(meal_insert_size)):
+            raise InvalidCommandException(
+                f"Only meal insert sizes of {list(MEAL_INSERT_SIZE_CUPS_REVERSE_MAP)} are supported."
+            )
+
         data = await self._post(
             json={
                 "query": """
@@ -145,7 +155,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
                 "variables": {
                     "id": self._data["state"]["id"],
                     "state": {
-                        "mealInsertSize": int(meal_insert_size),
+                        "mealInsertSize": value,
                         "historyInvalidationDate": utcnow().strftime(
                             "%Y-%m-%dT%H:%M:%S.%fZ"
                         ),
@@ -163,7 +173,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
                 },
             }
         )
-        return int(self.meal_insert_size) == int(meal_insert_size)
+        return self.meal_insert_size == meal_insert_size
 
     async def set_name(self, name: str) -> bool:
         """Set the name."""

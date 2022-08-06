@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum, IntEnum
+from enum import Enum
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
@@ -14,21 +14,6 @@ class FeederRobotCommand:
     GIVE_SNACK = "giveSnack"
     SET_AUTO_NIGHT_MODE = "setAutoNightMode"
     SET_PANEL_LOCKOUT = "setPanelLockout"
-
-
-class FeederRobotMealInsertSize(IntEnum):
-    """Feeder-Robot meal insert size."""
-
-    ONE_FOURTH_CUP = 0
-    ONE_EIGHTH_CUP = 1
-
-    # Handle unknown/future unit statuses
-    UNKNOWN = -1
-
-    @classmethod
-    def _missing_(cls, _: Any) -> FeederRobotMealInsertSize:
-        _LOGGER.error('Unknown meal insert size "%s"', _)
-        return cls.UNKNOWN
 
 
 class LitterBoxCommand:
