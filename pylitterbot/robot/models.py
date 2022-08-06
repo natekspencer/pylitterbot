@@ -26,9 +26,7 @@ LITTER_ROBOT_4_MODEL = """
     userId
     espFirmware
     picFirmwareVersion
-    picFirmwareVersionHex
     laserBoardFirmwareVersion
-    laserBoardFirmwareVersionHex
     wifiRssi
     unitPowerType
     catWeight

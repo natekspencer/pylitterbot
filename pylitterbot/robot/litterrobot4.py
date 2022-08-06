@@ -91,6 +91,15 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return self._data.get("cleanCycleWaitTime", 7)
 
     @property
+    def firmware(self) -> str:
+        """Return the firmware version."""
+        return (
+            f"ESP: {self._data.get('espFirmware')} / "
+            f"PIC: {self._data.get('picFirmwareVersion')} / "
+            f"TOF: {self._data.get('laserBoardFirmwareVersion')}"
+        )
+
+    @property
     def is_drawer_full_indicator_triggered(self) -> bool:
         """Return `True` if the drawer full indicator has been triggered."""
         return self._data.get("isDFIFull", False)
@@ -119,6 +128,11 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     def panel_lock_enabled(self) -> bool:
         """Return `True` if the buttons on the robot are disabled."""
         return self._data.get("isKeypadLockout", False)
+
+    @property
+    def pet_weight(self) -> float:
+        """Return the last recorded pet weight in pounds (lbs)."""
+        return self._data.get("catWeight", 0)
 
     @property
     def sleep_mode_enabled(self) -> bool:

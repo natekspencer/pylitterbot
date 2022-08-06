@@ -38,7 +38,7 @@ def from_litter_robot_timestamp(
     return datetime.fromisoformat(timestamp)
 
 
-def pluralize(word: str, count: int):
+def pluralize(word: str, count: int) -> str:
     """Pluralize a word."""
     return f"{count} {word}{'s' if count != 1 else ''}"
 
@@ -74,7 +74,7 @@ def utcnow() -> datetime:
 
 def send_deprecation_warning(
     old_name: str, new_name: str | None = None
-):  # pragma: no cover
+) -> None:  # pragma: no cover
     """Log a deprecation warning message."""
     message = f"{old_name} has been deprecated{'' if new_name is None else f' in favor of {new_name}'} and will be removed in a future release"
     warn(
