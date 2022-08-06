@@ -5,7 +5,7 @@ import asyncio
 import logging
 from datetime import datetime, time, timedelta, timezone
 from json import loads
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import ClientWebSocketResponse, WSMsgType
 
@@ -84,7 +84,7 @@ class LitterRobot3(LitterRobot):
     @property
     def is_drawer_full_indicator_triggered(self) -> bool:
         """Return `True` if the drawer full indicator has been triggered."""
-        return self._data.get("isDFITriggered", "0") != "0"
+        return bool(self._data.get("isDFITriggered", "0") != "0")
 
     @property
     def is_sleeping(self) -> bool:
@@ -109,17 +109,17 @@ class LitterRobot3(LitterRobot):
     @property
     def night_light_mode_enabled(self) -> bool:
         """Return `True` if night light mode is enabled."""
-        return self._data.get("nightLightActive", "0") != "0"
+        return bool(self._data.get("nightLightActive", "0") != "0")
 
     @property
     def panel_lock_enabled(self) -> bool:
         """Return `True` if the buttons on the robot are disabled."""
-        return self._data.get("panelLockActive", "0") != "0"
+        return bool(self._data.get("panelLockActive", "0") != "0")
 
     @property
     def sleep_mode_enabled(self) -> bool:
         """Return `True` if sleep mode is enabled."""
-        return self._data.get(SLEEP_MODE_ACTIVE, "0") != "0"
+        return bool(self._data.get(SLEEP_MODE_ACTIVE, "0") != "0")
 
     @property
     def status(self) -> LitterBoxStatus:
@@ -182,7 +182,7 @@ class LitterRobot3(LitterRobot):
         self._sleep_mode_start_time = start_time
         self._sleep_mode_end_time = end_time
 
-    async def _dispatch_command(self, command: str, **kwargs) -> bool:
+    async def _dispatch_command(self, command: str, **kwargs: Any) -> bool:
         """Send a command to the Litter-Robot."""
         try:
             await self._post(

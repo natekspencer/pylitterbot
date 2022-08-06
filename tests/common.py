@@ -1,6 +1,7 @@
 """Common test module."""
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import Mock, patch
 
 from aiohttp import ClientConnectorError, ClientResponseError, ClientWebSocketResponse
@@ -123,7 +124,7 @@ INSIGHT_RESPONSE = {
     ],
 }
 
-LITTER_ROBOT_4_DATA = {
+LITTER_ROBOT_4_DATA: dict[str, Any] = {
     "unitId": "LR4ID",
     "name": "Litter-Robot 4",
     "serial": "LR4C000001",

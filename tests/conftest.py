@@ -23,7 +23,7 @@ from .common import (
 
 
 @pytest.fixture
-def mock_aioresponse():
+def mock_aioresponse() -> aioresponses:
     """Mock aioresponses fixture."""
     with aioresponses() as mock:
         mock.post(

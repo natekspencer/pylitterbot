@@ -175,7 +175,8 @@ class Account:
         """Initiate websocket connection."""
         assert self._session.websession
 
-        async def _new_ws_connection():
+        async def _new_ws_connection() -> ClientWebSocketResponse:
+            assert self._session.websession
             return await self._session.websession.ws_connect(
                 url=url, params=params, headers=headers
             )

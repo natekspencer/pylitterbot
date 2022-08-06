@@ -5,7 +5,7 @@ import logging
 from abc import abstractmethod
 from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from deepdiff import DeepDiff
 
@@ -76,7 +76,7 @@ class Robot:
     @property
     def id(self) -> str:  # pylint: disable=invalid-name
         """Return the id of the robot."""
-        return self._id if self._id else self._data[self._data_id]
+        return self._id if self._id else str(self._data[self._data_id])
 
     @property
     @abstractmethod
@@ -108,7 +108,7 @@ class Robot:
         """Return the datetime the robot was onboarded, if any."""
         return from_litter_robot_timestamp(self._data.get(self._data_setup_date))
 
-    def emit(self, event_name: str, *args, **kwargs) -> None:
+    def emit(self, event_name: str, *args: Any, **kwargs: Any) -> None:
         """Run all callbacks for an event."""
         for listener in self._listeners.get(event_name, []):
             try:
@@ -157,14 +157,14 @@ class Robot:
         self.emit(EVENT_UPDATE)
 
     async def _get(
-        self, subpath: str | None = None, **kwargs
+        self, subpath: str | None = None, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Send a GET request to the Litter-Robot API."""
         assert self._session
         return await self._session.get(urljoin(self._path, subpath), **kwargs)
 
     async def _patch(
-        self, subpath: str | None = None, json=None, **kwargs
+        self, subpath: str | None = None, json: Any = None, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Send a PATCH request to the Litter-Robot API."""
         assert self._session
@@ -173,7 +173,7 @@ class Robot:
         )
 
     async def _post(
-        self, subpath: str | None = None, json=None, **kwargs
+        self, subpath: str | None = None, json: Any = None, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Send a POST request to the Litter-Robot API."""
         assert self._session

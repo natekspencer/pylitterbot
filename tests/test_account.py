@@ -2,6 +2,7 @@
 from unittest.mock import patch
 
 import pytest
+from aiohttp.client_exceptions import ClientError
 from aioresponses import aioresponses
 
 from pylitterbot.exceptions import LitterRobotException, LitterRobotLoginException
@@ -72,7 +73,9 @@ async def test_account(mock_aioresponse: aioresponses) -> None:
         (mock_client_connector_error(), LitterRobotException),
     ],
 )
-async def test_account_connect_exceptions(side_effect, exception):
+async def test_account_connect_exceptions(
+    side_effect: ClientError, exception: type[LitterRobotException]
+) -> None:
     """Tests the expected outcome of various exceptions that may occur on `account.connect()`."""
     account = await get_account()
 

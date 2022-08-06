@@ -68,7 +68,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     @property
     def firmware(self) -> str:
         """Return the firmware version."""
-        return self._state_info("fwVersion")
+        return str(self._state_info("fwVersion"))
 
     @property
     def food_level(self) -> int:
@@ -91,12 +91,12 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     @property
     def night_light_mode_enabled(self) -> bool:
         """Return `True` if night light mode is enabled."""
-        return self._state_info("autoNightMode")
+        return bool(self._state_info("autoNightMode"))
 
     @property
     def panel_lock_enabled(self) -> bool:
         """Return `True` if the buttons on the robot are disabled."""
-        return self._state_info("panelLockout")
+        return bool(self._state_info("panelLockout"))
 
     async def _dispatch_command(self, command: str, value: bool) -> bool:
         """Send a command to the Feeder-Robot."""

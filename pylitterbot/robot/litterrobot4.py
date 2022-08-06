@@ -5,7 +5,7 @@ import asyncio
 import logging
 from datetime import datetime, time, timedelta
 from json import dumps, loads
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from aiohttp import ClientWebSocketResponse, WSMsgType
@@ -107,7 +107,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def is_sleeping(self) -> bool:
         """Return `True` if the Litter-Robot is currently "sleeping" and won't automatically perform a clean cycle."""
-        return self._data.get("sleepStatus", "WAKE") != "WAKE"
+        return bool(self._data.get("sleepStatus", "WAKE") != "WAKE")
 
     @property
     def is_waste_drawer_full(self) -> bool:
@@ -122,7 +122,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def night_light_mode_enabled(self) -> bool:
         """Return `True` if night light mode is enabled."""
-        return self._data.get("nightLightMode", "OFF") != "OFF"
+        return bool(self._data.get("nightLightMode", "OFF") != "OFF")
 
     @property
     def panel_lock_enabled(self) -> bool:
@@ -197,7 +197,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                     start = start_of_day - timedelta(minutes=1440 - sleep_time)
                 else:
                     start = start_of_day + timedelta(minutes=sleep_time)
-                if end is None or now > start:
+                if now > start or end is None:
                     end = start_of_day + timedelta(minutes=wake_time)
                 if now > max(start, end):
                     continue
@@ -205,7 +205,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         self._sleep_mode_start_time = start
         self._sleep_mode_end_time = end
 
-    async def _dispatch_command(self, command: str, **kwargs) -> bool:
+    async def _dispatch_command(self, command: str, **kwargs: Any) -> bool:
         """Send a command to the Litter-Robot."""
         try:
             data = await self._post(
