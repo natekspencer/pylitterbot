@@ -12,8 +12,21 @@ FEEDER_ROBOT_MODEL = """
     state {
         id
         info
-        active_schedule_id
         updated_at
+        active_schedule {
+            id
+            name
+            meals
+            created_at
+        }
+    }
+    feeding_snack (limit: 10, order_by: {timestamp: desc}) {
+        timestamp
+        amount
+    }
+    feeding_meal (limit: 10, order_by: {timestamp: desc}) {
+        timestamp
+        amount
     }
 }
 """
