@@ -29,7 +29,7 @@ from .common import (
 )
 
 
-def test_robot_setup():
+def test_robot_setup() -> None:
     """Tests that robot setup is successful and parses as expected."""
     robot = LitterRobot3(data=ROBOT_DATA)
     assert robot
@@ -75,7 +75,7 @@ def test_robot_setup():
     assert robot.waste_drawer_level == 50
 
 
-def test_robot_with_sleep_mode_time():
+def test_robot_with_sleep_mode_time() -> None:
     """Tests that robot with `sleepModeTime` is setup correctly."""
     for hour in range(-12, 25, 12):
         with patch(
@@ -92,7 +92,7 @@ def test_robot_with_sleep_mode_time():
             assert robot.sleep_mode_start_time.timetz() == start_time.timetz()
 
 
-def test_robot_with_invalid_sleep_mode_active(caplog):
+def test_robot_with_invalid_sleep_mode_active(caplog) -> None:
     """Tests that a robot with an invalid `sleepModeActive` value is setup correctly."""
     invalid_value = "17F"
     robot = LitterRobot3(data={**ROBOT_DATA, "sleepModeActive": invalid_value})
@@ -106,7 +106,7 @@ def test_robot_with_invalid_sleep_mode_active(caplog):
     assert robot.sleep_mode_start_time is None
 
 
-def test_robot_with_unknown_status():
+def test_robot_with_unknown_status() -> None:
     """Tests that a robot with an unknown `unitStatus` is setup correctly."""
 
     random_status = "_" + "".join(random.sample(ascii_letters, 3))
@@ -118,7 +118,7 @@ def test_robot_with_unknown_status():
     assert robot.status.text == "Unknown"
 
 
-async def test_robot_with_drawer_full_status(mock_aioresponse):
+async def test_robot_with_drawer_full_status(mock_aioresponse) -> None:
     """Tests that a robot with a `unitStatus` of DF1/DF2 calls the activity endpoint."""
     url = ROBOT_ENDPOINT % ROBOT_FULL_ID
 
@@ -148,7 +148,7 @@ async def test_robot_with_drawer_full_status(mock_aioresponse):
     await robot._session.close()
 
 
-def test_robot_creation_fails():
+def test_robot_creation_fails() -> None:
     """Tests that robot creation fails if missing information."""
     with pytest.raises(LitterRobotException):
         LitterRobot3()
@@ -170,7 +170,9 @@ def test_robot_creation_fails():
         (LitterRobot.set_wait_time, LitterBoxCommand.WAIT_TIME + "F", {15}),
     ],
 )
-async def test_dispatch_commands(mock_aioresponse, method_call, dispatch_command, args):
+async def test_dispatch_commands(
+    mock_aioresponse, method_call, dispatch_command, args
+) -> None:
     """Tests that the dispatch commands are sent as expected."""
     robot = await get_robot()
 
@@ -258,7 +260,9 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
     await robot._session.close()
 
 
-async def test_invalid_commands(mock_aioresponse, caplog: pytest.LogCaptureFixture):
+async def test_invalid_commands(
+    mock_aioresponse, caplog: pytest.LogCaptureFixture
+) -> None:
     """Tests expected exceptions/responses for invalid commands."""
     robot = await get_robot()
     url = f"{ROBOT_ENDPOINT % robot.id}/{LitterBoxCommand.ENDPOINT}"
@@ -280,7 +284,7 @@ async def test_invalid_commands(mock_aioresponse, caplog: pytest.LogCaptureFixtu
     await robot._session.close()
 
 
-async def test_robot_update_event():
+async def test_robot_update_event() -> None:
     """Test robot emits an update event."""
     robot = LitterRobot3(data=ROBOT_DATA)
     assert not robot._listeners
