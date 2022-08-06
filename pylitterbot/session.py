@@ -35,20 +35,20 @@ class Session(ABC):
         if not self._websession_provided and self._websession is not None:
             await self._websession.close()
 
-    async def get(self, path: str, **kwargs) -> dict | list[dict] | None:
+    async def get(self, path: str, **kwargs: Any) -> dict | list[dict] | None:
         """Send a GET request to the specified path."""
         return await self.request("GET", path, **kwargs)
 
-    async def post(self, path: str, **kwargs) -> dict | list[dict] | None:
+    async def post(self, path: str, **kwargs: Any) -> dict | list[dict] | None:
         """Send a POST request to the specified path."""
         return await self.request("POST", path, **kwargs)
 
-    async def patch(self, path: str, **kwargs) -> dict | list[dict] | None:
+    async def patch(self, path: str, **kwargs: Any) -> dict | list[dict] | None:
         """Send a PATCH request to the specified path."""
         return await self.request("PATCH", path, **kwargs)
 
     @abstractmethod
-    async def async_get_access_token(self, **kwargs) -> str | None:
+    async def async_get_access_token(self, **kwargs: Any) -> str | None:
         """Return a valid access token."""
 
     @abstractmethod
@@ -66,7 +66,7 @@ class Session(ABC):
         return f"Bearer {access_token}"
 
     async def request(
-        self, method: str, url: str, **kwargs
+        self, method: str, url: str, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Make a request."""
         if self._websession is None:
@@ -100,7 +100,7 @@ class Session(ABC):
 
             resp.raise_for_status()
             data = await resp.json()
-            return data
+            return data  # type: ignore
 
     async def __aenter__(self: T) -> T:
         """Async enter."""
@@ -138,7 +138,7 @@ class LitterRobotSession(Session):
         self._token = token
         self._custom_args: dict = {}
 
-    def generate_args(self, url: str, **kwargs) -> dict[str, Any]:
+    def generate_args(self, url: str, **kwargs: Any) -> dict[str, Any]:
         """Generate args."""
         for key, value in next(
             (value for key, value in self._custom_args.items() if url.startswith(key)),
@@ -163,7 +163,7 @@ class LitterRobotSession(Session):
             return False
         return True
 
-    async def async_get_access_token(self, **kwargs) -> str | None:
+    async def async_get_access_token(self, **kwargs: Any) -> str | None:
         """Return a valid access token."""
         if self._token is None or not self.is_token_valid():
             return None
@@ -209,7 +209,7 @@ class LitterRobotSession(Session):
         self._token = data
 
     async def request(
-        self, method: str, url: str, **kwargs
+        self, method: str, url: str, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Make a request."""
         kwargs = self.generate_args(url, **kwargs)

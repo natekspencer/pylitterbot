@@ -15,7 +15,7 @@ from .common import LITTER_ROBOT_4_DATA
 
 async def test_litter_robot_4_setup(
     mock_aioresponse: aioresponses, caplog: pytest.LogCaptureFixture
-):
+) -> None:
     """Tests that a Litter-Robot 4 setup is successful and parses as expected."""
     robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)
     await robot.subscribe_for_updates()
@@ -103,7 +103,7 @@ async def test_litter_robot_4_setup(
     await robot._session.close()
 
 
-def test_litter_robot_4_sleep_time(freezer):
+def test_litter_robot_4_sleep_time(freezer: pytest.fixture) -> None:
     """Tests that a Litter-Robot 4 parses sleep time as expected."""
     freezer.move_to("2022-07-21 12:00:00-06:00")
     robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)

@@ -3,8 +3,10 @@
 import asyncio
 import logging
 import random
+from collections.abc import Callable
 from datetime import datetime, time, timedelta, timezone
 from string import ascii_letters
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -63,10 +65,10 @@ def test_robot_setup() -> None:
     assert robot.power_status == "AC"
     assert robot.setup_date == datetime(year=2021, month=1, day=1, tzinfo=timezone.utc)
     assert robot.sleep_mode_enabled
-    assert robot.sleep_mode_start_time.timetz() == time(
+    assert robot.sleep_mode_start_time and robot.sleep_mode_start_time.timetz() == time(
         hour=22, minute=30, tzinfo=timezone.utc
     )
-    assert robot.sleep_mode_end_time.timetz() == time(
+    assert robot.sleep_mode_end_time and robot.sleep_mode_end_time.timetz() == time(
         hour=6, minute=30, tzinfo=timezone.utc
     )
     assert robot.status == LitterBoxStatus.READY
@@ -89,10 +91,13 @@ def test_robot_with_sleep_mode_time() -> None:
             robot = LitterRobot3(
                 data={**ROBOT_DATA, "sleepModeTime": int(start_time.timestamp())}
             )
-            assert robot.sleep_mode_start_time.timetz() == start_time.timetz()
+            assert (
+                robot.sleep_mode_start_time
+                and robot.sleep_mode_start_time.timetz() == start_time.timetz()
+            )
 
 
-def test_robot_with_invalid_sleep_mode_active(caplog) -> None:
+def test_robot_with_invalid_sleep_mode_active(caplog: pytest.LogCaptureFixture) -> None:
     """Tests that a robot with an invalid `sleepModeActive` value is setup correctly."""
     invalid_value = "17F"
     robot = LitterRobot3(data={**ROBOT_DATA, "sleepModeActive": invalid_value})
@@ -118,11 +123,13 @@ def test_robot_with_unknown_status() -> None:
     assert robot.status.text == "Unknown"
 
 
-async def test_robot_with_drawer_full_status(mock_aioresponse) -> None:
+async def test_robot_with_drawer_full_status(mock_aioresponse: aioresponses) -> None:
     """Tests that a robot with a `unitStatus` of DF1/DF2 calls the activity endpoint."""
     url = ROBOT_ENDPOINT % ROBOT_FULL_ID
 
     robot = await get_robot(ROBOT_FULL_ID)
+    assert robot._session
+
     robot_status = LitterBoxStatus.DRAWER_FULL_1
     assert robot_status.minimum_cycles_left == 2
     assert robot.status == robot_status
@@ -171,10 +178,14 @@ def test_robot_creation_fails() -> None:
     ],
 )
 async def test_dispatch_commands(
-    mock_aioresponse, method_call, dispatch_command, args
+    mock_aioresponse: aioresponses,
+    method_call: Callable,
+    dispatch_command: str,
+    args: Any,
 ) -> None:
     """Tests that the dispatch commands are sent as expected."""
     robot = await get_robot()
+    assert robot._session
 
     mock_aioresponse.post(
         f"{ROBOT_ENDPOINT % robot.id}/{LitterBoxCommand.ENDPOINT}",
@@ -193,7 +204,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
     assert robot._session
     url = ROBOT_ENDPOINT % robot.id
 
-    def patch_callback(_: URL, **kwargs):
+    def patch_callback(_: URL, **kwargs: Any) -> CallbackResult:
         return CallbackResult(payload={**robot._data, **kwargs["json"]})
 
     mock_aioresponse.patch(url, callback=patch_callback)
@@ -201,14 +212,14 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
     await robot.set_name(new_name)
     assert robot.name == new_name
 
-    def patch_callback2(_: URL, **kwargs):
+    def patch_callback2(_: URL, **kwargs: Any) -> CallbackResult:
         assert kwargs["json"] == {"sleepModeEnable": False}
         return CallbackResult(payload=robot._data)
 
     mock_aioresponse.patch(url, callback=patch_callback2)
     await robot.set_sleep_mode(False)
 
-    def patch_callback3(_: URL, **kwargs):
+    def patch_callback3(_: URL, **kwargs: Any) -> CallbackResult:
         json = kwargs["json"]
         assert json.get("sleepModeEnable")
         assert robot.sleep_mode_start_time
@@ -221,7 +232,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
     mock_aioresponse.patch(url, callback=patch_callback3)
     await robot.set_sleep_mode(True)
 
-    def patch_callback4(_: URL, **kwargs):
+    def patch_callback4(_: URL, **kwargs: Any) -> CallbackResult:
         json = kwargs["json"]
         assert json.get("sleepModeEnable")
         assert robot.sleep_mode_start_time
@@ -235,7 +246,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
     assert robot.sleep_mode_start_time
     await robot.set_sleep_mode(True, robot.sleep_mode_start_time.timetz())
 
-    def patch_callback5(_: URL, **kwargs):
+    def patch_callback5(_: URL, **kwargs: Any) -> CallbackResult:
         json = kwargs["json"]
         return CallbackResult(payload={**robot._data, **json})
 
@@ -261,7 +272,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
 
 
 async def test_invalid_commands(
-    mock_aioresponse, caplog: pytest.LogCaptureFixture
+    mock_aioresponse: aioresponses, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Tests expected exceptions/responses for invalid commands."""
     robot = await get_robot()

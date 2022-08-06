@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod
 from datetime import datetime, time
+from typing import Any
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
@@ -182,7 +183,7 @@ class LitterRobot(Robot):
             self._minimum_cycles_left = self.status.minimum_cycles_left
 
     @abstractmethod
-    async def _dispatch_command(self, command: str, **kwargs) -> bool:
+    async def _dispatch_command(self, command: str, **kwargs: Any) -> bool:
         """Send a command to the Litter-Robot."""
 
     async def start_cleaning(self) -> bool:
