@@ -137,7 +137,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
 
     async def set_meal_insert_size(self, meal_insert_size: float) -> bool:
         """Set the meal insert size."""
-        if not (value := MEAL_INSERT_SIZE_CUPS_REVERSE_MAP.get(meal_insert_size)):
+        if (value := MEAL_INSERT_SIZE_CUPS_REVERSE_MAP.get(meal_insert_size)) is None:
             raise InvalidCommandException(
                 f"Only meal insert sizes of {list(MEAL_INSERT_SIZE_CUPS_REVERSE_MAP)} are supported."
             )
