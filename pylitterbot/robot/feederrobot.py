@@ -39,6 +39,8 @@ MEAL_INSERT_SIZE_CUPS_REVERSE_MAP = {v: k for k, v in MEAL_INSERT_SIZE_CUPS_MAP.
 class FeederRobot(Robot):  # pylint: disable=abstract-method
     """Data and methods for interacting with a Feeder-Robot automatic pet feeder."""
 
+    VALID_MEAL_INSERT_SIZES = list(MEAL_INSERT_SIZE_CUPS_MAP.values())
+
     _data_id = "id"
     _data_name = "name"
     _data_serial = "serial"
