@@ -29,5 +29,14 @@ jobs:
         cache: 'poetry'
     - name: Install dependencies
       run: poetry install
+    - name: Run linting
+      run: |
+        isort .
+        black . --check
+        flake8 .
+        pylint pylitterbot tests
+        pydocstyle pylitterbot tests
+    - name: Run mypy
+      run: mypy pylitterbot tests
     - name: Test with pytest
       run: poetry run pytest --asyncio-mode=auto
