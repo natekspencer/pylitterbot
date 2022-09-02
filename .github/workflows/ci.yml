@@ -31,12 +31,12 @@ jobs:
       run: poetry install
     - name: Run linting
       run: |
-        isort .
-        black . --check
-        flake8 .
-        pylint pylitterbot tests
-        pydocstyle pylitterbot tests
+        poetry run isort .
+        poetry run black . --check
+        poetry run flake8 .
+        poetry run pylint pylitterbot tests
+        poetry run pydocstyle pylitterbot tests
     - name: Run mypy
-      run: mypy pylitterbot tests
+      run: poetry run mypy pylitterbot tests
     - name: Test with pytest
       run: poetry run pytest --asyncio-mode=auto
