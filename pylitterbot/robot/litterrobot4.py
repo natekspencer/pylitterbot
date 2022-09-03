@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, time, timedelta
+from enum import Enum, IntEnum, unique
 from json import dumps, loads
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -36,6 +37,24 @@ LR4_STATUS_MAP = {
     "ROBOT_IDLE": LitterBoxStatus.READY,
     "ROBOT_POWER_OFF": LitterBoxStatus.OFF,
 }
+
+
+@unique
+class NightLightLevel(IntEnum):
+    """Night light level of a Litter-Robot 4 unit."""
+
+    LOW = 85
+    MEDIUM = 170
+    HIGH = 255
+
+
+@unique
+class NightLightMode(Enum):
+    """Night light mode of a Litter-Robot 4 unit."""
+
+    ON = "ON"
+    OFF = "OFF"
+    AUTO = "AUTO"
 
 
 class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
@@ -118,6 +137,26 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     def model(self) -> str:
         """Return the robot model."""
         return "Litter-Robot 4"
+
+    @property
+    def night_light_brightness(self) -> int:
+        """Return the night light brightness."""
+        return int(self._data.get("nightLightBrightness", 0))
+
+    @property
+    def night_light_level(self) -> NightLightLevel | None:
+        """Return the night light brightness."""
+        if (brightness := self.night_light_brightness) in map(int, NightLightLevel):
+            return NightLightLevel(brightness)
+        return None
+
+    @property
+    def night_light_mode(self) -> NightLightMode | None:
+        """Return the night light mode setting."""
+        mode = self._data.get("nightLightMode", None)
+        if mode in (mode.value for mode in NightLightMode):
+            return NightLightMode(mode)
+        return None
 
     @property
     def night_light_mode_enabled(self) -> bool:
@@ -254,6 +293,29 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         )
         assert isinstance(data, dict)
         self._update_data(data.get("data", {}).get("getLitterRobot4BySerial", {}))
+
+    async def set_night_light_brightness(
+        self, brightness: int | NightLightLevel
+    ) -> bool:
+        """Set the night light brightness on the robot."""
+        if brightness not in map(int, NightLightLevel):
+            raise InvalidCommandException(
+                f"Attempt to send an invalid night light level to Litter-Robot. "
+                f"Brightness must be one of: {list(NightLightLevel)}, but received {brightness}"
+            )
+        return await self._dispatch_command(
+            LitterRobot4Command.SET_NIGHT_LIGHT_VALUE,
+            value=dumps({"nightLightPower": int(brightness)}),
+        )
+
+    async def set_night_light_mode(self, mode: NightLightMode) -> bool:
+        """Set the night light mode on the robot."""
+        mode_to_command = {
+            NightLightMode.ON: LitterRobot4Command.NIGHT_LIGHT_MODE_ON,
+            NightLightMode.OFF: LitterRobot4Command.NIGHT_LIGHT_MODE_OFF,
+            NightLightMode.AUTO: LitterRobot4Command.NIGHT_LIGHT_MODE_AUTO,
+        }
+        return await self._dispatch_command(mode_to_command[mode])
 
     async def set_wait_time(self, wait_time: int) -> bool:
         """Set the wait time on the Litter-Robot."""
