@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, time, timedelta
-from enum import IntEnum, unique
+from enum import Enum, IntEnum, unique
 from json import dumps, loads
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -46,6 +46,15 @@ class NightLightLevel(IntEnum):
     LOW = 85
     MEDIUM = 170
     HIGH = 255
+
+
+@unique
+class NightLightMode(Enum):
+    """Night light mode of a Litter-Robot 4 unit."""
+
+    ON = "ON"
+    OFF = "OFF"
+    AUTO = "AUTO"
 
 
 class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
@@ -139,6 +148,14 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         """Return the night light brightness."""
         if (brightness := self.night_light_brightness) in map(int, NightLightLevel):
             return NightLightLevel(brightness)
+        return None
+
+    @property
+    def night_light_mode(self) -> NightLightMode | None:
+        """Return the night light mode setting."""
+        mode = self._data.get("nightLightMode", None)
+        if mode in (mode.value for mode in NightLightMode):
+            return NightLightMode(mode)
         return None
 
     @property
@@ -290,6 +307,15 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             LitterRobot4Command.SET_NIGHT_LIGHT_VALUE,
             value=dumps({"nightLightPower": int(brightness)}),
         )
+
+    async def set_night_light_mode(self, mode: NightLightMode) -> bool:
+        """Set the night light mode on the robot."""
+        mode_to_command = {
+            NightLightMode.ON: LitterRobot4Command.NIGHT_LIGHT_MODE_ON,
+            NightLightMode.OFF: LitterRobot4Command.NIGHT_LIGHT_MODE_OFF,
+            NightLightMode.AUTO: LitterRobot4Command.NIGHT_LIGHT_MODE_AUTO,
+        }
+        return await self._dispatch_command(mode_to_command[mode])
 
     async def set_wait_time(self, wait_time: int) -> bool:
         """Set the wait time on the Litter-Robot."""

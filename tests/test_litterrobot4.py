@@ -7,7 +7,12 @@ from aioresponses import aioresponses
 
 from pylitterbot.enums import LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException
-from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT, LitterRobot4
+from pylitterbot.robot.litterrobot4 import (
+    LR4_ENDPOINT,
+    LitterRobot4,
+    NightLightLevel,
+    NightLightMode,
+)
 from pylitterbot.session import LitterRobotSession
 
 from .common import LITTER_ROBOT_4_DATA
@@ -40,6 +45,7 @@ async def test_litter_robot_4_setup(
         assert not robot.did_notify_offline
     with pytest.warns(DeprecationWarning):
         assert robot.drawer_full_indicator_cycle_count == 0
+    assert robot.firmware == "ESP: 1.1.50 / PIC: 10512.2560.2.51 / TOF: 255.0.255.255"
     assert not robot.is_drawer_full_indicator_triggered
     assert robot.is_onboarded
     assert not robot.is_sleeping
@@ -49,8 +55,12 @@ async def test_litter_robot_4_setup(
     )
     assert robot.model == "Litter-Robot 4"
     assert robot.name == "Litter-Robot 4"
+    assert robot.night_light_brightness == 255
+    assert robot.night_light_level == NightLightLevel.HIGH
+    assert robot.night_light_mode == NightLightMode.AUTO
     assert robot.night_light_mode_enabled
     assert not robot.panel_lock_enabled
+    assert robot.pet_weight == 7.93
     assert robot.power_status == "AC"
     assert robot.setup_date == datetime(
         year=2022, month=7, day=16, hour=21, minute=40, second=50, tzinfo=timezone.utc

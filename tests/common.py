@@ -133,6 +133,7 @@ LITTER_ROBOT_4_DATA: dict[str, Any] = {
     "picFirmwareVersion": "10512.2560.2.51",
     "laserBoardFirmwareVersion": "255.0.255.255",
     "unitPowerType": "AC",
+    "catWeight": 7.93,
     "unitTimezone": "America/Denver",
     "cleanCycleWaitTime": 7,
     "isKeypadLockout": False,
