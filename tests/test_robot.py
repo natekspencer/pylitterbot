@@ -13,8 +13,9 @@ import pytest
 from aiohttp.typedefs import URL
 from aioresponses import CallbackResult, aioresponses
 
+from pylitterbot import Account
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
-from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
+from pylitterbot.exceptions import InvalidCommandException
 from pylitterbot.robot import EVENT_UPDATE
 from pylitterbot.robot.litterrobot3 import UNIT_STATUS, LitterRobot, LitterRobot3
 
@@ -31,9 +32,9 @@ from .common import (
 )
 
 
-def test_robot_setup() -> None:
+def test_robot_setup(mock_account: Account) -> None:
     """Tests that robot setup is successful and parses as expected."""
-    robot = LitterRobot3(data=ROBOT_DATA)
+    robot = LitterRobot3(data=ROBOT_DATA, account=mock_account)
     assert robot
     assert (
         str(robot)
@@ -77,7 +78,7 @@ def test_robot_setup() -> None:
     assert robot.waste_drawer_level == 50
 
 
-def test_robot_with_sleep_mode_time() -> None:
+def test_robot_with_sleep_mode_time(mock_account: Account) -> None:
     """Tests that robot with `sleepModeTime` is setup correctly."""
     for hour in range(-12, 25, 12):
         with patch(
@@ -89,7 +90,8 @@ def test_robot_with_sleep_mode_time() -> None:
             )
 
             robot = LitterRobot3(
-                data={**ROBOT_DATA, "sleepModeTime": int(start_time.timestamp())}
+                data={**ROBOT_DATA, "sleepModeTime": int(start_time.timestamp())},
+                account=mock_account,
             )
             assert (
                 robot.sleep_mode_start_time
@@ -97,10 +99,14 @@ def test_robot_with_sleep_mode_time() -> None:
             )
 
 
-def test_robot_with_invalid_sleep_mode_active(caplog: pytest.LogCaptureFixture) -> None:
+def test_robot_with_invalid_sleep_mode_active(
+    mock_account: Account, caplog: pytest.LogCaptureFixture
+) -> None:
     """Tests that a robot with an invalid `sleepModeActive` value is setup correctly."""
     invalid_value = "17F"
-    robot = LitterRobot3(data={**ROBOT_DATA, "sleepModeActive": invalid_value})
+    robot = LitterRobot3(
+        data={**ROBOT_DATA, "sleepModeActive": invalid_value}, account=mock_account
+    )
     assert caplog.record_tuples == [
         (
             "pylitterbot.robot.litterrobot3",
@@ -111,12 +117,14 @@ def test_robot_with_invalid_sleep_mode_active(caplog: pytest.LogCaptureFixture) 
     assert robot.sleep_mode_start_time is None
 
 
-def test_robot_with_unknown_status() -> None:
+def test_robot_with_unknown_status(mock_account: Account) -> None:
     """Tests that a robot with an unknown `unitStatus` is setup correctly."""
 
     random_status = "_" + "".join(random.sample(ascii_letters, 3))
 
-    robot = LitterRobot3(data={**ROBOT_DATA, "unitStatus": random_status})
+    robot = LitterRobot3(
+        data={**ROBOT_DATA, "unitStatus": random_status}, account=mock_account
+    )
     assert robot.status_code == random_status
     assert robot.status == LitterBoxStatus.UNKNOWN
     assert robot.status.value is None
@@ -128,7 +136,6 @@ async def test_robot_with_drawer_full_status(mock_aioresponse: aioresponses) -> 
     url = ROBOT_ENDPOINT % ROBOT_FULL_ID
 
     robot = await get_robot(ROBOT_FULL_ID)
-    assert robot._session
 
     robot_status = LitterBoxStatus.DRAWER_FULL_1
     assert robot_status.minimum_cycles_left == 2
@@ -152,13 +159,7 @@ async def test_robot_with_drawer_full_status(mock_aioresponse: aioresponses) -> 
     assert robot.is_waste_drawer_full
     assert robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
 
-    await robot._session.close()
-
-
-def test_robot_creation_fails() -> None:
-    """Tests that robot creation fails if missing information."""
-    with pytest.raises(LitterRobotException):
-        LitterRobot3()
+    await robot._account.disconnect()
 
 
 @pytest.mark.parametrize(
@@ -185,7 +186,6 @@ async def test_dispatch_commands(
 ) -> None:
     """Tests that the dispatch commands are sent as expected."""
     robot = await get_robot()
-    assert robot._session
 
     mock_aioresponse.post(
         f"{ROBOT_ENDPOINT % robot.id}/{LitterBoxCommand.ENDPOINT}",
@@ -195,13 +195,12 @@ async def test_dispatch_commands(
     assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
         "command": f"{LitterBoxCommand.PREFIX}{dispatch_command}"
     }
-    await robot._session.close()
+    await robot._account.disconnect()
 
 
 async def test_other_commands(mock_aioresponse: aioresponses) -> None:
     """Tests that other various robot commands call as expected."""
     robot = await get_robot()
-    assert robot._session
     url = ROBOT_ENDPOINT % robot.id
 
     def patch_callback(_: URL, **kwargs: Any) -> CallbackResult:
@@ -268,7 +267,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
         == "Completed 3 cycles averaging 1.5 cycles per day over the last 2 days"
     )
 
-    await robot._session.close()
+    await robot._account.disconnect()
 
 
 async def test_invalid_commands(
@@ -291,13 +290,12 @@ async def test_invalid_commands(
 
     with pytest.raises(InvalidCommandException):
         await robot.get_activity_history(0)
-    assert robot._session
-    await robot._session.close()
+    await robot._account.disconnect()
 
 
-async def test_robot_update_event() -> None:
+async def test_robot_update_event(mock_account: Account) -> None:
     """Test robot emits an update event."""
-    robot = LitterRobot3(data=ROBOT_DATA)
+    robot = LitterRobot3(data=ROBOT_DATA, account=mock_account)
     assert not robot._listeners
     event = asyncio.Event()
     unsub = robot.on(EVENT_UPDATE, event.set)

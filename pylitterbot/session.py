@@ -22,18 +22,20 @@ class Session(ABC):
 
     def __init__(self, websession: ClientSession | None = None) -> None:
         """Initialize the session."""
-        self._websession = websession
         self._websession_provided = websession is not None
+        self._websession = websession
 
     @property
-    def websession(self) -> ClientSession | None:
+    def websession(self) -> ClientSession:
         """Get websession."""
+        if self._websession is None:
+            self._websession = ClientSession()
         return self._websession
 
     async def close(self) -> None:
         """Close the session."""
-        if not self._websession_provided and self._websession is not None:
-            await self._websession.close()
+        if not self._websession_provided and self.websession is not None:
+            await self.websession.close()
 
     async def get(self, path: str, **kwargs: Any) -> dict | list[dict] | None:
         """Send a GET request to the specified path."""
@@ -69,16 +71,13 @@ class Session(ABC):
         self, method: str, url: str, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Make a request."""
-        if self._websession is None:
-            self._websession = ClientSession()
-
         if "headers" not in kwargs:
             kwargs["headers"] = {}
 
         if (authorization := await self.get_bearer_authorization()) is not None:
             kwargs["headers"]["authorization"] = authorization
 
-        async with self._websession.request(method, url, **kwargs) as resp:
+        async with self.websession.request(method, url, **kwargs) as resp:
             if resp.status == 500:
                 if (data := await resp.json()).get("type") == "InvalidCommandException":
                     raise InvalidCommandException(data.get("developerMessage", data))
@@ -90,7 +89,7 @@ class Session(ABC):
                         (now := utcnow().timestamp()),
                         (
                             expires := jwt.decode(
-                                authorization,
+                                authorization.replace("Bearer ", ""),
                                 options={"verify_signature": False},
                             )["exp"]
                         ),
@@ -128,9 +127,7 @@ class LitterRobotSession(Session):
     TOKEN_KEY = "QUl6YVN5Q3Y4NGplbDdKa0NRbHNncXJfc2xYZjNmM3gtY01HMTVR"
 
     def __init__(
-        self,
-        token: dict = None,
-        websession: ClientSession | None = None,
+        self, token: dict = None, websession: ClientSession | None = None
     ) -> None:
         """Initialize the session."""
         super().__init__(websession=websession)

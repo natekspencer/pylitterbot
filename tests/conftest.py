@@ -8,6 +8,7 @@ import jwt
 import pytest
 from aioresponses import aioresponses
 
+from pylitterbot import Account
 from pylitterbot.robot.feederrobot import FEEDER_ENDPOINT
 from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
 from pylitterbot.session import LitterRobotSession
@@ -19,7 +20,14 @@ from .common import (
     ROBOT_DATA,
     ROBOT_FULL_DATA,
     USER_RESPONSE,
+    get_account,
 )
+
+
+@pytest.fixture
+async def mock_account() -> Account:
+    """Mock an account."""
+    return await get_account()
 
 
 @pytest.fixture

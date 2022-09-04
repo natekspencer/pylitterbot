@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import pytest
 from aioresponses import aioresponses
 
+from pylitterbot import Account
 from pylitterbot.enums import LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException
 from pylitterbot.robot.litterrobot4 import (
@@ -13,20 +14,17 @@ from pylitterbot.robot.litterrobot4 import (
     NightLightLevel,
     NightLightMode,
 )
-from pylitterbot.session import LitterRobotSession
 
 from .common import LITTER_ROBOT_4_DATA
 
 
 async def test_litter_robot_4_setup(
-    mock_aioresponse: aioresponses, caplog: pytest.LogCaptureFixture
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Tests that a Litter-Robot 4 setup is successful and parses as expected."""
-    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)
-    await robot.subscribe_for_updates()
-
-    session = LitterRobotSession()
-    robot = LitterRobot4(session=session, data=LITTER_ROBOT_4_DATA)
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
     await robot.subscribe_for_updates()
     await robot.unsubscribe_from_updates()
     assert (
@@ -109,14 +107,15 @@ async def test_litter_robot_4_setup(
     with pytest.raises(InvalidCommandException):
         await robot.set_wait_time(-1)
 
-    assert robot._session
-    await robot._session.close()
+    await robot._account.disconnect()
 
 
-def test_litter_robot_4_sleep_time(freezer: pytest.fixture) -> None:
+def test_litter_robot_4_sleep_time(
+    freezer: pytest.fixture, mock_account: Account
+) -> None:
     """Tests that a Litter-Robot 4 parses sleep time as expected."""
     freezer.move_to("2022-07-21 12:00:00-06:00")
-    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA)
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
     assert robot.sleep_mode_enabled
     assert robot.sleep_mode_start_time
     assert robot.sleep_mode_start_time.isoformat() == "2022-07-21T23:30:00-06:00"

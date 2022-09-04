@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING, Any
 
 from deepdiff import DeepDiff
 
-from ..exceptions import LitterRobotException
-from ..session import Session
 from ..utils import from_litter_robot_timestamp, urljoin
 
 if TYPE_CHECKING:
@@ -31,36 +29,9 @@ class Robot:
 
     _path: str
 
-    def __init__(
-        self,
-        id: str = None,  # pylint: disable=invalid-name,redefined-builtin
-        serial: str = None,
-        user_id: str = None,  # pylint: disable=unused-argument
-        name: str = None,
-        session: Session = None,
-        data: dict = None,
-        account: Account | None = None,
-    ) -> None:
-        """Initialize an instance of a robot with individual attributes or a data dictionary.
-
-        :param id: Litter-Robot id (optional)
-        :param serial: Litter-Robot serial (optional)
-        :param user_id: user id that has access to this Litter-Robot (optional)
-        :param name: Litter-Robot name (optional)
-        :param session: user's session to interact with this Litter-Robot (optional)
-        :param data: optional data to pre-populate Litter-Robot's attributes (optional)
-        """
-        if not id and not data:
-            raise LitterRobotException(
-                "An id or data dictionary is required to initilize a Litter-Robot."
-            )
-
+    def __init__(self, data: dict, account: Account) -> None:
+        """Initialize a robot."""
         self._data: dict = {}
-
-        self._id = id
-        self._name = name
-        self._serial = serial
-        self._session = session
         self._account = account
 
         self._is_loaded = False
@@ -76,7 +47,7 @@ class Robot:
     @property
     def id(self) -> str:  # pylint: disable=invalid-name
         """Return the id of the robot."""
-        return self._id if self._id else str(self._data[self._data_id])
+        return str(self._data[self._data_id])
 
     @property
     @abstractmethod
@@ -84,9 +55,9 @@ class Robot:
         """Return the robot model."""
 
     @property
-    def name(self) -> str | None:
+    def name(self) -> str:
         """Return the name of the robot, if any."""
-        return self._name if self._name else self._data.get(self._data_name)
+        return self._data.get(self._data_name, "")
 
     @property
     @abstractmethod
@@ -99,9 +70,9 @@ class Robot:
         """Return `True` if the buttons on the robot are disabled."""
 
     @property
-    def serial(self) -> str | None:
+    def serial(self) -> str:
         """Return the serial of the robot, if any."""
-        return self._serial if self._serial else self._data.get(self._data_serial)
+        return self._data.get(self._data_serial, "")
 
     @property
     def setup_date(self) -> datetime | None:
@@ -160,15 +131,13 @@ class Robot:
         self, subpath: str | None = None, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Send a GET request to the Litter-Robot API."""
-        assert self._session
-        return await self._session.get(urljoin(self._path, subpath), **kwargs)
+        return await self._account.session.get(urljoin(self._path, subpath), **kwargs)
 
     async def _patch(
         self, subpath: str | None = None, json: Any = None, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Send a PATCH request to the Litter-Robot API."""
-        assert self._session
-        return await self._session.patch(
+        return await self._account.session.patch(
             urljoin(self._path, subpath), json=json, **kwargs
         )
 
@@ -176,7 +145,6 @@ class Robot:
         self, subpath: str | None = None, json: Any = None, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Send a POST request to the Litter-Robot API."""
-        assert self._session
-        return await self._session.post(
+        return await self._account.session.post(
             urljoin(self._path, subpath), json=json, **kwargs
         )
