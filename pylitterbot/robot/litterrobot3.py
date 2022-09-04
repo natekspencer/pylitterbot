@@ -48,7 +48,7 @@ class LitterRobot3(LitterRobot):
         super().__init__(data, account)
         self._path = urljoin(
             DEFAULT_ENDPOINT,
-            f"users/{'' if account is None else account.user_id}/robots/{self.id}",
+            f"users/{account.user_id}/robots/{self.id}",
         )
         self._ws: ClientWebSocketResponse | None = None
         self._ws_last_received: datetime | None = None
