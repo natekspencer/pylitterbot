@@ -12,7 +12,6 @@ from aiohttp import ClientWebSocketResponse, WSMsgType
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
 from ..exceptions import InvalidCommandException
-from ..session import Session
 from ..utils import (
     from_litter_robot_timestamp,
     round_time,
@@ -44,27 +43,13 @@ class LitterRobot3(LitterRobot):
 
     VALID_WAIT_TIMES = [3, 7, 15]
 
-    def __init__(
-        self,
-        id: str = None,  # pylint: disable=redefined-builtin
-        serial: str = None,
-        user_id: str = None,
-        name: str = None,
-        session: Session = None,
-        data: dict = None,
-        account: Account | None = None,
-    ) -> None:
-        """Initialize an instance of a Litter-Robot with individual attributes or a data dictionary.
-
-        :param id: Litter-Robot id (optional)
-        :param serial: Litter-Robot serial (optional)
-        :param user_id: user id that has access to this Litter-Robot (optional)
-        :param name: Litter-Robot name (optional)
-        :param session: user's session to interact with this Litter-Robot (optional)
-        :param data: optional data to pre-populate Litter-Robot's attributes (optional)
-        """
-        super().__init__(id, serial, user_id, name, session, data, account)
-        self._path = urljoin(DEFAULT_ENDPOINT, f"users/{user_id}/robots/{self.id}")
+    def __init__(self, data: dict, account: Account) -> None:
+        """Initialize a Litter-Robot 3."""
+        super().__init__(data, account)
+        self._path = urljoin(
+            DEFAULT_ENDPOINT,
+            f"users/{account.user_id}/robots/{self.id}",
+        )
         self._ws: ClientWebSocketResponse | None = None
         self._ws_last_received: datetime | None = None
 
@@ -306,15 +291,13 @@ class LitterRobot3(LitterRobot):
 
     async def subscribe_for_updates(self) -> None:
         """Open a web socket connection to receive updates."""
-        if self._session is None or self._session.websession is None:
-            _LOGGER.warning("Robot has no session")
-            return
 
         async def _authorization() -> str:
-            assert self._session
-            if not self._session.is_token_valid():
-                await self._session.refresh_token()
-            assert (authorization := await self._session.get_bearer_authorization())
+            if not self._account.session.is_token_valid():
+                await self._account.session.refresh_token()
+            assert (
+                authorization := await self._account.session.get_bearer_authorization()
+            )
             return authorization
 
         async def _subscribe() -> None:

@@ -11,12 +11,6 @@ from pylitterbot.robot.litterrobot3 import DEFAULT_ENDPOINT
 
 USERNAME = "username@username.com"
 PASSWORD = "password"
-TOKEN_RESPONSE = {
-    "token_type": "Bearer",
-    "access_token": "LR-Access-Token",
-    "refresh_token": "LR-Refresh-Token",
-    "expires_in": 3600,
-}
 
 USER_ID = "000000"
 USER_RESPONSE = {

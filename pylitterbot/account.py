@@ -48,6 +48,11 @@ class Account:
         """Return the set of robots for the logged in account."""
         return self._robots
 
+    @property
+    def session(self) -> LitterRobotSession:
+        """Return the associated session on the account."""
+        return self._session
+
     async def connect(
         self,
         username: str = None,
@@ -57,9 +62,9 @@ class Account:
     ) -> None:
         """Connect to the Litter-Robot API."""
         try:
-            if not self._session.is_token_valid():
+            if not self.session.is_token_valid():
                 if username and password:
-                    await self._session.login(username=username, password=password)
+                    await self.session.login(username=username, password=password)
                 else:
                     raise LitterRobotLoginException(
                         "Username and password are required to login to Litter-Robot."
@@ -83,11 +88,11 @@ class Account:
             await robot.unsubscribe_from_updates()
         for websocket, _ in self._ws_connections.values():
             await websocket.close()
-        await self._session.close()
+        await self.session.close()
 
     async def refresh_user(self) -> None:
         """Refresh the logged in user's info."""
-        data = await self._session.get(urljoin(DEFAULT_ENDPOINT, "users"))
+        data = await self.session.get(urljoin(DEFAULT_ENDPOINT, "users"))
         assert isinstance(data, dict)
         self._user.update(data.get("user", {}))
 
@@ -96,10 +101,10 @@ class Account:
         robots: list[Robot] = []
         try:
             all_robots = [
-                self._session.get(
+                self.session.get(
                     urljoin(DEFAULT_ENDPOINT, f"users/{self.user_id}/robots")
                 ),
-                self._session.post(
+                self.session.post(
                     LR4_ENDPOINT,
                     json={
                         "query": f"""
@@ -110,7 +115,7 @@ class Account:
                         "variables": {"userId": self.user_id},
                     },
                 ),
-                self._session.post(
+                self.session.post(
                     FEEDER_ENDPOINT,
                     json={
                         "query": f"""
@@ -137,12 +142,7 @@ class Account:
                 if robot_object:
                     robot_object._update_data(data)
                 else:
-                    robot_object = robot_cls(
-                        user_id=self.user_id,
-                        session=self._session,
-                        data=data,
-                        account=self,
-                    )
+                    robot_object = robot_cls(data=data, account=self)
                     if subscribe_for_updates:
                         await robot_object.subscribe_for_updates()
                 robots.append(robot_object)
@@ -173,11 +173,9 @@ class Account:
         subscriber_id: str,
     ) -> ClientWebSocketResponse:
         """Initiate websocket connection."""
-        assert self._session.websession
 
         async def _new_ws_connection() -> ClientWebSocketResponse:
-            assert self._session.websession
-            return await self._session.websession.ws_connect(
+            return await self.session.websession.ws_connect(
                 url=url, params=params, headers=headers
             )
 

@@ -13,7 +13,6 @@ from aiohttp import ClientWebSocketResponse, WSMsgType
 from ..activity import Activity, Insight
 from ..enums import FeederRobotCommand
 from ..exceptions import InvalidCommandException
-from ..session import Session
 from ..utils import decode, utcnow
 from . import Robot
 from .models import FEEDER_ROBOT_MODEL
@@ -46,18 +45,9 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     _data_serial = "serial"
     _data_setup_date = "created_at"
 
-    def __init__(
-        self,
-        id: str = None,  # pylint: disable=redefined-builtin
-        serial: str = None,
-        user_id: str = None,
-        name: str = None,
-        session: Session = None,
-        data: dict = None,
-        account: Account | None = None,
-    ) -> None:
-        """Initialize an instance of a Feeder-Robot with individual attributes or a data dictionary."""
-        super().__init__(id, serial, user_id, name, session, data, account)
+    def __init__(self, data: dict, account: Account) -> None:
+        """Initialize a  Feeder-Robot."""
+        super().__init__(data, account)
         self._path = FEEDER_ENDPOINT
         self._ws: ClientWebSocketResponse | None = None
         self._ws_subscription_id: str | None = None
@@ -225,15 +215,11 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
 
     async def subscribe_for_updates(self) -> None:
         """Open a web socket connection to receive updates."""
-        if self._session is None or self._session.websession is None:
-            _LOGGER.warning("Robot has no session")
-            return
 
         async def _authorization() -> str | None:
-            assert self._session
-            if not self._session.is_token_valid():
-                await self._session.refresh_token()
-            return await self._session.get_bearer_authorization()
+            if not self._account.session.is_token_valid():
+                await self._account.session.refresh_token()
+            return await self._account.session.get_bearer_authorization()
 
         async def _subscribe(send_stop: bool = False) -> None:
             assert self._ws
