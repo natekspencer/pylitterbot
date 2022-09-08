@@ -30,11 +30,14 @@ _LOGGER = logging.getLogger(__name__)
 
 LR4_ENDPOINT = "https://lr4.iothings.site/graphql"
 LR4_STATUS_MAP = {
+    "ROBOT_CAT_DETECT": LitterBoxStatus.CAT_DETECTED,
     "ROBOT_CAT_DETECT_DELAY": LitterBoxStatus.CAT_SENSOR_TIMING,
     "ROBOT_CLEAN": LitterBoxStatus.CLEAN_CYCLE,
     # "ROBOT_FIND_DUMP": happened during cleaning
     "ROBOT_IDLE": LitterBoxStatus.READY,
+    "ROBOT_POWER_DOWN": LitterBoxStatus.POWER_DOWN,
     "ROBOT_POWER_OFF": LitterBoxStatus.OFF,
+    "ROBOT_POWER_UP": LitterBoxStatus.POWER_UP,
 }
 
 
