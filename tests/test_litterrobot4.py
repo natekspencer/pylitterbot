@@ -44,6 +44,7 @@ async def test_litter_robot_4_setup(
     with pytest.warns(DeprecationWarning):
         assert robot.drawer_full_indicator_cycle_count == 0
     assert robot.firmware == "ESP: 1.1.50 / PIC: 10512.2560.2.51 / TOF: 255.0.255.255"
+    assert robot.litter_level == 41.7
     assert not robot.is_drawer_full_indicator_triggered
     assert robot.is_onboarded
     assert not robot.is_sleeping
@@ -106,6 +107,47 @@ async def test_litter_robot_4_setup(
     await robot.set_wait_time(7)
     with pytest.raises(InvalidCommandException):
         await robot.set_wait_time(-1)
+
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "getLitterRobot4BySerial": {
+                    **LITTER_ROBOT_4_DATA,
+                    "nightLightBrightness": 10,
+                    "nightLightMode": "TEST",
+                    "isDFIFull": True,
+                }
+            }
+        },
+    )
+    await robot.refresh()
+    assert robot.night_light_brightness == 10
+    assert robot.night_light_level is None
+    assert robot.night_light_mode is None  # type: ignore
+    assert robot.status == LitterBoxStatus.DRAWER_FULL
+
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "sendLitterRobot4Command": 'command "setNightLightValue (0x02190055)" sent'
+            }
+        },
+    )
+    await robot.set_night_light_brightness(85)
+    with pytest.raises(InvalidCommandException):
+        await robot.set_night_light_brightness(20)
+
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "sendLitterRobot4Command": 'command "nightLightModeAuto (0x02180002)" sent'
+            }
+        },
+    )
+    await robot.set_night_light_mode(NightLightMode.AUTO)
 
     await robot._account.disconnect()
 
