@@ -62,7 +62,7 @@ async def test_litter_robot_4_setup(
     assert robot.pet_weight == 7.93
     assert robot.power_status == "AC"
     assert robot.setup_date == datetime(
-        year=2022, month=7, day=16, hour=21, minute=40, second=50, tzinfo=timezone.utc
+        year=2022, month=7, day=16, hour=21, minute=40, tzinfo=timezone.utc
     )
     assert robot.status == LitterBoxStatus.READY
     assert robot.status_code == LitterBoxStatus.READY.value

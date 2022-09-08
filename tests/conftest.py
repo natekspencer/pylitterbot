@@ -15,6 +15,7 @@ from pylitterbot.session import LitterRobotSession
 
 from .common import (
     ACTIVITY_RESPONSE,
+    FEEDER_ROBOT_DATA,
     INSIGHT_RESPONSE,
     LITTER_ROBOT_4_DATA,
     ROBOT_DATA,
@@ -90,7 +91,7 @@ def mock_aioresponse() -> aioresponses:
         )
         mock.post(
             FEEDER_ENDPOINT,
-            payload={"data": {"feeder_unit": []}},
+            payload={"data": {"feeder_unit": [FEEDER_ROBOT_DATA]}},
             repeat=True,
         )
         yield mock

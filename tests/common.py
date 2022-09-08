@@ -172,8 +172,60 @@ LITTER_ROBOT_4_DATA: dict[str, Any] = {
     "weightSensor": 0.9,
     "isOnline": True,
     "isOnboarded": True,
-    "lastSeen": "2022-07-20T00:13:00.000Z",
-    "setupDateTime": "2022-07-16T21:40:50.000Z",
+    "lastSeen": "2022-07-20T00:13:00.000000Z",
+    "setupDateTime": "2022-07-16T21:40:00.000000Z",
+}
+
+FEEDER_ROBOT_DATA: dict[str, Any] = {
+    "id": 1,
+    "name": "Feeder-Robot",
+    "serial": "RF1C000001",
+    "timezone": "America/Denver",
+    "isEighthCupEnabled": False,
+    "created_at": "2021-12-15T06:45:00.000000+00:00",
+    "household_id": 1,
+    "state": {
+        "id": 1,
+        "info": {
+            "level": 2,
+            "power": True,
+            "online": True,
+            "acPower": True,
+            "dcPower": False,
+            "gravity": False,
+            "chuteFull": False,
+            "fwVersion": "1.0.0",
+            "onBoarded": True,
+            "unitMeals": 0,
+            "motorJammed": False,
+            "chuteFullExt": False,
+            "panelLockout": False,
+            "unitPortions": 0,
+            "autoNightMode": True,
+            "mealInsertSize": 1,
+        },
+        "updated_at": "2022-09-08T15:07:00.000000+00:00",
+    },
+    "feeding_snack": [
+        {"timestamp": "2022-09-04T03:03:00.000000+00:00", "amount": 0.125},
+        {"timestamp": "2022-08-30T16:34:00.000000+00:00", "amount": 0.25},
+    ],
+    "feeding_meal": [
+        {
+            "timestamp": "2022-09-08T18:00:00.000000+00:00",
+            "amount": 0.125,
+            "meal_name": "Lunch",
+            "meal_number": 2,
+            "meal_total_portions": 2,
+        },
+        {
+            "timestamp": "2022-09-08T12:00:00.000000+00:00",
+            "amount": 0.125,
+            "meal_name": "Breakfast",
+            "meal_number": 1,
+            "meal_total_portions": 1,
+        },
+    ],
 }
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from base64 import b64decode, b64encode
 from datetime import datetime, time, timezone
 from urllib.parse import urljoin as _urljoin
@@ -35,6 +36,7 @@ def from_litter_robot_timestamp(
         timestamp = timestamp.replace("Z", "")
     if (utc_offset := "+00:00") not in timestamp:
         timestamp += utc_offset
+    timestamp = re.sub(r"(\.\d+)", lambda m: m.group().ljust(7, "0"), timestamp)
     return datetime.fromisoformat(timestamp)
 
 
