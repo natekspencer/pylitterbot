@@ -13,7 +13,7 @@ from aiohttp import ClientWebSocketResponse, WSMsgType
 
 try:
     from zoneinfo import ZoneInfo
-except ImportError:
+except ImportError:  # pragma: no cover
     from backports.zoneinfo import ZoneInfo  # type: ignore
 
 from ..activity import Activity, Insight
@@ -114,6 +114,21 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     def is_waste_drawer_full(self) -> bool:
         """Return `True` if the Litter-Robot is reporting that the waste drawer is full."""
         return self._data.get("isDFIFull", False)
+
+    @property
+    def litter_level(self) -> float:
+        """Return the litter level.
+
+        The litterLevel field from the API is a millimeter distance to the
+        top center time of flight (ToF) sensor and is interpreted as:
+
+        ~ 441 full
+        ~ 451 nominal
+        ~ 461 low
+        ~ 471 very low
+        """
+        litter_level = int(self._data.get("litterLevel", 500))
+        return max(round(100 - (litter_level - 440) / 0.6, 1), 0)
 
     @property
     def model(self) -> str:
