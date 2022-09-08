@@ -17,8 +17,10 @@ from pylitterbot.robot.litterrobot4 import (
 
 from .common import LITTER_ROBOT_4_DATA
 
+pytestmark = pytest.mark.asyncio
 
-async def test_litter_robot_4_setup(
+
+async def test_litter_robot_4(
     mock_aioresponse: aioresponses,
     mock_account: Account,
     caplog: pytest.LogCaptureFixture,
@@ -69,11 +71,34 @@ async def test_litter_robot_4_setup(
     assert robot.status_text == LitterBoxStatus.READY.text
     assert robot.waste_drawer_level == 91
 
-    assert await robot.get_activity_history() == []
-    insight = await robot.get_insight()
-    assert insight.cycle_history == []
-
     assert await robot.start_cleaning()
+
+    assert await robot.get_activity_history() == []
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "getLitterRobot4Insights": {
+                    "totalCycles": 35,
+                    "averageCycles": 5,
+                    "cycleHistory": [
+                        {"date": "2022-09-08", "numberOfCycles": 5},
+                        {"date": "2022-09-07", "numberOfCycles": 6},
+                        {"date": "2022-09-06", "numberOfCycles": 4},
+                        {"date": "2022-09-05", "numberOfCycles": 4},
+                        {"date": "2022-09-04", "numberOfCycles": 5},
+                        {"date": "2022-09-03", "numberOfCycles": 6},
+                        {"date": "2022-09-02", "numberOfCycles": 5},
+                    ],
+                    "totalCatDetections": 35,
+                }
+            }
+        },
+    )
+    insight = await robot.get_insight(days=7)
+    assert len(insight.cycle_history) == 7
 
     mock_aioresponse.post(
         LR4_ENDPOINT,
@@ -152,7 +177,7 @@ async def test_litter_robot_4_setup(
     await robot._account.disconnect()
 
 
-def test_litter_robot_4_sleep_time(
+async def test_litter_robot_4_sleep_time(
     freezer: pytest.fixture, mock_account: Account
 ) -> None:
     """Tests that a Litter-Robot 4 parses sleep time as expected."""

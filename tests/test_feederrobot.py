@@ -9,6 +9,8 @@ from pylitterbot.robot.feederrobot import COMMAND_ENDPOINT, FEEDER_ENDPOINT, Fee
 
 from .common import FEEDER_ROBOT_DATA
 
+pytestmark = pytest.mark.asyncio
+
 
 async def test_feeder_robot(
     mock_aioresponse: aioresponses,

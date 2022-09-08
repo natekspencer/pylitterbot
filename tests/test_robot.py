@@ -31,8 +31,10 @@ from .common import (
     get_robot,
 )
 
+pytestmark = pytest.mark.asyncio
 
-def test_robot_setup(mock_account: Account) -> None:
+
+async def test_robot_setup(mock_account: Account) -> None:
     """Tests that robot setup is successful and parses as expected."""
     robot = LitterRobot3(data=ROBOT_DATA, account=mock_account)
     assert robot
@@ -78,7 +80,7 @@ def test_robot_setup(mock_account: Account) -> None:
     assert robot.waste_drawer_level == 50
 
 
-def test_robot_with_sleep_mode_time(mock_account: Account) -> None:
+async def test_robot_with_sleep_mode_time(mock_account: Account) -> None:
     """Tests that robot with `sleepModeTime` is setup correctly."""
     for hour in range(-12, 25, 12):
         with patch(
@@ -99,7 +101,7 @@ def test_robot_with_sleep_mode_time(mock_account: Account) -> None:
             )
 
 
-def test_robot_with_invalid_sleep_mode_active(
+async def test_robot_with_invalid_sleep_mode_active(
     mock_account: Account, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Tests that a robot with an invalid `sleepModeActive` value is setup correctly."""
@@ -117,7 +119,7 @@ def test_robot_with_invalid_sleep_mode_active(
     assert robot.sleep_mode_start_time is None
 
 
-def test_robot_with_unknown_status(mock_account: Account) -> None:
+async def test_robot_with_unknown_status(mock_account: Account) -> None:
     """Tests that a robot with an unknown `unitStatus` is setup correctly."""
 
     random_status = "_" + "".join(random.sample(ascii_letters, 3))

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
+import pytest_asyncio
 from aioresponses import aioresponses
 
 from pylitterbot import Account
@@ -25,7 +26,7 @@ from .common import (
 )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mock_account() -> Account:
     """Mock an account."""
     return await get_account()

@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, time, timedelta
 from enum import Enum, IntEnum, unique
 from json import dumps, loads
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 from aiohttp import ClientWebSocketResponse, WSMsgType
@@ -251,10 +251,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                 json={
                     "query": """
                         mutation sendCommand(
-                        $serial: String!
-                        $command: String!
-                        $value: String
-                        $commandSource: String
+                            $serial: String!
+                            $command: String!
+                            $value: String
+                            $commandSource: String
                         ) {
                         sendLitterRobot4Command(
                             input: {
@@ -333,10 +333,54 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         _LOGGER.warning("get_activity_history has not yet been implemented")
         return []
 
-    async def get_insight(self, days: int = 30, timezone_offset: int = None) -> Insight:
+    async def get_insight(
+        self, days: int = 30, timezone_offset: int | None = None
+    ) -> Insight:
         """Return the insight data."""
-        _LOGGER.warning("get_insight has not yet been implemented")
-        return Insight(0, 0, [])
+        data = await self._post(
+            json={
+                "query": """
+                            query GetLR4Insights(
+                                $serial: String!
+                                $startTimestamp: String
+                                $timezoneOffset: Int
+                            ) {
+                                getLitterRobot4Insights(
+                                    serial: $serial
+                                    startTimestamp: $startTimestamp
+                                    timezoneOffset: $timezoneOffset
+                                ) {
+                                    totalCycles
+                                    averageCycles
+                                    cycleHistory {
+                                        date
+                                        numberOfCycles
+                                    }
+                                    totalCatDetections
+                                }
+                            }
+                        """,
+                "variables": {
+                    "serial": self.serial,
+                    "startTimestamp": (utcnow() - timedelta(days=days)).strftime(
+                        "%Y-%m-%dT%H:%M:%S.%fZ"
+                    ),
+                    "timezoneOffset": timezone_offset,
+                },
+            }
+        )
+        insight = cast(dict, data).get("data", {}).get("getLitterRobot4Insights", {})
+        return Insight(
+            insight["totalCycles"],
+            insight["averageCycles"],
+            [
+                Activity(
+                    datetime.strptime(cycle["date"], "%Y-%m-%d").date(),
+                    count=cycle["numberOfCycles"],
+                )
+                for cycle in insight["cycleHistory"]
+            ],
+        )
 
     async def subscribe_for_updates(self) -> None:
         """Open a web socket connection to receive updates."""
