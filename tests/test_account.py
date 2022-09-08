@@ -25,6 +25,8 @@ from .common import (
 
 pytestmark = pytest.mark.asyncio
 
+ROBOT_COUNT = 4
+
 
 async def test_account(mock_aioresponse: aioresponses) -> None:
     """Tests that an account is properly setup."""
@@ -37,7 +39,7 @@ async def test_account(mock_aioresponse: aioresponses) -> None:
 
     await account.connect(username=USERNAME, password=PASSWORD, load_robots=True)
     assert account.user_id == USER_ID
-    assert len(account.robots) == 3
+    assert len(account.robots) == ROBOT_COUNT
 
     mock_aioresponse.post(
         LR4_ENDPOINT,
@@ -45,12 +47,12 @@ async def test_account(mock_aioresponse: aioresponses) -> None:
         repeat=True,
     )
     await account.load_robots()
-    assert len(account.robots) == 3
+    assert len(account.robots) == ROBOT_COUNT
 
     mock_aioresponse.get(ROBOT_ENDPOINT % ROBOT_ID, payload={})
     mock_aioresponse.get(ROBOT_ENDPOINT % ROBOT_FULL_ID, payload={})
     await account.refresh_robots()
-    assert len(account.robots) == 3
+    assert len(account.robots) == ROBOT_COUNT
 
     with patch(
         "pylitterbot.session.Session.request",

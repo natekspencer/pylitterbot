@@ -13,7 +13,9 @@ from aiohttp import ClientWebSocketResponse, WSMsgType
 from ..activity import Activity, Insight
 from ..enums import FeederRobotCommand
 from ..exceptions import InvalidCommandException
-from ..utils import decode, utcnow
+from ..utils import decode
+from ..utils import from_litter_robot_timestamp as to_timestamp
+from ..utils import utcnow
 from . import Robot
 from .models import FEEDER_ROBOT_MODEL
 
@@ -68,6 +70,38 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     def food_level(self) -> int:
         """Return the food level."""
         return int(round(self._state_info("level") / 9 * 100, -1))
+
+    @property
+    def last_feeding(self) -> dict[str, Any] | None:
+        """Get the last feeding meal or snack dispensed."""
+        meal = self.last_meal
+        if (snack := self.last_snack) is None or (
+            meal is not None and meal["timestamp"] > snack["timestamp"]
+        ):
+            return meal
+        return snack
+
+    @property
+    def last_meal(self) -> dict[str, Any] | None:
+        """Get the last meal dispensed."""
+        if not (meals := self._data.get("feeding_meal")):
+            return None
+        return {
+            "timestamp": to_timestamp(meals[0]["timestamp"]),
+            "amount": meals[0]["amount"] * meals[0]["meal_total_portions"],
+            "name": meals[0]["meal_name"],
+        }
+
+    @property
+    def last_snack(self) -> dict[str, Any] | None:
+        """Get the last snack dispensed."""
+        if not (snacks := self._data.get("feeding_snack")):
+            return None
+        return {
+            "timestamp": to_timestamp(snacks[0]["timestamp"]),
+            "amount": snacks[0]["amount"],
+            "name": "snack",
+        }
 
     @property
     def meal_insert_size(self) -> float:

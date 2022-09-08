@@ -20,13 +20,16 @@ FEEDER_ROBOT_MODEL = """
             created_at
         }
     }
-    feeding_snack (limit: 10, order_by: {timestamp: desc}) {
+    feeding_snack (limit: 10, order_by: {timestamp: desc}, where: {status:{_eq: dispensed}}) {
         timestamp
         amount
     }
-    feeding_meal (limit: 10, order_by: {timestamp: desc}) {
+    feeding_meal (limit: 10, order_by: {timestamp: desc}, where: {status:{_eq: dispensed}}) {
         timestamp
         amount
+        meal_name
+        meal_number
+        meal_total_portions
     }
 }
 """
