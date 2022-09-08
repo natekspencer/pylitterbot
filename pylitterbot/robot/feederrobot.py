@@ -5,7 +5,7 @@ import asyncio
 import logging
 from datetime import datetime
 from json import loads
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 from uuid import uuid4
 
 from aiohttp import ClientWebSocketResponse, WSMsgType
@@ -19,6 +19,8 @@ from .models import FEEDER_ROBOT_MODEL
 
 if TYPE_CHECKING:
     from ..account import Account
+
+_T = TypeVar("_T")
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,9 +55,9 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         self._ws_subscription_id: str | None = None
         self._ws_last_received: datetime | None = None
 
-    def _state_info(self, key: str) -> Any:
+    def _state_info(self, key: str, default: _T | None = None) -> _T | Any:
         """Get an attribute from the data.state.info section."""
-        return self._data["state"]["info"][key]
+        return cast(_T, self._data["state"]["info"].get(key, default))
 
     @property
     def firmware(self) -> str:
@@ -70,7 +72,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     @property
     def meal_insert_size(self) -> float:
         """Return the meal insert size in cups."""
-        meal_insert_size = self._state_info("mealInsertSize")
+        meal_insert_size = self._state_info("mealInsertSize", 0)
         if not (cups := MEAL_INSERT_SIZE_CUPS_MAP.get(meal_insert_size, 0)):
             _LOGGER.error('Unknown meal insert size "%s"', meal_insert_size)
         return cups
