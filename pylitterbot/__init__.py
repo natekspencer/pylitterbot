@@ -1,5 +1,5 @@
 """pylitterbot module."""
-__version__ = "2022.9.0"
+__version__ = "2022.9.1"
 
 from .account import Account
 from .robot import Robot
