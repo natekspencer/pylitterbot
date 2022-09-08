@@ -124,7 +124,7 @@ async def test_litter_robot_4_setup(
     await robot.refresh()
     assert robot.night_light_brightness == 10
     assert robot.night_light_level is None
-    assert robot.night_light_mode is None
+    assert robot.night_light_mode is None  # type: ignore
     assert robot.status == LitterBoxStatus.DRAWER_FULL
 
     mock_aioresponse.post(
