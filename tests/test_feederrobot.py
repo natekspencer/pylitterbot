@@ -31,6 +31,15 @@ async def test_feeder_robot(
     assert robot.meal_insert_size == 0.125
     assert robot.night_light_mode_enabled
     assert not robot.panel_lock_enabled
+    assert robot.power_status == "AC"
+
+    # simulate different power statuses
+    FEEDER_ROBOT_DATA["state"]["info"]["acPower"] = False
+    robot._update_data(FEEDER_ROBOT_DATA)
+    assert robot.power_status == "NC"
+    FEEDER_ROBOT_DATA["state"]["info"]["dcPower"] = True
+    robot._update_data(FEEDER_ROBOT_DATA)
+    assert robot.power_status == "DC"
 
     mock_aioresponse.clear()
     mock_aioresponse.post(

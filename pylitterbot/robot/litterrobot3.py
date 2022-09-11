@@ -229,7 +229,7 @@ class LitterRobot3(LitterRobot):
         )
 
     async def set_name(self, name: str) -> bool:
-        """Set the Litter-Robot's name."""
+        """Set the name."""
         data = await self._patch(json={self._data_name: name})
         assert isinstance(data, dict)
         self._update_data(data)

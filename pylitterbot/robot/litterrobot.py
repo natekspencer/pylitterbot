@@ -120,14 +120,14 @@ class LitterRobot(Robot):
         return from_litter_robot_timestamp(self._data.get("lastSeen"))
 
     @property
-    def power_status(self) -> str | None:
-        """Return the power status of the Litter-Robot.
+    def power_status(self) -> str:
+        """Return the power status.
 
-        `AC` = normal,
-        `DC` = battery backup,
-        `NC` = not connected or off
+        `AC` = normal/mains
+        `DC` = battery backup
+        `NC` = unknown, not connected or off
         """
-        return self._data.get(self._data_power_status)
+        return self._data.get(self._data_power_status, "NC")
 
     @property
     @abstractmethod
@@ -164,9 +164,9 @@ class LitterRobot(Robot):
     def waste_drawer_level(self) -> float:
         """Return the approximate waste drawer level."""
 
-    def _update_data(self, data: dict) -> None:
+    def _update_data(self, data: dict, partial: bool = False) -> None:
         """Save the Litter-Robot info from a data dictionary."""
-        super()._update_data(data)
+        super()._update_data(data, partial)
         self._parse_sleep_info()
         self._update_minimum_cycles_left()
 
@@ -221,10 +221,6 @@ class LitterRobot(Robot):
     @abstractmethod
     async def set_wait_time(self, wait_time: int) -> bool:
         """Set the wait time on the Litter-Robot."""
-
-    async def set_name(self, name: str) -> bool:  # pragma: no cover
-        """Set the Litter-Robot's name."""
-        raise NotImplementedError()
 
     async def reset_waste_drawer(self) -> bool:  # pragma: no cover
         """Reset the Litter-Robot's cycle counts and capacity."""
