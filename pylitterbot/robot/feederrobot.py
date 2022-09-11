@@ -126,6 +126,20 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         """Return `True` if the buttons on the robot are disabled."""
         return bool(self._state_info("panelLockout"))
 
+    @property
+    def power_status(self) -> str:
+        """Return the power type.
+
+        `AC` = normal/mains
+        `DC` = battery backup
+        `NC` = unknown, not connected or off
+        """
+        if bool(self._state_info("acPower")):
+            return "AC"
+        if bool(self._state_info("dcPower")):
+            return "DC"
+        return "NC"  # This *may* never happen
+
     async def _dispatch_command(self, command: str, value: bool) -> bool:
         """Send a command to the Feeder-Robot."""
         try:

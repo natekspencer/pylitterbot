@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
 from json import dumps, loads
 from typing import TYPE_CHECKING, Any, cast
@@ -39,6 +39,8 @@ LR4_STATUS_MAP = {
     "ROBOT_POWER_OFF": LitterBoxStatus.OFF,
     "ROBOT_POWER_UP": LitterBoxStatus.POWER_UP,
 }
+
+LITTER_LEVEL_EMPTY = 500
 
 
 @unique
@@ -80,6 +82,9 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     _command_panel_lock_on = LitterRobot4Command.KEY_PAD_LOCK_OUT_ON
     _command_power_off = LitterRobot4Command.POWER_OFF
     _command_power_on = LitterRobot4Command.POWER_ON
+
+    _litter_level = LITTER_LEVEL_EMPTY
+    _litter_level_exp = datetime.now(timezone.utc)
 
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a Litter-Robot 4."""
@@ -130,8 +135,13 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         ~ 461 low
         ~ 471 very low
         """
-        litter_level = int(self._data.get("litterLevel", 500))
-        return max(round(100 - (litter_level - 440) / 0.6, 1), 0)
+        new_level = int(self._data.get("litterLevel", LITTER_LEVEL_EMPTY))
+        now = datetime.now(timezone.utc)
+        if self._data.get("robotStatus") == "ROBOT_CLEAN":
+            self._litter_level_exp = now + timedelta(seconds=30)
+        elif self._litter_level_exp < now or abs(self._litter_level - new_level) < 10:
+            self._litter_level = new_level
+        return max(round(100 - (self._litter_level - 440) / 0.6, -1), 0)
 
     @property
     def model(self) -> str:
@@ -293,6 +303,32 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         )
         assert isinstance(data, dict)
         self._update_data(data.get("data", {}).get("getLitterRobot4BySerial", {}))
+
+    async def set_name(self, name: str) -> bool:
+        """Set the name."""
+        data = await self._post(
+            json={
+                "query": """
+                    mutation rename(
+                        $serial: String!
+                        $name: String
+                    ) {
+                        updateLitterRobot4(
+                            input: {
+                                serial: $serial
+                                name: $name
+                            }
+                        ) {
+                            name
+                        }
+                    }
+                """,
+                "variables": {"serial": self.serial, "name": name},
+            }
+        )
+        updated_data = cast(dict, data).get("data", {}).get("updateLitterRobot4", {})
+        self._update_data(updated_data, partial=True)
+        return self.name == name
 
     async def set_night_light_brightness(
         self, brightness: int | NightLightLevel

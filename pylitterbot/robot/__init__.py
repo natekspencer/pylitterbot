@@ -70,6 +70,16 @@ class Robot:
         """Return `True` if the buttons on the robot are disabled."""
 
     @property
+    @abstractmethod
+    def power_status(self) -> str:
+        """Return the power type.
+
+        `AC` = normal/mains
+        `DC` = battery backup
+        `NC` = unknown, not connected or off
+        """
+
+    @property
     def serial(self) -> str:
         """Return the serial of the robot, if any."""
         return self._data.get(self._data_serial, "")
@@ -106,6 +116,18 @@ class Robot:
         """Refresh the robot data from the API."""
 
     @abstractmethod
+    async def set_name(self, name: str) -> bool:
+        """Set the name."""
+
+    @abstractmethod
+    async def set_night_light(self, value: bool) -> bool:
+        """Turn the night light mode on or off."""
+
+    @abstractmethod
+    async def set_panel_lockout(self, value: bool) -> bool:
+        """Turn the panel lock on or off."""
+
+    @abstractmethod
     async def subscribe_for_updates(self) -> None:
         """Open a web socket connection to receive updates."""
 
@@ -113,13 +135,19 @@ class Robot:
     async def unsubscribe_from_updates(self) -> None:
         """Stop the web socket."""
 
-    def _update_data(self, data: dict) -> None:
+    def _update_data(self, data: dict, partial: bool = False) -> None:
         """Save the robot info from a data dictionary."""
         if self._is_loaded:
             _LOGGER.debug(
                 "%s updated: %s",
                 self.name,
-                DeepDiff(self._data, data, ignore_order=True, report_repetition=True)
+                DeepDiff(
+                    self._data,
+                    {**self._data, **data} if partial else data,
+                    ignore_order=True,
+                    report_repetition=True,
+                    verbose_level=2,
+                )
                 or "no changes detected",
             )
 
