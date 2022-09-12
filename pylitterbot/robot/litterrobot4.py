@@ -204,9 +204,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def status(self) -> LitterBoxStatus:
         """Return the status of the Litter-Robot."""
-        if self.is_waste_drawer_full:
+        status = self._data["robotStatus"]
+        if status == "ROBOT_IDLE" and self.is_waste_drawer_full:
             return LitterBoxStatus.DRAWER_FULL
-        return LR4_STATUS_MAP.get(self._data["robotStatus"], LitterBoxStatus.UNKNOWN)
+        return LR4_STATUS_MAP.get(status, LitterBoxStatus.UNKNOWN)
 
     @property
     def status_code(self) -> str | None:
