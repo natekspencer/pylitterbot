@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from types import TracebackType
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import jwt
 from aiohttp import ClientSession
@@ -174,17 +174,15 @@ class LitterRobotSession(Session):
             headers={"x-api-key": decode(self.AUTH_ENDPOINT_KEY)},
             json={"email": username, "password": password},
         )
-        assert isinstance(token, dict)
 
         data = await self.post(
             self.TOKEN_EXCHANGE_ENDPOINT,
             skip_auth=True,
             headers={"x-ios-bundle-identifier": "com.whisker.ios"},
             params={"key": decode(self.TOKEN_KEY)},
-            json={"returnSecureToken": True, "token": token["token"]},
+            json={"returnSecureToken": True, "token": cast(dict, token)["token"]},
         )
-        assert isinstance(data, dict)
-        self._token = data
+        self._token = cast(dict, data)
 
     async def refresh_token(self) -> None:
         """Refresh the access token."""
@@ -202,8 +200,7 @@ class LitterRobotSession(Session):
                 ),
             },
         )
-        assert isinstance(data, dict)
-        self._token = data
+        self._token = cast(dict, data)
 
     async def request(
         self, method: str, url: str, **kwargs: Any

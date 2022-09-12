@@ -174,8 +174,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
                 "variables": {"id": self.id},
             },
         )
-        assert isinstance(data, dict)
-        self._update_data(data.get("data", {}).get("feeder_unit_by_pk", {}))
+        self._update_data(cast(dict, data).get("data", {}).get("feeder_unit_by_pk", {}))
 
     async def set_meal_insert_size(self, meal_insert_size: float) -> bool:
         """Set the meal insert size."""
@@ -205,7 +204,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
                 },
             }
         )
-        assert isinstance(data, dict)
+        data = cast(dict, data)
         self._update_data(
             {
                 **self._data,
@@ -231,7 +230,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
                 "variables": {"id": self.id, "name": name},
             }
         )
-        assert isinstance(data, dict)
+        data = cast(dict, data)
         self._update_data(
             {**self._data, **data.get("data", {}).get("update_feeder_unit_by_pk", {})}
         )
@@ -340,7 +339,6 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
                     _LOGGER.debug("resubscribed")
 
         try:
-            assert self._account
             self._ws = await self._account.ws_connect(
                 self._path,
                 params=None,
@@ -357,6 +355,5 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         if (websocket := self._ws) is not None and not websocket.closed:
             self._ws = None
             await websocket.send_json({"id": self._ws_subscription_id, "type": "stop"})
-            assert self._account
             await self._account.ws_disconnect(self.id)
             _LOGGER.debug("Unsubscribed from updates")
