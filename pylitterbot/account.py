@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Mapping
+from typing import cast
 
 from aiohttp import (
     ClientConnectorError,
@@ -92,8 +93,7 @@ class Account:
 
     async def refresh_user(self) -> None:
         """Refresh the logged in user's info."""
-        data = await self.session.get(urljoin(DEFAULT_ENDPOINT, "users"))
-        assert isinstance(data, dict)
+        data = cast(dict, await self.session.get(urljoin(DEFAULT_ENDPOINT, "users")))
         self._user.update(data.get("user", {}))
 
     async def load_robots(self, subscribe_for_updates: bool = False) -> None:

@@ -204,9 +204,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def status(self) -> LitterBoxStatus:
         """Return the status of the Litter-Robot."""
-        if self.is_waste_drawer_full:
+        status = self._data["robotStatus"]
+        if status == "ROBOT_IDLE" and self.is_waste_drawer_full:
             return LitterBoxStatus.DRAWER_FULL
-        return LR4_STATUS_MAP.get(self._data["robotStatus"], LitterBoxStatus.UNKNOWN)
+        return LR4_STATUS_MAP.get(status, LitterBoxStatus.UNKNOWN)
 
     @property
     def status_code(self) -> str | None:
@@ -279,7 +280,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                     "variables": {"serial": self.serial, "command": command, **kwargs},
                 }
             )
-            assert isinstance(data, dict)
+            data = cast(dict, data)
             if "Error" in (
                 error := data.get("data", {}).get("sendLitterRobot4Command", "")
             ):
@@ -301,7 +302,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                 "variables": {"serial": self.serial},
             },
         )
-        assert isinstance(data, dict)
+        data = cast(dict, data)
         self._update_data(data.get("data", {}).get("getLitterRobot4BySerial", {}))
 
     async def set_name(self, name: str) -> bool:
@@ -499,7 +500,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                     _LOGGER.debug("resubscribed")
 
         try:
-            assert self._account
             self._ws = await self._account.ws_connect(
                 f"{self._path}/realtime",
                 params={
@@ -524,6 +524,5 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         if (websocket := self._ws) is not None and not websocket.closed:
             self._ws = None
             await websocket.send_json({"id": self._ws_subscription_id, "type": "stop"})
-            assert self._account
             await self._account.ws_disconnect(self.id)
             _LOGGER.debug("Unsubscribed from updates")

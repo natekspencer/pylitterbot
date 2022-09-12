@@ -5,7 +5,7 @@ import asyncio
 import logging
 from datetime import datetime, time, timedelta, timezone
 from json import loads
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from aiohttp import ClientWebSocketResponse, WSMsgType
 
@@ -123,7 +123,7 @@ class LitterRobot3(LitterRobot):
 
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info of a Litter-Robot."""
-        sleep_mode_active = self._data.get(SLEEP_MODE_ACTIVE)
+        sleep_mode_active = self._data.get(SLEEP_MODE_ACTIVE, "0")
         sleep_mode_time = self._data.get(SLEEP_MODE_TIME)
 
         start_time = end_time = None
@@ -136,20 +136,21 @@ class LitterRobot3(LitterRobot):
 
         # Handle older API sleep start time
         if self.sleep_mode_enabled and not start_time:
-            assert sleep_mode_active
             try:
                 [hours, minutes, seconds] = list(
                     map(int, sleep_mode_active[1:].split(":"))
                 )
                 # Round to the nearest minute to reduce "drift"
-                assert self.last_seen
-                start_time = round_time(
-                    today_at_time(self.last_seen.timetz())
-                    + (
-                        timedelta(hours=0 if self.is_sleeping else 24)
-                        - timedelta(hours=hours, minutes=minutes, seconds=seconds)
+                if self.last_seen is not None:
+                    start_time = round_time(
+                        today_at_time(self.last_seen.timetz())
+                        + (
+                            timedelta(hours=0 if self.is_sleeping else 24)
+                            - timedelta(hours=hours, minutes=minutes, seconds=seconds)
+                        )
                     )
-                )
+                else:
+                    start_time = datetime.now(timezone.utc)
             except ValueError:
                 _LOGGER.error(
                     "Unable to parse sleep mode start time from value '%s'",
@@ -181,8 +182,7 @@ class LitterRobot3(LitterRobot):
 
     async def refresh(self) -> None:
         """Refresh the Litter-Robot's data from the API."""
-        data = await self._get()
-        assert isinstance(data, dict)
+        data = cast(dict, await self._get())
         self._update_data(data)
 
     async def reset_settings(self) -> bool:
@@ -214,8 +214,7 @@ class LitterRobot3(LitterRobot):
                 ),
             }
         )
-        assert isinstance(data, dict)
-        self._update_data(data)
+        self._update_data(cast(dict, data))
         return sleep_time is None or self._data[SLEEP_MODE_TIME] == new_sleep_time
 
     async def set_wait_time(self, wait_time: int) -> bool:
@@ -230,8 +229,7 @@ class LitterRobot3(LitterRobot):
 
     async def set_name(self, name: str) -> bool:
         """Set the name."""
-        data = await self._patch(json={self._data_name: name})
-        assert isinstance(data, dict)
+        data = cast(dict, await self._patch(json={self._data_name: name}))
         self._update_data(data)
         return self.name == name
 
@@ -244,8 +242,7 @@ class LitterRobot3(LitterRobot):
                 self._data_drawer_full_cycles: 0,
             }
         )
-        assert isinstance(data, dict)
-        self._update_data(data)
+        self._update_data(cast(dict, data))
         return self.waste_drawer_level == 0.0
 
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
@@ -254,8 +251,7 @@ class LitterRobot3(LitterRobot):
             raise InvalidCommandException(
                 f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
             )
-        data = await self._get("activity", params={"limit": limit})
-        assert isinstance(data, dict)
+        data = cast(dict, await self._get("activity", params={"limit": limit}))
         return [
             Activity(lr_timestamp, LitterBoxStatus(activity[UNIT_STATUS]))
             for activity in data["activities"]
@@ -276,7 +272,7 @@ class LitterRobot3(LitterRobot):
                 ),
             },
         )
-        assert isinstance(insight, dict)
+        insight = cast(dict, insight)
         return Insight(
             insight["totalCycles"],
             insight["averageCycles"],
@@ -295,9 +291,8 @@ class LitterRobot3(LitterRobot):
         async def _authorization() -> str:
             if not self._account.session.is_token_valid():
                 await self._account.session.refresh_token()
-            assert (
-                authorization := await self._account.session.get_bearer_authorization()
-            )
+            authorization = await self._account.session.get_bearer_authorization()
+            assert authorization
             return authorization
 
         async def _subscribe() -> None:
@@ -344,7 +339,6 @@ class LitterRobot3(LitterRobot):
                     _LOGGER.debug("resubscribed")
 
         try:
-            assert self._account
             self._ws = await self._account.ws_connect(
                 WEBSOCKET_ENDPOINT,
                 params=None,
@@ -360,6 +354,5 @@ class LitterRobot3(LitterRobot):
         """Stop the web socket."""
         if (websocket := self._ws) is not None and not websocket.closed:
             self._ws = None
-            assert self._account
             await self._account.ws_disconnect(self.id)
             _LOGGER.debug("Unsubscribed from updates")
