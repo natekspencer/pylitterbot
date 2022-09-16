@@ -138,7 +138,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         new_level = int(self._data.get("litterLevel", LITTER_LEVEL_EMPTY))
         now = datetime.now(timezone.utc)
         if self._data.get("robotStatus") == "ROBOT_CLEAN":
-            self._litter_level_exp = now + timedelta(seconds=30)
+            self._litter_level_exp = now + timedelta(minutes=1)
         elif self._litter_level_exp < now or abs(self._litter_level - new_level) < 10:
             self._litter_level = new_level
         return max(round(100 - (self._litter_level - 440) / 0.6, -1), 0)
