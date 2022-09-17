@@ -51,6 +51,11 @@ class Robot:
 
     @property
     @abstractmethod
+    def is_online(self) -> bool:
+        """Return `True` if the robot is online."""
+
+    @property
+    @abstractmethod
     def model(self) -> str:
         """Return the robot model."""
 

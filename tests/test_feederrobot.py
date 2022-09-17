@@ -27,6 +27,7 @@ async def test_feeder_robot(
     )
     assert robot.firmware == "1.0.0"
     assert robot.food_level == 20
+    assert robot.is_online
     assert robot.last_feeding == robot.last_meal
     assert robot.meal_insert_size == 0.125
     assert robot.night_light_mode_enabled

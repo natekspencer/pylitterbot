@@ -72,6 +72,11 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         return int(round(self._state_info("level") / 9 * 100, -1))
 
     @property
+    def is_online(self) -> bool:
+        """Return `True` if the robot is online."""
+        return bool(self._state_info("online"))
+
+    @property
     def last_feeding(self) -> dict[str, Any] | None:
         """Get the last feeding meal or snack dispensed."""
         meal = self.last_meal

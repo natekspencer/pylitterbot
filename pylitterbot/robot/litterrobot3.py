@@ -72,6 +72,11 @@ class LitterRobot3(LitterRobot):
         return bool(self._data.get("isDFITriggered", "0") != "0")
 
     @property
+    def is_online(self) -> bool:
+        """Return `True` if the robot is online."""
+        return self.power_status != "NC" and self.status != LitterBoxStatus.OFFLINE
+
+    @property
     def is_sleeping(self) -> bool:
         """Return `True` if the Litter-Robot is currently "sleeping" and won't automatically perform a clean cycle."""
         return (

@@ -50,6 +50,7 @@ async def test_litter_robot_4(
     assert robot.litter_level == 40.0
     assert not robot.is_drawer_full_indicator_triggered
     assert robot.is_onboarded
+    assert robot.is_online
     assert not robot.is_sleeping
     assert not robot.is_waste_drawer_full
     assert robot.last_seen == datetime(

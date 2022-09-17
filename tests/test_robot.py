@@ -56,6 +56,7 @@ async def test_robot_setup(mock_account: Account) -> None:
         assert robot.drawer_full_indicator_cycle_count == 0
     assert not robot.is_drawer_full_indicator_triggered
     assert robot.is_onboarded
+    assert robot.is_online
     assert robot.is_sleeping
     assert not robot.is_waste_drawer_full
     assert robot.last_seen == datetime(

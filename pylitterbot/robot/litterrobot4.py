@@ -114,6 +114,11 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return self._data.get("isDFIFull", False)
 
     @property
+    def is_online(self) -> bool:
+        """Return `True` if the robot is online."""
+        return self._data.get("isOnline", False)
+
+    @property
     def is_sleeping(self) -> bool:
         """Return `True` if the Litter-Robot is currently "sleeping" and won't automatically perform a clean cycle."""
         return bool(self._data.get("sleepStatus", "WAKE") != "WAKE")
