@@ -260,7 +260,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
     history = await robot.get_activity_history(2)
     assert history
     assert len(history) == 2
-    assert str(history[0]) == "2021-03-01T00:01:00+00:00: Ready - 1 cycle"
+    assert str(history[0]) == "2021-03-01T00:01:00+00:00: Ready"
 
     insight = await robot.get_insight(2)
     assert insight

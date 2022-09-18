@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from deepdiff import DeepDiff
 
-from ..utils import from_litter_robot_timestamp, urljoin
+from ..utils import to_timestamp, urljoin
 
 if TYPE_CHECKING:
     from ..account import Account
@@ -92,7 +92,7 @@ class Robot:
     @property
     def setup_date(self) -> datetime | None:
         """Return the datetime the robot was onboarded, if any."""
-        return from_litter_robot_timestamp(self._data.get(self._data_setup_date))
+        return to_timestamp(self._data.get(self._data_setup_date))
 
     def emit(self, event_name: str, *args: Any, **kwargs: Any) -> None:
         """Run all callbacks for an event."""
@@ -143,18 +143,14 @@ class Robot:
     def _update_data(self, data: dict, partial: bool = False) -> None:
         """Save the robot info from a data dictionary."""
         if self._is_loaded:
-            _LOGGER.debug(
-                "%s updated: %s",
-                self.name,
-                DeepDiff(
-                    self._data,
-                    {**self._data, **data} if partial else data,
-                    ignore_order=True,
-                    report_repetition=True,
-                    verbose_level=2,
-                )
-                or "no changes detected",
-            )
+            if diff := DeepDiff(
+                self._data,
+                {**self._data, **data} if partial else data,
+                ignore_order=True,
+                report_repetition=True,
+                verbose_level=2,
+            ):
+                _LOGGER.debug("%s updated: %s", self.name, diff)
 
         self._data.update(data)
         self._is_loaded = True

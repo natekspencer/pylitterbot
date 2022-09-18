@@ -8,7 +8,7 @@ from typing import Any
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
-from ..utils import from_litter_robot_timestamp, send_deprecation_warning
+from ..utils import send_deprecation_warning, to_timestamp
 from . import Robot
 
 _LOGGER = logging.getLogger(__name__)
@@ -117,7 +117,7 @@ class LitterRobot(Robot):
     @property
     def last_seen(self) -> datetime | None:
         """Return the datetime the Litter-Robot last reported, if any."""
-        return from_litter_robot_timestamp(self._data.get("lastSeen"))
+        return to_timestamp(self._data.get("lastSeen"))
 
     @property
     def power_status(self) -> str:

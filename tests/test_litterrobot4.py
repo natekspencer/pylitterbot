@@ -75,9 +75,38 @@ async def test_litter_robot_4(
 
     assert await robot.start_cleaning()
 
-    assert await robot.get_activity_history() == []
-
     mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "getLitterRobot4Activity": [
+                    {
+                        "timestamp": "2022-09-17 20:53:32.000000000",
+                        "value": "robotCycleStatusIdle",
+                        "actionValue": "",
+                    },
+                    {
+                        "timestamp": "2022-09-17 20:51:18.000000000",
+                        "value": "robotCycleStatusDump",
+                        "actionValue": "",
+                    },
+                    {
+                        "timestamp": "2022-09-17 20:44:18.000000000",
+                        "value": "catWeight",
+                        "actionValue": "6.35",
+                    },
+                ]
+            }
+        },
+    )
+    activities = await robot.get_activity_history(3)
+    assert len(activities) == 3
+    assert activities[0].action == LitterBoxStatus.CLEAN_CYCLE_COMPLETE
+    assert activities[2].action == "Pet Weight Recorded: 6.35 lbs"
+    with pytest.raises(InvalidCommandException):
+        await robot.get_activity_history(0)
+
     mock_aioresponse.post(
         LR4_ENDPOINT,
         payload={
