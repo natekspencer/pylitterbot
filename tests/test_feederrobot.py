@@ -120,7 +120,4 @@ async def test_feeder_robot(
     assert await robot.set_name(new_name)
     assert robot.name == new_name
 
-    assert not await robot.get_activity_history()
-    assert (await robot.get_insight()).total_cycles == 0
-
     await robot._account.disconnect()

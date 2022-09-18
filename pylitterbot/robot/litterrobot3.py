@@ -12,13 +12,7 @@ from aiohttp import ClientWebSocketResponse, WSMsgType
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
 from ..exceptions import InvalidCommandException
-from ..utils import (
-    from_litter_robot_timestamp,
-    round_time,
-    today_at_time,
-    urljoin,
-    utcnow,
-)
+from ..utils import round_time, to_timestamp, today_at_time, urljoin, utcnow
 from .litterrobot import MINIMUM_CYCLES_LEFT_DEFAULT, LitterRobot
 
 if TYPE_CHECKING:
@@ -258,10 +252,9 @@ class LitterRobot3(LitterRobot):
             )
         data = cast(dict, await self._get("activity", params={"limit": limit}))
         return [
-            Activity(lr_timestamp, LitterBoxStatus(activity[UNIT_STATUS]))
+            Activity(timestamp, LitterBoxStatus(activity[UNIT_STATUS]))
             for activity in data["activities"]
-            if (lr_timestamp := from_litter_robot_timestamp(activity["timestamp"]))
-            is not None
+            if (timestamp := to_timestamp(activity["timestamp"])) is not None
         ]
 
     async def get_insight(self, days: int = 30, timezone_offset: int = None) -> Insight:
@@ -282,9 +275,9 @@ class LitterRobot3(LitterRobot):
             insight["totalCycles"],
             insight["averageCycles"],
             [
-                Activity(
+                (
                     datetime.strptime(cycle["date"], "%Y-%m-%d").date(),
-                    count=cycle["cyclesCompleted"],
+                    cycle["cyclesCompleted"],
                 )
                 for cycle in insight["cycleHistory"]
             ],
@@ -301,7 +294,8 @@ class LitterRobot3(LitterRobot):
             return authorization
 
         async def _subscribe() -> None:
-            assert self._ws
+            if not self._ws:
+                return
             await self._ws.send_json({"action": "ping"})
 
         async def _monitor() -> None:

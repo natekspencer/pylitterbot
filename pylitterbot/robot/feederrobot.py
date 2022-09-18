@@ -10,12 +10,9 @@ from uuid import uuid4
 
 from aiohttp import ClientWebSocketResponse, WSMsgType
 
-from ..activity import Activity, Insight
 from ..enums import FeederRobotCommand
 from ..exceptions import InvalidCommandException
-from ..utils import decode
-from ..utils import from_litter_robot_timestamp as to_timestamp
-from ..utils import utcnow
+from ..utils import decode, to_timestamp, utcnow
 from . import Robot
 from .models import FEEDER_ROBOT_MODEL
 
@@ -251,22 +248,6 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         """Turn the panel lock on or off."""
         return await self._dispatch_command(FeederRobotCommand.SET_PANEL_LOCKOUT, value)
 
-    async def get_activity_history(
-        self, limit: int = 100  # pylint: disable=unused-argument
-    ) -> list[Activity]:
-        """Return the activity history."""
-        _LOGGER.warning("get_activity_history has not yet been implemented")
-        return []
-
-    async def get_insight(
-        self,
-        days: int = 30,  # pylint: disable=unused-argument
-        timezone_offset: int = None,  # pylint: disable=unused-argument
-    ) -> Insight:
-        """Return the insight data."""
-        _LOGGER.warning("get_insight has not yet been implemented")
-        return Insight(0, 0, [])
-
     async def subscribe_for_updates(self) -> None:
         """Open a web socket connection to receive updates."""
 
@@ -276,7 +257,8 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
             return await self._account.session.get_bearer_authorization()
 
         async def _subscribe(send_stop: bool = False) -> None:
-            assert self._ws
+            if not self._ws:
+                return
             if send_stop:
                 await self._ws.send_json(
                     {"id": self._ws_subscription_id, "type": "stop"}

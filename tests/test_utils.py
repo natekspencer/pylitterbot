@@ -1,5 +1,5 @@
 """Test utils module."""
-from pylitterbot.utils import decode, encode, from_litter_robot_timestamp, round_time
+from pylitterbot.utils import decode, encode, round_time, to_timestamp
 
 
 def test_round_time_default() -> None:
@@ -8,9 +8,10 @@ def test_round_time_default() -> None:
     assert timestamp
 
 
-def test_from_litter_robot_timestamp() -> None:
+def test_to_timestamp() -> None:
     """Tests parsing a Litter-Robot timestamp."""
-    assert from_litter_robot_timestamp(None) is None
+    assert to_timestamp(None) is None
+    assert to_timestamp("2022-09-14") is not None
 
 
 def test_encode_decode() -> None:

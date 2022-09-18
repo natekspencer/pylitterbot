@@ -28,7 +28,13 @@ def encode(value: str | dict) -> str:
 
 def from_litter_robot_timestamp(
     timestamp: str | None,
-) -> datetime | None:
+) -> datetime | None:  # pragma: no cover
+    """Use `to_timestamp` instead."""
+    send_deprecation_warning("from_litter_robot_timestamp", "to_timestamp")
+    return to_timestamp(timestamp)
+
+
+def to_timestamp(timestamp: str | None) -> datetime | None:
     """Construct a UTC offset-aware datetime from a Litter-Robot API timestamp."""
     if not timestamp:
         return None
@@ -36,7 +42,7 @@ def from_litter_robot_timestamp(
         timestamp = timestamp.replace("Z", "")
     if (utc_offset := "+00:00") not in timestamp:
         timestamp += utc_offset
-    timestamp = re.sub(r"(\.\d+)", lambda m: m.group().ljust(7, "0"), timestamp)
+    timestamp = re.sub(r"(\.\d+)", lambda m: m.group().ljust(7, "0")[:7], timestamp)
     return datetime.fromisoformat(timestamp)
 
 

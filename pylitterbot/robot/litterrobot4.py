@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover
 from ..activity import Activity, Insight
 from ..enums import LitterBoxStatus, LitterRobot4Command
 from ..exceptions import InvalidCommandException
-from ..utils import encode, utcnow
+from ..utils import encode, to_timestamp, utcnow
 from .litterrobot import LitterRobot
 from .models import LITTER_ROBOT_4_MODEL
 
@@ -38,6 +38,15 @@ LR4_STATUS_MAP = {
     "ROBOT_POWER_DOWN": LitterBoxStatus.POWER_DOWN,
     "ROBOT_POWER_OFF": LitterBoxStatus.OFF,
     "ROBOT_POWER_UP": LitterBoxStatus.POWER_UP,
+}
+ACTIVITY_STATUS_MAP: dict[str, LitterBoxStatus | str] = {
+    "catDetectStuckLaser": LitterBoxStatus.CAT_SENSOR_FAULT,
+    "catWeight": "Pet Weight Recorded",
+    "powerTypeDC": "Battery Backup",
+    "robotCycleStateCatDetect": LitterBoxStatus.CAT_SENSOR_INTERRUPTED,
+    "robotCycleStatusDump": LitterBoxStatus.CLEAN_CYCLE,
+    "robotCycleStatusIdle": LitterBoxStatus.CLEAN_CYCLE_COMPLETE,
+    "robotStatusCatDetect": LitterBoxStatus.CAT_DETECTED,
 }
 
 LITTER_LEVEL_EMPTY = 500
@@ -237,6 +246,14 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         ):
             self._parse_sleep_info()
 
+    def _parse_activity(self, activity: dict[str, str]) -> LitterBoxStatus | str:
+        """Parse an activity."""
+        value = activity["value"]
+        action = ACTIVITY_STATUS_MAP.get(value, value)
+        if value == "catWeight":
+            action = f"{action}: {activity['actionValue']} lbs"
+        return action
+
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info of a Litter-Robot."""
         start = end = None
@@ -372,8 +389,53 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
         """Return the activity history."""
-        _LOGGER.warning("get_activity_history has not yet been implemented")
-        return []
+        if limit < 1:
+            raise InvalidCommandException(
+                f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
+            )
+        data = await self._post(
+            json={
+                "query": """
+                    query GetLR4Activity(
+                        $serial: String!
+                        $startTimestamp: String
+                        $endTimestamp: String
+                        $limit: Int
+                        $consumer: String
+                    ) {
+                        getLitterRobot4Activity(
+                            serial: $serial
+                            startTimestamp: $startTimestamp
+                            endTimestamp: $endTimestamp
+                            limit: $limit
+                            consumer: $consumer
+                        ) {
+                            serial
+                            measure
+                            timestamp
+                            value
+                            actionValue
+                            originalHex
+                            valueString
+                            stateString
+                            consumer
+                            commandSource
+                        }
+                    }
+                """,
+                "variables": {
+                    "serial": self.serial,
+                    "limit": limit,
+                    "consumer": "app",
+                },
+            }
+        )
+        activities = cast(dict, data).get("data", {}).get("getLitterRobot4Activity", {})
+        return [
+            Activity(timestamp, self._parse_activity(activity))
+            for activity in activities
+            if (timestamp := to_timestamp(activity["timestamp"])) is not None
+        ]
 
     async def get_insight(
         self, days: int = 30, timezone_offset: int | None = None
@@ -382,26 +444,26 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         data = await self._post(
             json={
                 "query": """
-                            query GetLR4Insights(
-                                $serial: String!
-                                $startTimestamp: String
-                                $timezoneOffset: Int
-                            ) {
-                                getLitterRobot4Insights(
-                                    serial: $serial
-                                    startTimestamp: $startTimestamp
-                                    timezoneOffset: $timezoneOffset
-                                ) {
-                                    totalCycles
-                                    averageCycles
-                                    cycleHistory {
-                                        date
-                                        numberOfCycles
-                                    }
-                                    totalCatDetections
-                                }
+                    query GetLR4Insights(
+                        $serial: String!
+                        $startTimestamp: String
+                        $timezoneOffset: Int
+                    ) {
+                        getLitterRobot4Insights(
+                            serial: $serial
+                            startTimestamp: $startTimestamp
+                            timezoneOffset: $timezoneOffset
+                        ) {
+                            totalCycles
+                            averageCycles
+                            cycleHistory {
+                                date
+                                numberOfCycles
                             }
-                        """,
+                            totalCatDetections
+                        }
+                    }
+                """,
                 "variables": {
                     "serial": self.serial,
                     "startTimestamp": (utcnow() - timedelta(days=days)).strftime(
@@ -416,9 +478,9 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             insight["totalCycles"],
             insight["averageCycles"],
             [
-                Activity(
+                (
                     datetime.strptime(cycle["date"], "%Y-%m-%d").date(),
-                    count=cycle["numberOfCycles"],
+                    cycle["numberOfCycles"],
                 )
                 for cycle in insight["cycleHistory"]
             ],
@@ -433,7 +495,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             return await self._account.session.get_bearer_authorization()
 
         async def _subscribe(send_stop: bool = False) -> None:
-            assert self._ws
+            if not self._ws:
+                return
             if send_stop:
                 await self._ws.send_json(
                     {"id": self._ws_subscription_id, "type": "stop"}
