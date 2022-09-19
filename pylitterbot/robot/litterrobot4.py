@@ -93,7 +93,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     _command_power_on = LitterRobot4Command.POWER_ON
 
     _litter_level = LITTER_LEVEL_EMPTY
-    _litter_level_exp = datetime.now(timezone.utc)
+    _litter_level_exp: datetime | None = None
 
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a Litter-Robot 4."""
@@ -153,7 +153,11 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         now = datetime.now(timezone.utc)
         if self._data.get("robotStatus") == "ROBOT_CLEAN":
             self._litter_level_exp = now + timedelta(minutes=1)
-        elif self._litter_level_exp < now or abs(self._litter_level - new_level) < 10:
+        elif (
+            self._litter_level_exp is None
+            or self._litter_level_exp < now
+            or abs(self._litter_level - new_level) < 10
+        ):
             self._litter_level = new_level
         return max(round(100 - (self._litter_level - 440) / 0.6, -1), 0)
 
