@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from copy import deepcopy
 from datetime import datetime
 from json import loads
 from typing import TYPE_CHECKING, Any, TypeVar, cast
@@ -240,13 +241,19 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
 
     async def set_night_light(self, value: bool) -> bool:
         """Turn the night light mode on or off."""
-        return await self._dispatch_command(
-            FeederRobotCommand.SET_AUTO_NIGHT_MODE, value
-        )
+        if await self._dispatch_command(FeederRobotCommand.SET_AUTO_NIGHT_MODE, value):
+            data = deepcopy(self._data)
+            data["state"]["info"]["autoNightMode"] = value
+            self._update_data(data)
+        return self.night_light_mode_enabled == value
 
     async def set_panel_lockout(self, value: bool) -> bool:
         """Turn the panel lock on or off."""
-        return await self._dispatch_command(FeederRobotCommand.SET_PANEL_LOCKOUT, value)
+        if await self._dispatch_command(FeederRobotCommand.SET_PANEL_LOCKOUT, value):
+            data = deepcopy(self._data)
+            data["state"]["info"]["panelLockout"] = value
+            self._update_data(data)
+        return self.panel_lock_enabled == value
 
     async def subscribe_for_updates(self) -> None:
         """Open a web socket connection to receive updates."""
