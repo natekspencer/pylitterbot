@@ -35,6 +35,8 @@ SLEEP_DURATION = timedelta(hours=SLEEP_DURATION_HOURS)
 class LitterRobot3(LitterRobot):
     """Data and methods for interacting with a Litter-Robot 3 automatic, self-cleaning litter box."""
 
+    _attr_model = "Litter-Robot 3"
+
     VALID_WAIT_TIMES = [3, 7, 15]
 
     def __init__(self, data: dict, account: Account) -> None:
@@ -84,11 +86,6 @@ class LitterRobot3(LitterRobot):
         return (
             self.is_drawer_full_indicator_triggered and self.cycle_count > 9
         ) or self._minimum_cycles_left < MINIMUM_CYCLES_LEFT_DEFAULT
-
-    @property
-    def model(self) -> str:
-        """Return the robot model."""
-        return "Litter-Robot 3"
 
     @property
     def night_light_mode_enabled(self) -> bool:

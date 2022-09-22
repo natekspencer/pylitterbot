@@ -73,6 +73,8 @@ class NightLightMode(Enum):
 class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     """Data and methods for interacting with a Litter-Robot 4 automatic, self-cleaning litter box."""
 
+    _attr_model = "Litter-Robot 4"
+
     VALID_WAIT_TIMES = [3, 5, 7, 15, 30]
 
     _data_cycle_capacity = "DFINumberOfCycles"
@@ -160,11 +162,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         ):
             self._litter_level = new_level
         return max(round(100 - (self._litter_level - 440) / 0.6, -1), 0)
-
-    @property
-    def model(self) -> str:
-        """Return the robot model."""
-        return "Litter-Robot 4"
 
     @property
     def night_light_brightness(self) -> int:
