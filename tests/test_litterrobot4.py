@@ -138,6 +138,29 @@ async def test_litter_robot_4(
     assert not await robot._dispatch_command("12")
     assert caplog.messages[-1] == "Error sending a command"
 
+    error_message = "sendLitterRobot4Command: Robot not online: LR4C000001"
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {"sendLitterRobot4Command": None},
+            "errors": [{"message": error_message}],
+        },
+    )
+    assert not await robot.set_night_light_brightness(255)
+    assert caplog.messages[-1] == error_message
+
+    # test multiple errors in message
+    error_message2 = "sendLitterRobot4Command: Robot still offline: LR4C000001"
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {"sendLitterRobot4Command": None},
+            "errors": [{"message": error_message}, {"message": error_message2}],
+        },
+    )
+    assert not await robot.set_night_light_brightness(255)
+    assert caplog.messages[-1] == f"{error_message}, {error_message2}"
+
     mock_aioresponse.post(
         LR4_ENDPOINT,
         payload={

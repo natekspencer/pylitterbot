@@ -307,9 +307,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                 }
             )
             data = cast(dict, data)
-            if "Error" in (
-                error := data.get("data", {}).get("sendLitterRobot4Command", "")
-            ):
+            error = data.get("data", {}).get("sendLitterRobot4Command", "")
+            if error and "Error" in error:
+                raise InvalidCommandException(error)
+            if error := ", ".join(e.get("message", "") for e in data.get("errors", {})):
                 raise InvalidCommandException(error)
             return True
         except InvalidCommandException as ex:
