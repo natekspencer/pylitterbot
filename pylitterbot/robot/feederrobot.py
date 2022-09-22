@@ -40,6 +40,8 @@ MEAL_INSERT_SIZE_CUPS_REVERSE_MAP = {v: k for k, v in MEAL_INSERT_SIZE_CUPS_MAP.
 class FeederRobot(Robot):  # pylint: disable=abstract-method
     """Data and methods for interacting with a Feeder-Robot automatic pet feeder."""
 
+    _attr_model = "Feeder-Robot"
+
     VALID_MEAL_INSERT_SIZES = list(MEAL_INSERT_SIZE_CUPS_MAP.values())
 
     _data_id = "id"
@@ -113,11 +115,6 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         if not (cups := MEAL_INSERT_SIZE_CUPS_MAP.get(meal_insert_size, 0)):
             _LOGGER.error('Unknown meal insert size "%s"', meal_insert_size)
         return cups
-
-    @property
-    def model(self) -> str:
-        """Return the robot model."""
-        return "Feeder-Robot"
 
     @property
     def night_light_mode_enabled(self) -> bool:

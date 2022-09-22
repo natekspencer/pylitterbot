@@ -22,6 +22,8 @@ EVENT_UPDATE = "update"
 class Robot:
     """Robot base class."""
 
+    _attr_model: str
+
     _data_id: str
     _data_name: str
     _data_serial: str
@@ -55,9 +57,9 @@ class Robot:
         """Return `True` if the robot is online."""
 
     @property
-    @abstractmethod
     def model(self) -> str:
         """Return the robot model."""
+        return self._attr_model
 
     @property
     def name(self) -> str:
