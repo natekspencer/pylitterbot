@@ -488,6 +488,47 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             ],
         )
 
+    async def has_firmware_update(self) -> bool:
+        """Check if a firmware update is available."""
+        data = await self._post(
+            json={
+                "query": """
+                    query getFirmwareDetails($serial: String!) {
+                        litterRobot4CompareFirmwareVersion(serial: $serial) {
+                            isEspFirmwareUpdateNeeded
+                            isPicFirmwareUpdateNeeded
+                            isLaserboardFirmwareUpdateNeeded
+                        }
+                    }
+                """,
+                "variables": {"serial": self.serial},
+            }
+        )
+        data = cast(dict, data)
+        firmware = data.get("data", {}).get("litterRobot4CompareFirmwareVersion", {})
+        return any(firmware.values())
+
+    async def update_firmware(self) -> bool:
+        """Trigger a firmware update."""
+        data = await self._post(
+            json={
+                "query": """
+                    mutation updateFirmware($serial: String!) {
+                        litterRobot4TriggerFirmwareUpdate(input: {serial: $serial}) {
+                            isUpdateTriggered
+                            isEspFirmwareUpdateNeeded
+                            isPicFirmwareUpdateNeeded
+                            isLaserboardFirmwareUpdateNeeded
+                        }
+                    }
+                """,
+                "variables": {"serial": self.serial},
+            }
+        )
+        data = cast(dict, data)
+        firmware = data.get("data", {}).get("litterRobot4TriggerFirmwareUpdate", {})
+        return bool(firmware.get("isUpdateTriggered", False))
+
     async def subscribe_for_updates(self) -> None:
         """Open a web socket connection to receive updates."""
 
