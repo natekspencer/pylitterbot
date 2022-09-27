@@ -237,6 +237,62 @@ async def test_litter_robot_4(
     )
     await robot.set_night_light_mode(NightLightMode.AUTO)
 
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "litterRobot4CompareFirmwareVersion": {
+                    "isEspFirmwareUpdateNeeded": True,
+                    "isPicFirmwareUpdateNeeded": True,
+                    "isLaserboardFirmwareUpdateNeeded": False,
+                }
+            }
+        },
+    )
+    assert await robot.has_firmware_update()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "litterRobot4CompareFirmwareVersion": {
+                    "isEspFirmwareUpdateNeeded": False,
+                    "isPicFirmwareUpdateNeeded": False,
+                    "isLaserboardFirmwareUpdateNeeded": False,
+                }
+            }
+        },
+    )
+    assert not await robot.has_firmware_update()
+
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "litterRobot4TriggerFirmwareUpdate": {
+                    "isEspFirmwareUpdateNeeded": True,
+                    "isLaserboardFirmwareUpdateNeeded": False,
+                    "isPicFirmwareUpdateNeeded": True,
+                    "isUpdateTriggered": True,
+                }
+            }
+        },
+    )
+    assert await robot.update_firmware()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "litterRobot4TriggerFirmwareUpdate": {
+                    "isEspFirmwareUpdateNeeded": False,
+                    "isLaserboardFirmwareUpdateNeeded": False,
+                    "isPicFirmwareUpdateNeeded": False,
+                    "isUpdateTriggered": False,
+                }
+            }
+        },
+    )
+    assert not await robot.update_firmware()
+
     await robot._account.disconnect()
 
 
