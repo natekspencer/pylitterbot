@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from abc import abstractmethod
+from collections.abc import Callable
 from datetime import datetime, time
 from typing import Any
 
@@ -164,11 +165,19 @@ class LitterRobot(Robot):
     def waste_drawer_level(self) -> float:
         """Return the approximate waste drawer level."""
 
-    def _update_data(self, data: dict, partial: bool = False) -> None:
+    def _update_data(
+        self,
+        data: dict,
+        partial: bool = False,
+        callback: Callable[[], Any] | None = None,
+    ) -> None:
         """Save the Litter-Robot info from a data dictionary."""
-        super()._update_data(data, partial)
-        self._parse_sleep_info()
-        self._update_minimum_cycles_left()
+
+        def _callback() -> None:
+            self._parse_sleep_info()
+            self._update_minimum_cycles_left()
+
+        super()._update_data(data, partial, _callback)
 
     @abstractmethod
     def _parse_sleep_info(self) -> None:

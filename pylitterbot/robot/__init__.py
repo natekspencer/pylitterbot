@@ -142,7 +142,12 @@ class Robot:
     async def unsubscribe_from_updates(self) -> None:
         """Stop the web socket."""
 
-    def _update_data(self, data: dict, partial: bool = False) -> None:
+    def _update_data(
+        self,
+        data: dict,
+        partial: bool = False,
+        callback: Callable[[], Any] | None = None,
+    ) -> None:
         """Save the robot info from a data dictionary."""
         if self._is_loaded:
             if diff := DeepDiff(
@@ -155,6 +160,8 @@ class Robot:
                 _LOGGER.debug("%s updated: %s", self.name, diff)
 
         self._data.update(data)
+        if callback:
+            callback()
         self._is_loaded = True
         self.emit(EVENT_UPDATE)
 
