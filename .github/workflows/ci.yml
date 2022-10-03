@@ -5,13 +5,12 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -19,24 +18,24 @@ jobs:
         python-version: ["3.8", "3.9", "3.10"]
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Install poetry
-      run: pipx install poetry
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'poetry'
-    - name: Install dependencies
-      run: poetry install
-    - name: Run linting
-      run: |
-        poetry run isort .
-        poetry run black . --check
-        poetry run flake8 .
-        poetry run pylint pylitterbot tests
-        poetry run pydocstyle pylitterbot tests
-    - name: Run mypy
-      run: poetry run mypy pylitterbot tests
-    - name: Test with pytest
-      run: poetry run pytest --asyncio-mode=auto
+      - uses: actions/checkout@v3
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "poetry"
+      - name: Install dependencies
+        run: poetry install
+      - name: Run linting
+        run: |
+          poetry run isort .
+          poetry run black . --check
+          poetry run flake8 .
+          poetry run pylint pylitterbot tests
+          poetry run pydocstyle pylitterbot tests
+      - name: Run mypy
+        run: poetry run mypy pylitterbot tests
+      - name: Test with pytest
+        run: poetry run pytest --timeout=10 --cov=pylitterbot --asyncio-mode=auto
