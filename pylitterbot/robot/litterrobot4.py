@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
 from json import dumps, loads
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Union, cast
 from uuid import uuid4
 
 from aiohttp import ClientWebSocketResponse, WSMsgType
@@ -488,8 +488,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             ],
         )
 
-    async def has_firmware_update(self) -> bool:
-        """Check if a firmware update is available."""
+    async def get_firmware_details(self) -> dict[str, bool | dict[str, str]]:
+        """Get the firmware details."""
         data = await self._post(
             json={
                 "query": """
@@ -498,15 +498,34 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                             isEspFirmwareUpdateNeeded
                             isPicFirmwareUpdateNeeded
                             isLaserboardFirmwareUpdateNeeded
+                            latestFirmware {
+                                espFirmwareVersion
+                                picFirmwareVersion
+                                laserBoardFirmwareVersion
+                            }
                         }
                     }
                 """,
                 "variables": {"serial": self.serial},
             }
         )
-        data = cast(dict, data)
-        firmware = data.get("data", {}).get("litterRobot4CompareFirmwareVersion", {})
-        return any(firmware.values())
+        data = cast(dict[str, dict[str, dict[str, Union[bool, dict[str, str]]]]], data)
+        return data.get("data", {}).get("litterRobot4CompareFirmwareVersion", {})
+
+    async def get_latest_firmware(self) -> str:
+        """Get the latest firmware available."""
+        latest_firmware = (await self.get_firmware_details()).get("latestFirmware", {})
+        latest_firmware = cast(dict[str, str], latest_firmware)
+        return (
+            f"ESP: {latest_firmware.get('espFirmwareVersion')} / "
+            f"PIC: {latest_firmware.get('picFirmwareVersion')} / "
+            f"TOF: {latest_firmware.get('laserBoardFirmwareVersion')}"
+        )
+
+    async def has_firmware_update(self) -> bool:
+        """Check if a firmware update is available."""
+        firmware = await self.get_firmware_details()
+        return any(value for value in firmware.values() if isinstance(value, bool))
 
     async def update_firmware(self) -> bool:
         """Trigger a firmware update."""
