@@ -50,7 +50,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     _data_setup_date = "created_at"
 
     def __init__(self, data: dict, account: Account) -> None:
-        """Initialize a  Feeder-Robot."""
+        """Initialize a Feeder-Robot."""
         super().__init__(data, account)
         self._path = FEEDER_ENDPOINT
         self._ws: ClientWebSocketResponse | None = None
