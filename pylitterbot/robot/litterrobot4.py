@@ -56,9 +56,9 @@ LITTER_LEVEL_EMPTY = 500
 class NightLightLevel(IntEnum):
     """Night light level of a Litter-Robot 4 unit."""
 
-    LOW = 85
-    MEDIUM = 170
-    HIGH = 255
+    LOW = 25
+    MEDIUM = 50
+    HIGH = 100
 
 
 @unique
