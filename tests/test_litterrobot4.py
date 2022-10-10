@@ -237,32 +237,28 @@ async def test_litter_robot_4(
     )
     await robot.set_night_light_mode(NightLightMode.AUTO)
 
-    mock_aioresponse.post(
-        LR4_ENDPOINT,
-        payload={
-            "data": {
-                "litterRobot4CompareFirmwareVersion": {
-                    "isEspFirmwareUpdateNeeded": True,
-                    "isPicFirmwareUpdateNeeded": True,
-                    "isLaserboardFirmwareUpdateNeeded": False,
-                }
-            }
+    version_info = {
+        "isEspFirmwareUpdateNeeded": True,
+        "isPicFirmwareUpdateNeeded": True,
+        "isLaserboardFirmwareUpdateNeeded": False,
+        "latestFirmware": {
+            "espFirmwareVersion": "1.1.54",
+            "picFirmwareVersion": "10512.2560.2.66",
+            "laserBoardFirmwareVersion": "4.0.65.4",
         },
-    )
+    }
+    firmware_response = {"data": {"litterRobot4CompareFirmwareVersion": version_info}}
+    mock_aioresponse.post(LR4_ENDPOINT, payload=firmware_response)
     assert await robot.has_firmware_update()
-    mock_aioresponse.post(
-        LR4_ENDPOINT,
-        payload={
-            "data": {
-                "litterRobot4CompareFirmwareVersion": {
-                    "isEspFirmwareUpdateNeeded": False,
-                    "isPicFirmwareUpdateNeeded": False,
-                    "isLaserboardFirmwareUpdateNeeded": False,
-                }
-            }
-        },
-    )
+
+    version_info["isEspFirmwareUpdateNeeded"] = False
+    version_info["isPicFirmwareUpdateNeeded"] = False
+    mock_aioresponse.post(LR4_ENDPOINT, payload=firmware_response)
     assert not await robot.has_firmware_update()
+
+    mock_aioresponse.post(LR4_ENDPOINT, payload=firmware_response)
+    latest_firmware = await robot.get_latest_firmware()
+    assert latest_firmware == "ESP: 1.1.54 / PIC: 10512.2560.2.66 / TOF: 4.0.65.4"
 
     mock_aioresponse.post(
         LR4_ENDPOINT,
