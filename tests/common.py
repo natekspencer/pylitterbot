@@ -132,7 +132,7 @@ LITTER_ROBOT_4_DATA: dict[str, Any] = {
     "cleanCycleWaitTime": 7,
     "isKeypadLockout": False,
     "nightLightMode": "AUTO",
-    "nightLightBrightness": 255,
+    "nightLightBrightness": 100,
     "isPanelSleepMode": False,
     "panelSleepTime": 0,
     "panelWakeTime": 0,

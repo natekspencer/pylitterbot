@@ -58,7 +58,7 @@ async def test_litter_robot_4(
     )
     assert robot.model == "Litter-Robot 4"
     assert robot.name == "Litter-Robot 4"
-    assert robot.night_light_brightness == 255
+    assert robot.night_light_brightness == 100
     assert robot.night_light_level == NightLightLevel.HIGH
     assert robot.night_light_mode == NightLightMode.AUTO
     assert robot.night_light_mode_enabled
@@ -146,7 +146,7 @@ async def test_litter_robot_4(
             "errors": [{"message": error_message}],
         },
     )
-    assert not await robot.set_night_light_brightness(255)
+    assert not await robot.set_night_light_brightness(100)
     assert caplog.messages[-1] == error_message
 
     # test multiple errors in message
@@ -158,7 +158,7 @@ async def test_litter_robot_4(
             "errors": [{"message": error_message}, {"message": error_message2}],
         },
     )
-    assert not await robot.set_night_light_brightness(255)
+    assert not await robot.set_night_light_brightness(100)
     assert caplog.messages[-1] == f"{error_message}, {error_message2}"
 
     mock_aioresponse.post(
@@ -223,7 +223,7 @@ async def test_litter_robot_4(
             }
         },
     )
-    await robot.set_night_light_brightness(85)
+    await robot.set_night_light_brightness(25)
     with pytest.raises(InvalidCommandException):
         await robot.set_night_light_brightness(20)
 
