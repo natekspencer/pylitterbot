@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
 from json import dumps, loads
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Union, cast
 from uuid import uuid4
 
 from aiohttp import ClientWebSocketResponse, WSMsgType
@@ -509,15 +509,13 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                 "variables": {"serial": self.serial},
             }
         )
-        # pylint: disable=unsubscriptable-object
-        data = cast(dict[str, dict[str, dict[str, Union[bool, dict[str, str]]]]], data)
+        data = cast(Dict[str, Dict[str, Dict[str, Union[bool, Dict[str, str]]]]], data)
         return data.get("data", {}).get("litterRobot4CompareFirmwareVersion", {})
 
     async def get_latest_firmware(self) -> str:
         """Get the latest firmware available."""
         latest_firmware = (await self.get_firmware_details()).get("latestFirmware", {})
-        # pylint: disable=unsubscriptable-object
-        latest_firmware = cast(dict[str, str], latest_firmware)
+        latest_firmware = cast(Dict[str, str], latest_firmware)
         return (
             f"ESP: {latest_firmware.get('espFirmwareVersion')} / "
             f"PIC: {latest_firmware.get('picFirmwareVersion')} / "
