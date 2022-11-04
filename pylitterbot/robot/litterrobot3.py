@@ -115,7 +115,9 @@ class LitterRobot3(LitterRobot):
     @property
     def waste_drawer_level(self) -> float:
         """Return the approximate waste drawer level."""
-        return (self.cycle_count / self.cycle_capacity * 1000 + 0.5) // 1 / 10
+        if (capacity := self.cycle_capacity) == 0:
+            return 100
+        return (self.cycle_count / capacity * 1000 + 0.5) // 1 / 10
 
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info of a Litter-Robot."""

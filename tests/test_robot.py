@@ -81,6 +81,14 @@ async def test_robot_setup(mock_account: Account) -> None:
     assert robot.waste_drawer_level == 50
 
 
+async def test_robot_with_zero_cycle_capacity(mock_account: Account) -> None:
+    """Tests that a robot with zero cycle capacity doesn't cause an error."""
+    data = {**ROBOT_DATA, "cycleCount": 0, "unitStatus": "DFS"}
+    robot = LitterRobot3(data=data, account=mock_account)
+    assert robot.cycle_capacity == 0
+    assert robot.waste_drawer_level == 100
+
+
 async def test_robot_with_sleep_mode_time(mock_account: Account) -> None:
     """Tests that robot with `sleepModeTime` is setup correctly."""
     for hour in range(-12, 25, 12):
