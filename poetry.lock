@@ -619,7 +619,7 @@ python-versions = ">=3.6,<4.0"
 
 [[package]]
 name = "tox"
-version = "3.27.0"
+version = "3.27.1"
 description = "tox is a generic virtualenv management and test command line tool"
 category = "dev"
 optional = false
@@ -710,7 +710,7 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7.2"
-content-hash = "e1b35f7f24b1ae5f17bc3239a6fb6914a90903d4e3ffe841c35d49c057e6d1f2"
+content-hash = "c1255bd616b3aff59129dab49a7ac1c0a05fa45309d1b744a6b255c7fa07e5fc"
 
 [metadata.files]
 aiohttp = [
@@ -1259,8 +1259,8 @@ tomlkit = [
     {file = "tomlkit-0.11.5.tar.gz", hash = "sha256:571854ebbb5eac89abcb4a2e47d7ea27b89bf29e09c35395da6f03dd4ae23d1c"},
 ]
 tox = [
-    {file = "tox-3.27.0-py2.py3-none-any.whl", hash = "sha256:89e4bc6df3854e9fc5582462e328dd3660d7d865ba625ae5881bbc63836a6324"},
-    {file = "tox-3.27.0.tar.gz", hash = "sha256:d2c945f02a03d4501374a3d5430877380deb69b218b1df9b7f1d2f2a10befaf9"},
+    {file = "tox-3.27.1-py2.py3-none-any.whl", hash = "sha256:f52ca66eae115fcfef0e77ef81fd107133d295c97c52df337adedb8dfac6ab84"},
+    {file = "tox-3.27.1.tar.gz", hash = "sha256:b2a920e35a668cc06942ffd1cf3a4fb221a4d909ca72191fb6d84b0b18a7be04"},
 ]
 typed-ast = [
     {file = "typed_ast-1.5.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:669dd0c4167f6f2cd9f57041e03c3c2ebf9063d0757dc89f79ba1daa2bfca9d4"},
