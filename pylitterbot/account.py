@@ -56,8 +56,8 @@ class Account:
 
     async def connect(
         self,
-        username: str = None,
-        password: str = None,
+        username: str | None = None,
+        password: str | None = None,
         load_robots: bool = False,
         subscribe_for_updates: bool = False,
     ) -> None:

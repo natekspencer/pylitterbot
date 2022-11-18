@@ -127,7 +127,7 @@ class LitterRobotSession(Session):
     TOKEN_KEY = "QUl6YVN5Q3Y4NGplbDdKa0NRbHNncXJfc2xYZjNmM3gtY01HMTVR"
 
     def __init__(
-        self, token: dict = None, websession: ClientSession | None = None
+        self, token: dict | None = None, websession: ClientSession | None = None
     ) -> None:
         """Initialize the session."""
         super().__init__(websession=websession)

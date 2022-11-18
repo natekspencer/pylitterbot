@@ -240,5 +240,7 @@ class LitterRobot(Robot):
         """Return the activity history."""
 
     @abstractmethod
-    async def get_insight(self, days: int = 30, timezone_offset: int = None) -> Insight:
+    async def get_insight(
+        self, days: int = 30, timezone_offset: int | None = None
+    ) -> Insight:
         """Return the insight data."""
