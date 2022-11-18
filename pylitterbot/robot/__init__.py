@@ -172,7 +172,7 @@ class Robot:
         return await self._account.session.get(urljoin(self._path, subpath), **kwargs)
 
     async def _patch(
-        self, subpath: str | None = None, json: Any = None, **kwargs: Any
+        self, subpath: str | None = None, json: Any | None = None, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Send a PATCH request to the Litter-Robot API."""
         return await self._account.session.patch(
@@ -180,7 +180,7 @@ class Robot:
         )
 
     async def _post(
-        self, subpath: str | None = None, json: Any = None, **kwargs: Any
+        self, subpath: str | None = None, json: Any | None = None, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Send a POST request to the Litter-Robot API."""
         return await self._account.session.post(

@@ -256,7 +256,9 @@ class LitterRobot3(LitterRobot):
             if (timestamp := to_timestamp(activity["timestamp"])) is not None
         ]
 
-    async def get_insight(self, days: int = 30, timezone_offset: int = None) -> Insight:
+    async def get_insight(
+        self, days: int = 30, timezone_offset: int | None = None
+    ) -> Insight:
         """Return the insight data."""
         insight = await self._get(
             "insights",
