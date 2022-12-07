@@ -47,6 +47,8 @@ async def test_litter_robot_4(
     with pytest.warns(DeprecationWarning):
         assert robot.drawer_full_indicator_cycle_count == 0
     assert robot.firmware == "ESP: 1.1.50 / PIC: 10512.2560.2.51 / TOF: 255.0.255.255"
+    assert robot.firmware_update_status == "SUCCEEDED"
+    assert not robot.firmware_update_triggered
     assert robot.litter_level == 40.0
     assert not robot.is_drawer_full_indicator_triggered
     assert robot.is_onboarded
@@ -288,6 +290,20 @@ async def test_litter_robot_4(
         },
     )
     assert not await robot.update_firmware()
+
+    firmware_response = {
+        "data": {"litterRobot4CompareFirmwareVersion": None},
+        "errors": [
+            {
+                "path": ["litterRobot4CompareFirmwareVersion"],
+                "errorType": "Error",
+                "message": "validateFirmwareForRobotDetails: Robot has already active Firmware Update",
+            }
+        ],
+    }
+    mock_aioresponse.post(LR4_ENDPOINT, payload=firmware_response, repeat=True)
+    assert not await robot.has_firmware_update()
+    assert not await robot.get_latest_firmware()
 
     await robot._account.disconnect()
 

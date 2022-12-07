@@ -124,6 +124,16 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         )
 
     @property
+    def firmware_update_status(self) -> str:
+        """Return the firmware update status."""
+        return self._data.get("firmwareUpdateStatus", "UNKNOWN")
+
+    @property
+    def firmware_update_triggered(self) -> bool:
+        """Return `True` if a firmware update has been triggered."""
+        return self._data.get("isFirmwareUpdateTriggered", False)
+
+    @property
     def is_drawer_full_indicator_triggered(self) -> bool:
         """Return `True` if the drawer full indicator has been triggered."""
         return self._data.get("isDFIFull", False)
@@ -492,7 +502,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             ],
         )
 
-    async def get_firmware_details(self) -> dict[str, bool | dict[str, str]]:
+    async def get_firmware_details(self) -> dict[str, bool | dict[str, str]] | None:
         """Get the firmware details."""
         data = await self._post(
             json={
@@ -516,9 +526,12 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         data = cast(Dict[str, Dict[str, Dict[str, Union[bool, Dict[str, str]]]]], data)
         return data.get("data", {}).get("litterRobot4CompareFirmwareVersion", {})
 
-    async def get_latest_firmware(self) -> str:
+    async def get_latest_firmware(self) -> str | None:
         """Get the latest firmware available."""
-        latest_firmware = (await self.get_firmware_details()).get("latestFirmware", {})
+        if (firmware := await self.get_firmware_details()) is None:
+            return None
+
+        latest_firmware = (firmware).get("latestFirmware", {})
         latest_firmware = cast(Dict[str, str], latest_firmware)
         return (
             f"ESP: {latest_firmware.get('espFirmwareVersion')} / "
@@ -528,7 +541,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     async def has_firmware_update(self) -> bool:
         """Check if a firmware update is available."""
-        firmware = await self.get_firmware_details()
+        if (firmware := await self.get_firmware_details()) is None:
+            return False
         return any(value for value in firmware.values() if isinstance(value, bool))
 
     async def update_firmware(self) -> bool:
