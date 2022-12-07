@@ -126,6 +126,8 @@ LITTER_ROBOT_4_DATA: dict[str, Any] = {
     "espFirmware": "1.1.50",
     "picFirmwareVersion": "10512.2560.2.51",
     "laserBoardFirmwareVersion": "255.0.255.255",
+    "isFirmwareUpdateTriggered": False,
+    "firmwareUpdateStatus": "SUCCEEDED",
     "unitPowerType": "AC",
     "catWeight": 7.93,
     "unitTimezone": "America/Denver",
