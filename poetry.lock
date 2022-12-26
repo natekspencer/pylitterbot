@@ -22,7 +22,7 @@ speedups = ["Brotli", "aiodns", "cchardet"]
 
 [[package]]
 name = "aioresponses"
-version = "0.7.3"
+version = "0.7.4"
 description = "Mock out requests made by ClientSession from aiohttp package"
 category = "dev"
 optional = false
@@ -184,17 +184,6 @@ ordered-set = ">=4.0.2,<4.2.0"
 
 [package.extras]
 cli = ["click (==8.1.3)", "pyyaml (==6.0)"]
-
-[[package]]
-name = "dill"
-version = "0.3.5.1"
-description = "serialize all of python"
-category = "dev"
-optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, !=3.6.*"
-
-[package.extras]
-graph = ["objgraph (>=1.7.2)"]
 
 [[package]]
 name = "dill"
@@ -726,7 +715,7 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7.2"
-content-hash = "5eb8776676b8aa262a8f511317e29a897375f5a572c6527cac87474769e156fd"
+content-hash = "6fcb3caef758654c66389f18c47fbd4693f8ac98d6932bf4fab8cd6720d66e0e"
 
 [metadata.files]
 aiohttp = [
@@ -819,8 +808,8 @@ aiohttp = [
     {file = "aiohttp-3.8.3.tar.gz", hash = "sha256:3828fb41b7203176b82fe5d699e0d845435f2374750a44b480ea6b930f6be269"},
 ]
 aioresponses = [
-    {file = "aioresponses-0.7.3-py2.py3-none-any.whl", hash = "sha256:7b1897169062c92fa87d6ecc503ac566ac87fbfacb2504f8ca81c8035a2eb068"},
-    {file = "aioresponses-0.7.3.tar.gz", hash = "sha256:2c64ed5710ee8cb4e958c569184dad12f4c9cd5939135cb38f88c6a8261cceb3"},
+    {file = "aioresponses-0.7.4-py2.py3-none-any.whl", hash = "sha256:1160486b5ea96fcae6170cf2bdef029b9d3a283b7dbeabb3d7f1182769bfb6b7"},
+    {file = "aioresponses-0.7.4.tar.gz", hash = "sha256:9b8c108b36354c04633bad0ea752b55d956a7602fe3e3234b939fc44af96f1d8"},
 ]
 aiosignal = [
     {file = "aiosignal-1.2.0-py3-none-any.whl", hash = "sha256:26e62109036cd181df6e6ad646f91f0dcfd05fe16d0cb924138ff2ab75d64e3a"},
@@ -943,8 +932,6 @@ deepdiff = [
     {file = "deepdiff-6.2.2.tar.gz", hash = "sha256:d04d997a68bf8bea01f8a97395877314ef5c2131d8f57bba2295f3adda725282"},
 ]
 dill = [
-    {file = "dill-0.3.5.1-py2.py3-none-any.whl", hash = "sha256:33501d03270bbe410c72639b350e941882a8b0fd55357580fbc873fba0c59302"},
-    {file = "dill-0.3.5.1.tar.gz", hash = "sha256:d75e41f3eff1eee599d738e76ba8f4ad98ea229db8b085318aa2b3333a208c86"},
     {file = "dill-0.3.6-py3-none-any.whl", hash = "sha256:a07ffd2351b8c678dfc4a856a3005f8067aea51d6ba6c700796a4d9e280f39f0"},
     {file = "dill-0.3.6.tar.gz", hash = "sha256:e5db55f3687856d8fbdab002ed78544e1c4559a130302693d839dfe8f93f2373"},
 ]
