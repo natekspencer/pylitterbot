@@ -28,7 +28,7 @@ isort = "^5.10.1"
 mypy = "^0.991"
 flake8 = "^5.0.4"
 pylint = "^2.15.8"
-tox = "^3.27.1"
+tox = "^3.28.0"
 pydocstyle = "^6.1.1"
 pytest-timeout = "^2.1.0"
 
