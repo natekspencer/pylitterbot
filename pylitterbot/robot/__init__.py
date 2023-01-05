@@ -7,6 +7,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from aiohttp import ClientWebSocketResponse
 from deepdiff import DeepDiff
 
 from ..utils import to_timestamp, urljoin
@@ -38,6 +39,8 @@ class Robot:
 
         self._is_loaded = False
         self._listeners: dict[str, list[Callable]] = {}
+
+        self._ws: ClientWebSocketResponse | None = None
 
         if data:
             self._update_data(data)
@@ -186,3 +189,13 @@ class Robot:
         return await self._account.session.post(
             urljoin(self._path, subpath), json=json, **kwargs
         )
+
+    @staticmethod
+    async def get_websocket_config(account: Account) -> dict[str, Any]:
+        """Get wesocket config."""
+        raise NotImplementedError()
+
+    @staticmethod
+    def parse_websocket_message(data: dict) -> dict | None:
+        """Parse a wesocket message."""
+        raise NotImplementedError()

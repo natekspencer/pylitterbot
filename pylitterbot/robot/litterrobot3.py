@@ -1,13 +1,9 @@
 """Litter-Robot 3."""
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, time, timedelta, timezone
-from json import loads
 from typing import TYPE_CHECKING, Any, cast
-
-from aiohttp import ClientWebSocketResponse, WSMsgType
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
@@ -46,8 +42,6 @@ class LitterRobot3(LitterRobot):
             DEFAULT_ENDPOINT,
             f"users/{account.user_id}/robots/{self.id}",
         )
-        self._ws: ClientWebSocketResponse | None = None
-        self._ws_last_received: datetime | None = None
 
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
@@ -287,65 +281,13 @@ class LitterRobot3(LitterRobot):
     async def subscribe_for_updates(self) -> None:
         """Open a web socket connection to receive updates."""
 
-        async def _authorization() -> str:
-            if not self._account.session.is_token_valid():
-                await self._account.session.refresh_token()
-            authorization = await self._account.session.get_bearer_authorization()
-            assert authorization
-            return authorization
-
         async def _subscribe() -> None:
             if not self._ws:
                 return
             await self._ws.send_json({"action": "ping"})
 
-        async def _monitor() -> None:
-            assert (websocket := self._ws)
-            while True:
-                try:
-                    msg = await websocket.receive(timeout=80)
-                    if msg.type in (
-                        WSMsgType.CLOSE,
-                        WSMsgType.CLOSING,
-                        WSMsgType.CLOSED,
-                    ):
-                        break
-                    self._ws_last_received = utcnow()
-                    if msg.type == WSMsgType.TEXT:
-                        data = loads(msg.data)
-                        if data["type"] == "MODIFY" and data["name"] == "LitterRobot":
-                            if (data := data["data"])["litterRobotId"] == self.id:
-                                self._update_data(data)
-                            else:
-                                pass  # This update was not meant for me
-                        else:
-                            _LOGGER.debug(data)
-                    elif msg.type == WSMsgType.ERROR:
-                        _LOGGER.error(msg)
-                        break
-                except asyncio.TimeoutError:
-                    _LOGGER.debug(
-                        "Web socket monitor did not receive a message in time"
-                    )
-                    await _subscribe()
-            _LOGGER.debug("Web socket monitor stopped")
-            if self._ws is not None:
-                if self._ws.closed:
-                    await self.subscribe_for_updates()
-                    _LOGGER.debug("restarted connection")
-                else:
-                    asyncio.create_task(_monitor())
-                    await _subscribe()
-                    _LOGGER.debug("resubscribed")
-
         try:
-            self._ws = await self._account.ws_connect(
-                WEBSOCKET_ENDPOINT,
-                params=None,
-                headers={"authorization": await _authorization()},
-                subscriber_id=self.id,
-            )
-            asyncio.create_task(_monitor())
+            self._ws = await self._account.ws_connect(self)
             await _subscribe()
         except Exception as ex:  # pylint: disable=broad-except
             _LOGGER.error(ex)
@@ -354,5 +296,21 @@ class LitterRobot3(LitterRobot):
         """Stop the web socket."""
         if (websocket := self._ws) is not None and not websocket.closed:
             self._ws = None
-            await self._account.ws_disconnect(self.id)
             _LOGGER.debug("Unsubscribed from updates")
+
+    @staticmethod
+    async def get_websocket_config(account: Account) -> dict[str, Any]:
+        """Get wesocket config."""
+        return {
+            "url": WEBSOCKET_ENDPOINT,
+            "params": None,
+            "headers": {"authorization": await account.get_bearer_authorization()},
+        }
+
+    @staticmethod
+    def parse_websocket_message(data: dict) -> dict | None:
+        """Parse a wesocket message."""
+        if data["type"] == "MODIFY" and data["name"] == "LitterRobot":
+            return cast(dict, data["data"])
+        _LOGGER.debug(data)
+        return None

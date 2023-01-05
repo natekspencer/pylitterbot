@@ -1,15 +1,10 @@
 """Feeder-Robot."""
 from __future__ import annotations
 
-import asyncio
 import logging
 from copy import deepcopy
-from datetime import datetime
-from json import loads
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 from uuid import uuid4
-
-from aiohttp import ClientWebSocketResponse, WSMsgType
 
 from ..enums import FeederRobotCommand
 from ..exceptions import InvalidCommandException
@@ -53,9 +48,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         """Initialize a Feeder-Robot."""
         super().__init__(data, account)
         self._path = FEEDER_ENDPOINT
-        self._ws: ClientWebSocketResponse | None = None
         self._ws_subscription_id: str | None = None
-        self._ws_last_received: datetime | None = None
 
     def _state_info(self, key: str, default: _T | None = None) -> _T | Any:
         """Get an attribute from the data.state.info section."""
@@ -255,11 +248,6 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     async def subscribe_for_updates(self) -> None:
         """Open a web socket connection to receive updates."""
 
-        async def _authorization() -> str | None:
-            if not self._account.session.is_token_valid():
-                await self._account.session.refresh_token()
-            return await self._account.session.get_bearer_authorization()
-
         async def _subscribe(send_stop: bool = False) -> None:
             if not self._ws:
                 return
@@ -271,7 +259,11 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
             await self._ws.send_json(
                 {
                     "type": "connection_init",
-                    "payload": {"headers": {"Authorization": await _authorization()}},
+                    "payload": {
+                        "headers": {
+                            "Authorization": await self._account.get_bearer_authorization()
+                        }
+                    },
                 }
             )
             await self._ws.send_json(
@@ -289,54 +281,8 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
                 }
             )
 
-        async def _monitor() -> None:
-            assert (websocket := self._ws)
-            while True:
-                try:
-                    msg = await websocket.receive(timeout=80)
-                    if msg.type in (
-                        WSMsgType.CLOSE,
-                        WSMsgType.CLOSING,
-                        WSMsgType.CLOSED,
-                    ):
-                        break
-                    self._ws_last_received = utcnow()
-                    if msg.type == WSMsgType.TEXT:
-                        data = loads(msg.data)
-                        if (data_type := data["type"]) == "data":
-                            self._update_data(
-                                data["payload"]["data"]["feeder_unit_by_pk"]
-                            )
-                        elif data_type == "error":
-                            _LOGGER.error(data)
-                        elif data_type not in ("connection_ack", "ka", "complete"):
-                            _LOGGER.debug(data)
-                    elif msg.type == WSMsgType.ERROR:
-                        _LOGGER.error(msg)
-                        break
-                except asyncio.TimeoutError:
-                    _LOGGER.debug(
-                        "Web socket monitor did not receive a message in time"
-                    )
-                    await _subscribe(send_stop=True)
-            _LOGGER.debug("Web socket monitor stopped")
-            if self._ws is not None:
-                if self._ws.closed:
-                    await self.subscribe_for_updates()
-                    _LOGGER.debug("restarted connection")
-                else:
-                    asyncio.create_task(_monitor())
-                    await _subscribe()
-                    _LOGGER.debug("resubscribed")
-
         try:
-            self._ws = await self._account.ws_connect(
-                self._path,
-                params=None,
-                headers={"sec-websocket-protocol": "graphql-ws"},
-                subscriber_id=self.id,
-            )
-            asyncio.create_task(_monitor())
+            self._ws = await self._account.ws_connect(self)
             await _subscribe()
         except Exception as ex:  # pylint: disable=broad-except
             _LOGGER.error(ex)
@@ -346,5 +292,24 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         if (websocket := self._ws) is not None and not websocket.closed:
             self._ws = None
             await websocket.send_json({"id": self._ws_subscription_id, "type": "stop"})
-            await self._account.ws_disconnect(self.id)
             _LOGGER.debug("Unsubscribed from updates")
+
+    @staticmethod
+    async def get_websocket_config(account: Account) -> dict[str, Any]:
+        """Get wesocket config."""
+        return {
+            "url": FEEDER_ENDPOINT,
+            "params": None,
+            "headers": {"sec-websocket-protocol": "graphql-ws"},
+        }
+
+    @staticmethod
+    def parse_websocket_message(data: dict) -> dict | None:
+        """Parse a wesocket message."""
+        if (data_type := data["type"]) == "data":
+            return cast(dict, data["payload"]["data"]["feeder_unit_by_pk"])
+        if data_type == "error":
+            _LOGGER.error(data)
+        elif data_type not in ("connection_ack", "ka", "complete"):
+            _LOGGER.debug(data)
+        return None
