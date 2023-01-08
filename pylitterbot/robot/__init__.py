@@ -41,6 +41,7 @@ class Robot:
         self._listeners: dict[str, list[Callable]] = {}
 
         self._ws: ClientWebSocketResponse | None = None
+        self._ws_subscription_id: str | None = None
 
         if data:
             self._update_data(data)
@@ -138,12 +139,28 @@ class Robot:
         """Turn the panel lock on or off."""
 
     @abstractmethod
-    async def subscribe_for_updates(self) -> None:
-        """Open a web socket connection to receive updates."""
+    async def send_subscribe_request(self, send_stop: bool = False) -> None:
+        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
 
-    @abstractmethod
-    async def unsubscribe_from_updates(self) -> None:
-        """Stop the web socket."""
+    async def subscribe(self) -> None:
+        """Open a web socket connection to receive updates."""
+        try:
+            self._ws = await self._account.ws_connect(self)
+            await self.send_subscribe_request()
+        except Exception as ex:  # pylint: disable=broad-except
+            _LOGGER.error(ex)
+
+    async def send_unsubscribe_request(self) -> None:
+        """Send an unsubscribe request."""
+        if self._ws and self._ws_subscription_id:
+            await self._ws.send_json({"id": self._ws_subscription_id, "type": "stop"})
+
+    async def unsubscribe(self) -> None:
+        """Unsubscribe from the web socket."""
+        if self._ws is not None and not self._ws.closed:
+            await self.send_unsubscribe_request()
+            self._ws = None
+            _LOGGER.debug("%s unsubscribed from updates", self.name)
 
     def _update_data(
         self,

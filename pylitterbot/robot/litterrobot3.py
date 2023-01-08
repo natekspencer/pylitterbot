@@ -278,25 +278,15 @@ class LitterRobot3(LitterRobot):
             ],
         )
 
-    async def subscribe_for_updates(self) -> None:
-        """Open a web socket connection to receive updates."""
+    async def send_subscribe_request(self, send_stop: bool = False) -> None:
+        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
+        if not self._ws:
+            return
+        await self._ws.send_json({"action": "ping"})
 
-        async def _subscribe() -> None:
-            if not self._ws:
-                return
-            await self._ws.send_json({"action": "ping"})
-
-        try:
-            self._ws = await self._account.ws_connect(self)
-            await _subscribe()
-        except Exception as ex:  # pylint: disable=broad-except
-            _LOGGER.error(ex)
-
-    async def unsubscribe_from_updates(self) -> None:
-        """Stop the web socket."""
-        if (websocket := self._ws) is not None and not websocket.closed:
-            self._ws = None
-            _LOGGER.debug("Unsubscribed from updates")
+    async def send_unsubscribe_request(self) -> None:
+        """Send an unsubscribe request."""
+        # Litter-Robot 3 does not have a subscription id, so this just does nothing
 
     @staticmethod
     async def get_websocket_config(account: Account) -> dict[str, Any]:

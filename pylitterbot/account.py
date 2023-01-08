@@ -37,7 +37,7 @@ class Account:
         }
         self._user: dict = {}
         self._robots: list[Robot] = []
-        self._ws_monitors: dict[type[Robot], WebSocketMonitor] = {}
+        self._monitors: dict[type[Robot], WebSocketMonitor] = {}
 
     @property
     def user_id(self) -> str | None:
@@ -54,12 +54,16 @@ class Account:
         """Return the associated session on the account."""
         return self._session
 
-    def get_robot(self, robot_id: str | None) -> Robot | None:
+    def get_robot(self, robot_id: str | int | None) -> Robot | None:
         """If found, return the robot with the specified id."""
         return next(
-            (robot for robot in self._robots if robot.id == robot_id),
+            (robot for robot in self._robots if robot.id == str(robot_id)),
             None,
         )
+
+    def get_robots(self, robot_class: type[Robot]) -> list[Robot]:
+        """If found, return the specified class of robots."""
+        return [robot for robot in self._robots if isinstance(robot, robot_class)]
 
     async def connect(
         self,
@@ -92,10 +96,8 @@ class Account:
 
     async def disconnect(self) -> None:
         """Close the underlying session."""
-        for robot in self.robots:
-            await robot.unsubscribe_from_updates()
-        for ws_monitor in self._ws_monitors.values():
-            await ws_monitor.close()
+        await asyncio.gather(*(robot.unsubscribe() for robot in self.robots))
+        await asyncio.gather(*(monitor.close() for monitor in self._monitors.values()))
         await self.session.close()
 
     async def refresh_user(self) -> None:
@@ -144,7 +146,7 @@ class Account:
                 else:
                     robot = robot_cls(data=data, account=self)
                     if subscribe_for_updates:
-                        await robot.subscribe_for_updates()
+                        await robot.subscribe()
                 robots.append(robot)
 
             for robot_data in resp[0]:
@@ -161,7 +163,7 @@ class Account:
     async def refresh_robots(self) -> None:
         """Refresh known robots."""
         try:
-            await asyncio.gather(*[robot.refresh() for robot in self.robots])
+            await asyncio.gather(*(robot.refresh() for robot in self.robots))
         except (LitterRobotException, ClientResponseError, ClientConnectorError) as ex:
             _LOGGER.error("Unable to refresh your robots: %s", ex)
 
@@ -174,11 +176,11 @@ class Account:
     async def ws_connect(self, robot: Robot) -> ClientWebSocketResponse:
         """Initiate a websocket connection for a robot."""
         robot_class = type(robot)
-        ws_monitor = self._ws_monitors.setdefault(
+        ws_monitor = self._monitors.setdefault(
             robot_class, WebSocketMonitor(self, robot_class)
         )
         if ws_monitor.websocket is None or ws_monitor.websocket.closed:
-            await ws_monitor.new_connection()
-        if ws_monitor.monitor is None:
+            await ws_monitor.new_connection(True)
+        if ws_monitor.monitor is None or ws_monitor.monitor.done():
             await ws_monitor.start_monitor()
         return ws_monitor.websocket

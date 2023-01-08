@@ -102,7 +102,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         """Initialize a Litter-Robot 4."""
         super().__init__(data, account)
         self._path = LR4_ENDPOINT
-        self._ws_subscription_id: str | None = None
 
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
@@ -561,54 +560,37 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         firmware = data.get("data", {}).get("litterRobot4TriggerFirmwareUpdate", {})
         return bool(firmware.get("isUpdateTriggered", False))
 
-    async def subscribe_for_updates(self) -> None:
-        """Open a web socket connection to receive updates."""
+    async def send_subscribe_request(self, send_stop: bool = False) -> None:
+        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
+        if not self._ws:
+            return
+        if send_stop:
+            await self.send_unsubscribe_request()
+        self._ws_subscription_id = str(uuid4())
 
-        async def _subscribe(send_stop: bool = False) -> None:
-            if not self._ws:
-                return
-            if send_stop:
-                await self._ws.send_json(
-                    {"id": self._ws_subscription_id, "type": "stop"}
-                )
-            self._ws_subscription_id = str(uuid4())
-
-            await self._ws.send_json(
-                {
-                    "id": self._ws_subscription_id,
-                    "payload": {
-                        "data": dumps(
-                            {
-                                "query": f"""
-                                        subscription GetLR4($serial: String!) {{
-                                            litterRobot4StateSubscriptionBySerial(serial: $serial) {LITTER_ROBOT_4_MODEL}
-                                        }}
-                                    """,
-                                "variables": {"serial": self.serial},
-                            }
-                        ),
-                        "extensions": {
-                            "authorization": {
-                                "Authorization": await self._account.get_bearer_authorization()
-                            }
-                        },
+        await self._ws.send_json(
+            {
+                "id": self._ws_subscription_id,
+                "payload": {
+                    "data": dumps(
+                        {
+                            "query": f"""
+                                subscription GetLR4($serial: String!) {{
+                                    litterRobot4StateSubscriptionBySerial(serial: $serial) {LITTER_ROBOT_4_MODEL}
+                                }}
+                            """,
+                            "variables": {"serial": self.serial},
+                        }
+                    ),
+                    "extensions": {
+                        "authorization": {
+                            "Authorization": await self._account.get_bearer_authorization()
+                        }
                     },
-                    "type": "start",
-                }
-            )
-
-        try:
-            self._ws = await self._account.ws_connect(self)
-            await _subscribe()
-        except Exception as ex:  # pylint: disable=broad-except
-            _LOGGER.error(ex)
-
-    async def unsubscribe_from_updates(self) -> None:
-        """Stop the web socket."""
-        if (websocket := self._ws) is not None and not websocket.closed:
-            self._ws = None
-            await websocket.send_json({"id": self._ws_subscription_id, "type": "stop"})
-            _LOGGER.debug("Unsubscribed from updates")
+                },
+                "type": "start",
+            }
+        )
 
     @staticmethod
     async def get_websocket_config(account: Account) -> dict[str, Any]:

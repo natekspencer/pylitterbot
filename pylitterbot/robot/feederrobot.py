@@ -48,7 +48,6 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         """Initialize a Feeder-Robot."""
         super().__init__(data, account)
         self._path = FEEDER_ENDPOINT
-        self._ws_subscription_id: str | None = None
 
     def _state_info(self, key: str, default: _T | None = None) -> _T | Any:
         """Get an attribute from the data.state.info section."""
@@ -245,54 +244,38 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
             self._update_data(data)
         return self.panel_lock_enabled == value
 
-    async def subscribe_for_updates(self) -> None:
-        """Open a web socket connection to receive updates."""
+    async def send_subscribe_request(self, send_stop: bool = False) -> None:
+        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
+        if not self._ws:
+            return
+        if send_stop:
+            await self.send_unsubscribe_request()
+        self._ws_subscription_id = str(uuid4())
 
-        async def _subscribe(send_stop: bool = False) -> None:
-            if not self._ws:
-                return
-            if send_stop:
-                await self._ws.send_json(
-                    {"id": self._ws_subscription_id, "type": "stop"}
-                )
-            self._ws_subscription_id = str(uuid4())
-            await self._ws.send_json(
-                {
-                    "type": "connection_init",
-                    "payload": {
-                        "headers": {
-                            "Authorization": await self._account.get_bearer_authorization()
-                        }
-                    },
-                }
-            )
-            await self._ws.send_json(
-                {
-                    "type": "start",
-                    "id": self._ws_subscription_id,
-                    "payload": {
-                        "query": f"""
+        await self._ws.send_json(
+            {
+                "type": "connection_init",
+                "payload": {
+                    "headers": {
+                        "Authorization": await self._account.get_bearer_authorization()
+                    }
+                },
+            }
+        )
+        await self._ws.send_json(
+            {
+                "type": "start",
+                "id": self._ws_subscription_id,
+                "payload": {
+                    "query": f"""
                             subscription GetFeeder($id: Int!) {{
                                 feeder_unit_by_pk(id: $id) {FEEDER_ROBOT_MODEL}
                             }}
                         """,
-                        "variables": {"id": self.id},
-                    },
-                }
-            )
-
-        try:
-            self._ws = await self._account.ws_connect(self)
-            await _subscribe()
-        except Exception as ex:  # pylint: disable=broad-except
-            _LOGGER.error(ex)
-
-    async def unsubscribe_from_updates(self) -> None:
-        """Stop the web socket."""
-        if (websocket := self._ws) is not None and not websocket.closed:
-            self._ws = None
-            await websocket.send_json({"id": self._ws_subscription_id, "type": "stop"})
-            _LOGGER.debug("Unsubscribed from updates")
+                    "variables": {"id": self.id},
+                },
+            }
+        )
 
     @staticmethod
     async def get_websocket_config(account: Account) -> dict[str, Any]:

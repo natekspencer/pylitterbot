@@ -18,6 +18,17 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
+async def cancel_task(*tasks: asyncio.Task | None) -> None:
+    """Cancel task(s)."""
+    for task in tasks:
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+
 class WebSocketMonitor:
     """Web socket monitor for a robot."""
 
@@ -25,9 +36,16 @@ class WebSocketMonitor:
         """Initialize a web socket monitor."""
         self._account = account
         self._robot_class = robot_class
+        self._disconnect = False
         self._ws: ClientWebSocketResponse | None = None
         self._monitor_task: asyncio.Task | None = None
+        self._receiver_task: asyncio.Task | None = None
         self._last_received: datetime | None = None
+
+    @property
+    def connected(self) -> bool:
+        """Return `True` if the web socket is connected."""
+        return False if self._ws is None else not self._ws.closed
 
     @property
     def websocket(self) -> ClientWebSocketResponse | None:
@@ -39,19 +57,24 @@ class WebSocketMonitor:
         """Return the monitor task."""
         return self._monitor_task
 
-    async def new_connection(self) -> None:
-        """Create a new connection."""
+    async def new_connection(self, start_monitor: bool = False) -> None:
+        """Create a new connection and, optionally, start the monitor."""
+        await self.stop_monitor()
+        self._disconnect = False
         self._ws = await self._account.session.websession.ws_connect(
             **await self._robot_class.get_websocket_config(self._account)
         )
+        self._receiver_task = asyncio.ensure_future(self._receiver())
+        if start_monitor:
+            await self.start_monitor()
 
-    async def _monitor(self) -> None:
-        """Monitor a web socket."""
-        if not self._ws:
+    async def _receiver(self) -> None:
+        """Receive a message from a web socket."""
+        if not (websocket := self._ws):
             return
-        while True:
+        while not websocket.closed:
             try:
-                msg = await self._ws.receive(timeout=80)
+                msg = await websocket.receive(timeout=300)
                 if msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
                     break
                 self._last_received = utcnow()
@@ -65,35 +88,45 @@ class WebSocketMonitor:
                     ):
                         robot._update_data(data)
                 elif msg.type == WSMsgType.ERROR:
-                    _LOGGER.error(msg)
-                    break
+                    self._log_message(msg, True)
+                    continue
             except asyncio.TimeoutError:
-                _LOGGER.debug("Web socket monitor did not receive a message in time")
-                # should we resubscribe?
-                # await _subscribe(send_stop=True)
-        _LOGGER.debug("Web socket monitor stopped")
-        if self._ws is not None:
-            if self._ws.closed:
-                pass  # restart?
-                # await self.subscribe_for_updates()
-                # _LOGGER.debug("restarted connection")
-            else:
-                pass  # resubscribe?
-                # await self._start_ws_monitor(ws_monitor)
-                # await _subscribe()
-                # _LOGGER.debug("resubscribed")
+                for robot in self._account.get_robots(self._robot_class):
+                    await robot.send_subscribe_request(send_stop=True)
+        self._log_message("stopped")
+
+    async def _monitor(self) -> None:
+        """Monitor a web socket connection."""
+        while not self._disconnect:
+            while self.connected:
+                await asyncio.sleep(1)
+            if not self._disconnect and (websocket := self._ws) is not None:
+                if websocket.closed:
+                    for robot in self._account.get_robots(self._robot_class):
+                        await robot.subscribe()
+                    self._log_message("reopened connection")
+                else:
+                    for robot in self._account.get_robots(self._robot_class):
+                        await robot.send_subscribe_request()
+                    self._log_message("resubscribed")
 
     async def start_monitor(self) -> None:
         """Start or restart the monitor task."""
-        if (task := self._monitor_task) is not None and not task.done():
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        await self.stop_monitor()
         self._monitor_task = asyncio.ensure_future(self._monitor())
+
+    async def stop_monitor(self) -> None:
+        """Stop the monitor task."""
+        await cancel_task(self._monitor_task)
 
     async def close(self) -> None:
         """Close the web socket."""
+        self._disconnect = True
         if self._ws:
             await self._ws.close()
+        await cancel_task(self._monitor_task, self._receiver_task)
+
+    def _log_message(self, message: str, is_error: bool = False) -> None:
+        """Log a message."""
+        log_method = _LOGGER.error if is_error else _LOGGER.debug
+        log_method("%s %s", self._robot_class.__name__, message)

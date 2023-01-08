@@ -28,8 +28,8 @@ async def test_litter_robot_4(
 ) -> None:
     """Tests that a Litter-Robot 4 setup is successful and parses as expected."""
     robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
-    await robot.subscribe_for_updates()
-    await robot.unsubscribe_from_updates()
+    await robot.subscribe()
+    await robot.unsubscribe()
     assert (
         str(robot)
         == "Name: Litter-Robot 4, Model: Litter-Robot 4, Serial: LR4C000001, id: LR4ID"
