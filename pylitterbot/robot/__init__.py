@@ -147,6 +147,7 @@ class Robot:
         try:
             self._ws = await self._account.ws_connect(self)
             await self.send_subscribe_request()
+            _LOGGER.debug("%s subscribed to updates", self.name)
         except Exception as ex:  # pylint: disable=broad-except
             _LOGGER.error(ex)
 
