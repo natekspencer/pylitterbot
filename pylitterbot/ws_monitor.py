@@ -5,6 +5,7 @@ import asyncio
 import logging
 from datetime import datetime
 from json import loads
+from random import uniform
 from typing import TYPE_CHECKING
 
 from aiohttp import ClientWebSocketResponse, WSMsgType
@@ -45,6 +46,8 @@ class WebSocketMonitor:
     @property
     def connected(self) -> bool:
         """Return `True` if the web socket is connected."""
+        if self._disconnect:
+            return False
         return False if self._ws is None else not self._ws.closed
 
     @property
@@ -59,7 +62,7 @@ class WebSocketMonitor:
 
     async def new_connection(self, start_monitor: bool = False) -> None:
         """Create a new connection and, optionally, start the monitor."""
-        await self.stop_monitor()
+        await cancel_task(self._receiver_task)
         self._disconnect = False
         self._ws = await self._account.session.websession.ws_connect(
             **await self._robot_class.get_websocket_config(self._account)
@@ -93,27 +96,32 @@ class WebSocketMonitor:
             except asyncio.TimeoutError:
                 for robot in self._account.get_robots(self._robot_class):
                     await robot.send_subscribe_request(send_stop=True)
-        self._log_message("stopped")
+        self._log_message("web socket stopped")
 
     async def _monitor(self) -> None:
         """Monitor a web socket connection."""
+        attempt = 0
         while not self._disconnect:
             while self.connected:
                 await asyncio.sleep(1)
-            if not self._disconnect and (websocket := self._ws) is not None:
-                if websocket.closed:
-                    for robot in self._account.get_robots(self._robot_class):
-                        await robot.subscribe()
-                    self._log_message("reopened connection")
-                else:
-                    for robot in self._account.get_robots(self._robot_class):
-                        await robot.send_subscribe_request()
-                    self._log_message("resubscribed")
+            if not self._disconnect:
+                try:
+                    await self.new_connection()
+                except Exception as ex:  # pylint: disable=broad-except
+                    self._log_message(ex, True)
+                if not self._ws or self._ws.closed:
+                    await asyncio.sleep(min(1 * 2**attempt + uniform(0, 1), 300))
+                    attempt += 1
+                    continue
+                attempt = 0
+                self._log_message("web socket connection reopened")
+                for robot in self._account.get_robots(self._robot_class):
+                    await robot.subscribe()
 
     async def start_monitor(self) -> None:
         """Start or restart the monitor task."""
-        await self.stop_monitor()
-        self._monitor_task = asyncio.ensure_future(self._monitor())
+        if self._monitor_task is None or self._monitor_task.done():
+            self._monitor_task = asyncio.ensure_future(self._monitor())
 
     async def stop_monitor(self) -> None:
         """Stop the monitor task."""
@@ -126,7 +134,7 @@ class WebSocketMonitor:
             await self._ws.close()
         await cancel_task(self._monitor_task, self._receiver_task)
 
-    def _log_message(self, message: str, is_error: bool = False) -> None:
+    def _log_message(self, message: str | Exception, is_error: bool = False) -> None:
         """Log a message."""
         log_method = _LOGGER.error if is_error else _LOGGER.debug
         log_method("%s %s", self._robot_class.__name__, message)
