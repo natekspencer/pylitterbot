@@ -1,15 +1,12 @@
 """Litter-Robot 4."""
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
-from json import dumps, loads
+from json import dumps
 from typing import TYPE_CHECKING, Any, Dict, Union, cast
 from uuid import uuid4
-
-from aiohttp import ClientWebSocketResponse, WSMsgType
 
 try:
     from zoneinfo import ZoneInfo
@@ -105,9 +102,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         """Initialize a Litter-Robot 4."""
         super().__init__(data, account)
         self._path = LR4_ENDPOINT
-        self._ws: ClientWebSocketResponse | None = None
-        self._ws_subscription_id: str | None = None
-        self._ws_last_received: datetime | None = None
 
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
@@ -566,111 +560,63 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         firmware = data.get("data", {}).get("litterRobot4TriggerFirmwareUpdate", {})
         return bool(firmware.get("isUpdateTriggered", False))
 
-    async def subscribe_for_updates(self) -> None:
-        """Open a web socket connection to receive updates."""
+    async def send_subscribe_request(self, send_stop: bool = False) -> None:
+        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
+        if not self._ws:
+            return
+        if send_stop:
+            await self.send_unsubscribe_request()
+        self._ws_subscription_id = str(uuid4())
 
-        async def _authorization() -> str | None:
-            if not self._account.session.is_token_valid():
-                await self._account.session.refresh_token()
-            return await self._account.session.get_bearer_authorization()
-
-        async def _subscribe(send_stop: bool = False) -> None:
-            if not self._ws:
-                return
-            if send_stop:
-                await self._ws.send_json(
-                    {"id": self._ws_subscription_id, "type": "stop"}
-                )
-            self._ws_subscription_id = str(uuid4())
-
-            await self._ws.send_json(
-                {
-                    "id": self._ws_subscription_id,
-                    "payload": {
-                        "data": dumps(
-                            {
-                                "query": f"""
-                                        subscription GetLR4($serial: String!) {{
-                                            litterRobot4StateSubscriptionBySerial(serial: $serial) {LITTER_ROBOT_4_MODEL}
-                                        }}
-                                    """,
-                                "variables": {"serial": self.serial},
-                            }
-                        ),
-                        "extensions": {
-                            "authorization": {"Authorization": await _authorization()}
-                        },
-                    },
-                    "type": "start",
-                }
-            )
-
-        async def _monitor() -> None:
-            assert (websocket := self._ws)
-            while True:
-                try:
-                    msg = await websocket.receive(timeout=80)
-                    if msg.type in (
-                        WSMsgType.CLOSE,
-                        WSMsgType.CLOSING,
-                        WSMsgType.CLOSED,
-                    ):
-                        break
-                    self._ws_last_received = utcnow()
-                    if msg.type == WSMsgType.TEXT:
-                        data = loads(msg.data)
-                        if (data_type := data["type"]) == "data":
-                            self._update_data(
-                                data["payload"]["data"][
-                                    "litterRobot4StateSubscriptionBySerial"
-                                ]
-                            )
-                        elif data_type == "error":
-                            _LOGGER.error(data)
-                        elif data_type not in ("start_ack", "ka", "complete"):
-                            _LOGGER.debug(data)
-                    elif msg.type == WSMsgType.ERROR:
-                        _LOGGER.error(msg)
-                        break
-                except asyncio.TimeoutError:
-                    _LOGGER.debug(
-                        "Web socket monitor did not receive a message in time"
-                    )
-                    await _subscribe(send_stop=True)
-            _LOGGER.debug("Web socket monitor stopped")
-            if self._ws is not None:
-                if self._ws.closed:
-                    await self.subscribe_for_updates()
-                    _LOGGER.debug("restarted connection")
-                else:
-                    asyncio.create_task(_monitor())
-                    await _subscribe()
-                    _LOGGER.debug("resubscribed")
-
-        try:
-            self._ws = await self._account.ws_connect(
-                f"{self._path}/realtime",
-                params={
-                    "header": encode(
+        await self._ws.send_json(
+            {
+                "id": self._ws_subscription_id,
+                "payload": {
+                    "data": dumps(
                         {
-                            "Authorization": await _authorization(),
-                            "host": "lr4.iothings.site",
+                            "query": f"""
+                                subscription GetLR4($serial: String!) {{
+                                    litterRobot4StateSubscriptionBySerial(serial: $serial) {LITTER_ROBOT_4_MODEL}
+                                }}
+                            """,
+                            "variables": {"serial": self.serial},
                         }
                     ),
-                    "payload": encode({}),
+                    "extensions": {
+                        "authorization": {
+                            "Authorization": await self._account.get_bearer_authorization()
+                        }
+                    },
                 },
-                headers={"sec-websocket-protocol": "graphql-ws"},
-                subscriber_id=self.id,
-            )
-            asyncio.create_task(_monitor())
-            await _subscribe()
-        except Exception as ex:  # pylint: disable=broad-except
-            _LOGGER.error(ex)
+                "type": "start",
+            }
+        )
 
-    async def unsubscribe_from_updates(self) -> None:
-        """Stop the web socket."""
-        if (websocket := self._ws) is not None and not websocket.closed:
-            self._ws = None
-            await websocket.send_json({"id": self._ws_subscription_id, "type": "stop"})
-            await self._account.ws_disconnect(self.id)
-            _LOGGER.debug("Unsubscribed from updates")
+    @staticmethod
+    async def get_websocket_config(account: Account) -> dict[str, Any]:
+        """Get wesocket config."""
+        return {
+            "url": f"{LR4_ENDPOINT}/realtime",
+            "params": {
+                "header": encode(
+                    {
+                        "Authorization": await account.get_bearer_authorization(),
+                        "host": "lr4.iothings.site",
+                    }
+                ),
+                "payload": encode({}),
+            },
+            "headers": {"sec-websocket-protocol": "graphql-ws"},
+        }
+
+    @staticmethod
+    def parse_websocket_message(data: dict) -> dict | None:
+        """Parse a wesocket message."""
+        if (data_type := data["type"]) == "data":
+            data = data["payload"]["data"]["litterRobot4StateSubscriptionBySerial"]
+            return data
+        if data_type == "error":
+            _LOGGER.error(data)
+        elif data_type not in ("start_ack", "ka", "complete"):
+            _LOGGER.debug(data)
+        return None

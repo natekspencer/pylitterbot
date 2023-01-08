@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Mapping
 from typing import cast
 
 from aiohttp import (
@@ -20,6 +19,7 @@ from .robot.litterrobot3 import DEFAULT_ENDPOINT, DEFAULT_ENDPOINT_KEY, LitterRo
 from .robot.litterrobot4 import LITTER_ROBOT_4_MODEL, LR4_ENDPOINT, LitterRobot4
 from .session import LitterRobotSession
 from .utils import decode, urljoin
+from .ws_monitor import WebSocketMonitor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class Account:
         }
         self._user: dict = {}
         self._robots: list[Robot] = []
-        self._ws_connections: dict[str, tuple[ClientWebSocketResponse, list[str]]] = {}
+        self._monitors: dict[type[Robot], WebSocketMonitor] = {}
 
     @property
     def user_id(self) -> str | None:
@@ -53,6 +53,17 @@ class Account:
     def session(self) -> LitterRobotSession:
         """Return the associated session on the account."""
         return self._session
+
+    def get_robot(self, robot_id: str | int | None) -> Robot | None:
+        """If found, return the robot with the specified id."""
+        return next(
+            (robot for robot in self._robots if robot.id == str(robot_id)),
+            None,
+        )
+
+    def get_robots(self, robot_class: type[Robot]) -> list[Robot]:
+        """If found, return the specified class of robots."""
+        return [robot for robot in self._robots if isinstance(robot, robot_class)]
 
     async def connect(
         self,
@@ -85,10 +96,8 @@ class Account:
 
     async def disconnect(self) -> None:
         """Close the underlying session."""
-        for robot in self.robots:
-            await robot.unsubscribe_from_updates()
-        for websocket, _ in self._ws_connections.values():
-            await websocket.close()
+        await asyncio.gather(*(robot.unsubscribe() for robot in self.robots))
+        await asyncio.gather(*(monitor.close() for monitor in self._monitors.values()))
         await self.session.close()
 
     async def refresh_user(self) -> None:
@@ -132,20 +141,13 @@ class Account:
                 robot_cls: type[Robot], data: dict
             ) -> None:
                 # pylint: disable=protected-access
-                robot_object = next(
-                    filter(
-                        lambda robot: (robot.id == data.get(robot_cls._data_id)),
-                        self._robots,
-                    ),
-                    None,
-                )
-                if robot_object:
-                    robot_object._update_data(data)
+                if robot := self.get_robot(data.get(robot_cls._data_id)):
+                    robot._update_data(data)
                 else:
-                    robot_object = robot_cls(data=data, account=self)
+                    robot = robot_cls(data=data, account=self)
                     if subscribe_for_updates:
-                        await robot_object.subscribe_for_updates()
-                robots.append(robot_object)
+                        await robot.subscribe()
+                robots.append(robot)
 
             for robot_data in resp[0]:
                 await update_or_create_robot(LitterRobot3, robot_data)
@@ -161,45 +163,24 @@ class Account:
     async def refresh_robots(self) -> None:
         """Refresh known robots."""
         try:
-            await asyncio.gather(*[robot.refresh() for robot in self.robots])
+            await asyncio.gather(*(robot.refresh() for robot in self.robots))
         except (LitterRobotException, ClientResponseError, ClientConnectorError) as ex:
             _LOGGER.error("Unable to refresh your robots: %s", ex)
 
-    async def ws_connect(
-        self,
-        url: str,
-        params: Mapping[str, str] | None,
-        headers: Mapping[str, str],
-        subscriber_id: str,
-    ) -> ClientWebSocketResponse:
-        """Initiate websocket connection."""
+    async def get_bearer_authorization(self) -> str | None:
+        """Return the authorization token."""
+        if not self.session.is_token_valid():
+            await self.session.refresh_token()
+        return await self.session.get_bearer_authorization()
 
-        async def _new_ws_connection() -> ClientWebSocketResponse:
-            return await self.session.websession.ws_connect(
-                url=url, params=params, headers=headers
-            )
-
-        websocket, subscribers = self._ws_connections.setdefault(
-            url, (await _new_ws_connection(), [subscriber_id])
+    async def ws_connect(self, robot: Robot) -> ClientWebSocketResponse:
+        """Initiate a websocket connection for a robot."""
+        robot_class = type(robot)
+        ws_monitor = self._monitors.setdefault(
+            robot_class, WebSocketMonitor(self, robot_class)
         )
-        if websocket.closed:
-            websocket = await _new_ws_connection()
-            self._ws_connections[url] = (websocket, subscribers)
-        if subscriber_id not in subscribers:
-            subscribers.append(subscriber_id)
-        return websocket
-
-    async def ws_disconnect(self, subscriber_id: str) -> None:
-        """Disconnect a subscriber from a websocket.
-
-        Close websocket if no longer used.
-        """
-        closed_ws_urls: list[str] = []
-        for url, (websocket, subscribers) in self._ws_connections.items():
-            if subscriber_id in subscribers:
-                subscribers.remove(subscriber_id)
-            if not subscribers and not websocket.closed:
-                await websocket.close()
-                closed_ws_urls.append(url)
-        for url in closed_ws_urls:
-            self._ws_connections.pop(url)
+        if ws_monitor.websocket is None or ws_monitor.websocket.closed:
+            await ws_monitor.new_connection(True)
+        if ws_monitor.monitor is None or ws_monitor.monitor.done():
+            await ws_monitor.start_monitor()
+        return ws_monitor.websocket

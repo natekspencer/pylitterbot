@@ -19,8 +19,8 @@ async def test_feeder_robot(
 ) -> None:
     """Tests that a Feeder-Robot setup is successful and parses as expected."""
     robot = FeederRobot(data=FEEDER_ROBOT_DATA, account=mock_account)
-    await robot.subscribe_for_updates()
-    await robot.unsubscribe_from_updates()
+    await robot.subscribe()
+    await robot.unsubscribe()
     assert (
         str(robot)
         == "Name: Feeder-Robot, Model: Feeder-Robot, Serial: RF1C000001, id: 1"
