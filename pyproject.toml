@@ -29,7 +29,7 @@ mypy = "^0.991"
 flake8 = "^5.0.4"
 pylint = "^2.15.10"
 tox = "^3.28.0"
-pydocstyle = "^6.1.1"
+pydocstyle = "^6.2.3"
 pytest-timeout = "^2.1.0"
 
 [build-system]
