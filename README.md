@@ -5,9 +5,9 @@
 
 # pylitterbot
 
-Python package for controlling a Whisker connected self-cleaning litter boxes and feeders.
+Python package for controlling Whisker connected self-cleaning litter boxes and feeders.
 
-This is an unofficial API for controlling various Whisker automated robots. It currently supports Litter-Robot 3, Litter-Robot 4 and Feeder-Robot.
+This is an unofficial API for controlling various Whisker automated robots. It currently supports Litter-Robot 3 (with connect), Litter-Robot 4 and Feeder-Robot.
 
 ## Disclaimer
 
