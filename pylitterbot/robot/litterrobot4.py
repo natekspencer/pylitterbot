@@ -98,6 +98,9 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     _litter_level = LITTER_LEVEL_EMPTY
     _litter_level_exp: datetime | None = None
 
+    _firmware_details: dict[str, bool | dict[str, str]] | None = None
+    _firmware_details_requested: datetime | None = None
+
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a Litter-Robot 4."""
         super().__init__(data, account)
@@ -496,46 +499,58 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             ],
         )
 
-    async def get_firmware_details(self) -> dict[str, bool | dict[str, str]] | None:
+    async def get_firmware_details(
+        self, force_check: bool = False
+    ) -> dict[str, bool | dict[str, str]] | None:
         """Get the firmware details."""
-        data = await self._post(
-            json={
-                "query": """
-                    query getFirmwareDetails($serial: String!) {
-                        litterRobot4CompareFirmwareVersion(serial: $serial) {
-                            isEspFirmwareUpdateNeeded
-                            isPicFirmwareUpdateNeeded
-                            isLaserboardFirmwareUpdateNeeded
-                            latestFirmware {
-                                espFirmwareVersion
-                                picFirmwareVersion
-                                laserBoardFirmwareVersion
+        if (
+            force_check
+            or not self._firmware_details
+            or (requested := self._firmware_details_requested) is None
+            or requested + timedelta(minutes=15) < utcnow()
+        ):
+            data = await self._post(
+                json={
+                    "query": """
+                        query getFirmwareDetails($serial: String!) {
+                            litterRobot4CompareFirmwareVersion(serial: $serial) {
+                                isEspFirmwareUpdateNeeded
+                                isPicFirmwareUpdateNeeded
+                                isLaserboardFirmwareUpdateNeeded
+                                latestFirmware {
+                                    espFirmwareVersion
+                                    picFirmwareVersion
+                                    laserBoardFirmwareVersion
+                                }
                             }
                         }
-                    }
-                """,
-                "variables": {"serial": self.serial},
-            }
-        )
-        data = cast(Dict[str, Dict[str, Dict[str, Union[bool, Dict[str, str]]]]], data)
-        return data.get("data", {}).get("litterRobot4CompareFirmwareVersion", {})
+                    """,
+                    "variables": {"serial": self.serial},
+                }
+            )
+            self._firmware_details = (
+                cast(Dict[str, Dict[str, Dict[str, Union[bool, Dict[str, str]]]]], data)
+                .get("data", {})
+                .get("litterRobot4CompareFirmwareVersion", {})
+            )
+            self._firmware_details_requested = utcnow()
+        return self._firmware_details
 
-    async def get_latest_firmware(self) -> str | None:
+    async def get_latest_firmware(self, force_check: bool = False) -> str | None:
         """Get the latest firmware available."""
-        if (firmware := await self.get_firmware_details()) is None:
+        if (firmware := await self.get_firmware_details(force_check)) is None:
             return None
 
-        latest_firmware = (firmware).get("latestFirmware", {})
-        latest_firmware = cast(Dict[str, str], latest_firmware)
+        latest_firmware = cast(Dict[str, str], firmware.get("latestFirmware", {}))
         return (
             f"ESP: {latest_firmware.get('espFirmwareVersion')} / "
             f"PIC: {latest_firmware.get('picFirmwareVersion')} / "
             f"TOF: {latest_firmware.get('laserBoardFirmwareVersion')}"
         )
 
-    async def has_firmware_update(self) -> bool:
+    async def has_firmware_update(self, force_check: bool = False) -> bool:
         """Check if a firmware update is available."""
-        if (firmware := await self.get_firmware_details()) is None:
+        if (firmware := await self.get_firmware_details(force_check)) is None:
             return False
         return any(value for value in firmware.values() if isinstance(value, bool))
 

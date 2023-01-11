@@ -256,9 +256,7 @@ async def test_litter_robot_4(
     version_info["isEspFirmwareUpdateNeeded"] = False
     version_info["isPicFirmwareUpdateNeeded"] = False
     mock_aioresponse.post(LR4_ENDPOINT, payload=firmware_response)
-    assert not await robot.has_firmware_update()
-
-    mock_aioresponse.post(LR4_ENDPOINT, payload=firmware_response)
+    assert not await robot.has_firmware_update(True)
     latest_firmware = await robot.get_latest_firmware()
     assert latest_firmware == "ESP: 1.1.54 / PIC: 10512.2560.2.66 / TOF: 4.0.65.4"
 
@@ -302,7 +300,7 @@ async def test_litter_robot_4(
         ],
     }
     mock_aioresponse.post(LR4_ENDPOINT, payload=firmware_response, repeat=True)
-    assert not await robot.has_firmware_update()
+    assert not await robot.has_firmware_update(True)
     assert not await robot.get_latest_firmware()
 
     await robot._account.disconnect()
