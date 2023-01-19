@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import cast
+from typing import TypeVar, cast
 
 from aiohttp import (
     ClientConnectorError,
@@ -22,6 +22,7 @@ from .utils import decode, urljoin
 from .ws_monitor import WebSocketMonitor
 
 _LOGGER = logging.getLogger(__name__)
+_RobotT = TypeVar("_RobotT", bound=Robot)
 
 
 class Account:
@@ -61,7 +62,7 @@ class Account:
             None,
         )
 
-    def get_robots(self, robot_class: type[Robot]) -> list[Robot]:
+    def get_robots(self, robot_class: type[_RobotT]) -> list[_RobotT]:
         """If found, return the specified class of robots."""
         return [robot for robot in self._robots if isinstance(robot, robot_class)]
 

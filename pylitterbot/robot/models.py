@@ -1,5 +1,4 @@
 """pylitterbot robot models."""
-
 FEEDER_ROBOT_MODEL = """
 {
     id
@@ -34,18 +33,29 @@ FEEDER_ROBOT_MODEL = """
 }
 """
 
-LITTER_ROBOT_4_MODEL = """
+SLEEP_WAKE_ENABLED_MODEL = """
 {
+  sleepTime
+  wakeTime
+  isEnabled
+}
+"""
+
+LITTER_ROBOT_4_MODEL = f"""
+{{
     unitId
     name
     serial
     userId
     espFirmware
     picFirmwareVersion
+    picFirmwareVersionHex
     laserBoardFirmwareVersion
+    laserBoardFirmwareVersionHex
     wifiRssi
     unitPowerType
     catWeight
+    displayCode
     unitTimezone
     unitTime
     cleanCycleWaitTime
@@ -55,43 +65,15 @@ LITTER_ROBOT_4_MODEL = """
     isPanelSleepMode
     panelSleepTime
     panelWakeTime
-    weekdaySleepModeEnabled {
-        Sunday {
-            sleepTime
-            wakeTime
-            isEnabled
-        }
-        Monday {
-            sleepTime
-            wakeTime
-            isEnabled
-        }
-        Tuesday {
-            sleepTime
-            wakeTime
-            isEnabled
-        }
-        Wednesday {
-            sleepTime
-            wakeTime
-            isEnabled
-        }
-        Thursday {
-            sleepTime
-            wakeTime
-            isEnabled
-        }
-        Friday {
-            sleepTime
-            wakeTime
-            isEnabled
-        }
-        Saturday {
-            sleepTime
-            wakeTime
-            isEnabled
-        }
-    }
+    weekdaySleepModeEnabled {{
+        Sunday {SLEEP_WAKE_ENABLED_MODEL}
+        Monday {SLEEP_WAKE_ENABLED_MODEL}
+        Tuesday {SLEEP_WAKE_ENABLED_MODEL}
+        Wednesday {SLEEP_WAKE_ENABLED_MODEL}
+        Thursday {SLEEP_WAKE_ENABLED_MODEL}
+        Friday {SLEEP_WAKE_ENABLED_MODEL}
+        Saturday {SLEEP_WAKE_ENABLED_MODEL}
+    }}
     unitPowerStatus
     sleepStatus
     robotStatus
@@ -102,6 +84,9 @@ LITTER_ROBOT_4_MODEL = """
     isNightLightLEDOn
     odometerPowerCycles
     odometerCleanCycles
+    panelBrightnessHigh
+    panelBrightnessLow
+    smartWeightEnabled
     odometerEmptyCycles
     odometerFilterCycles
     isDFIResetPending
@@ -130,4 +115,6 @@ LITTER_ROBOT_4_MODEL = """
     isUSBPowerOn
     USBFaultStatus
     isDFIPartialFull
-}"""
+    isLaserDirty
+}}
+"""

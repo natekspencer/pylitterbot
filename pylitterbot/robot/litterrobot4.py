@@ -54,12 +54,16 @@ LITTER_LEVEL_EMPTY = 500
 
 
 @unique
-class NightLightLevel(IntEnum):
-    """Night light level of a Litter-Robot 4 unit."""
+class BrightnessLevel(IntEnum):
+    """Brightness level of a Litter-Robot 4 unit."""
 
     LOW = 25
     MEDIUM = 50
     HIGH = 100
+
+
+# Deprecated. Use BrightnessLevel.
+NightLightLevel = BrightnessLevel
 
 
 @unique
@@ -180,10 +184,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return int(self._data.get("nightLightBrightness", 0))
 
     @property
-    def night_light_level(self) -> NightLightLevel | None:
+    def night_light_level(self) -> BrightnessLevel | None:
         """Return the night light brightness."""
-        if (brightness := self.night_light_brightness) in map(int, NightLightLevel):
-            return NightLightLevel(brightness)
+        if (brightness := self.night_light_brightness) in list(BrightnessLevel):
+            return BrightnessLevel(brightness)
         return None
 
     @property
@@ -198,6 +202,14 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     def night_light_mode_enabled(self) -> bool:
         """Return `True` if night light mode is enabled."""
         return bool(self._data.get("nightLightMode", "OFF") != "OFF")
+
+    @property
+    def panel_brightness(self) -> BrightnessLevel | None:
+        """Return the panel brightness."""
+        brightness = self._data.get("panelBrightnessHigh")
+        if brightness in list(BrightnessLevel):
+            return BrightnessLevel(brightness)
+        return None
 
     @property
     def panel_lock_enabled(self) -> bool:
@@ -367,13 +379,13 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return self.name == name
 
     async def set_night_light_brightness(
-        self, brightness: int | NightLightLevel
+        self, brightness: int | BrightnessLevel
     ) -> bool:
         """Set the night light brightness on the robot."""
-        if brightness not in map(int, NightLightLevel):
+        if brightness not in list(BrightnessLevel):
             raise InvalidCommandException(
                 f"Attempt to send an invalid night light level to Litter-Robot. "
-                f"Brightness must be one of: {list(NightLightLevel)}, but received {brightness}"
+                f"Brightness must be one of: {list(BrightnessLevel)}, but received {brightness}"
             )
         return await self._dispatch_command(
             LitterRobot4Command.SET_NIGHT_LIGHT_VALUE,
@@ -388,6 +400,15 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             NightLightMode.AUTO: LitterRobot4Command.NIGHT_LIGHT_MODE_AUTO,
         }
         return await self._dispatch_command(mode_to_command[mode])
+
+    async def set_panel_brightness(self, brightness: BrightnessLevel) -> bool:
+        """Set the panel brightness."""
+        level_to_command = {
+            BrightnessLevel.LOW: LitterRobot4Command.PANEL_BRIGHTNESS_LOW,
+            BrightnessLevel.MEDIUM: LitterRobot4Command.PANEL_BRIGHTNESS_MEDIUM,
+            BrightnessLevel.HIGH: LitterRobot4Command.PANEL_BRIGHTNESS_HIGH,
+        }
+        return await self._dispatch_command(level_to_command[brightness])
 
     async def set_wait_time(self, wait_time: int) -> bool:
         """Set the wait time on the Litter-Robot."""

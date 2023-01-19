@@ -26,14 +26,6 @@ def encode(value: str | dict) -> str:
     return b64encode(value.encode(ENCODING)).decode(ENCODING)
 
 
-def from_litter_robot_timestamp(
-    timestamp: str | None,
-) -> datetime | None:  # pragma: no cover
-    """Use `to_timestamp` instead."""
-    send_deprecation_warning("from_litter_robot_timestamp", "to_timestamp")
-    return to_timestamp(timestamp)
-
-
 def to_timestamp(timestamp: str | None) -> datetime | None:
     """Construct a UTC offset-aware datetime from a Litter-Robot API timestamp."""
     if not timestamp:
@@ -85,9 +77,5 @@ def send_deprecation_warning(
 ) -> None:  # pragma: no cover
     """Log a deprecation warning message."""
     message = f"{old_name} has been deprecated{'' if new_name is None else f' in favor of {new_name}'} and will be removed in a future release"
-    warn(
-        message,
-        DeprecationWarning,
-        stacklevel=2,
-    )
+    warn(message, DeprecationWarning, stacklevel=2)
     _LOGGER.warning(message)

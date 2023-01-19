@@ -85,7 +85,6 @@ Currently the following methods are available in the Robot class:
 - set_sleep_mode()
 - set_wait_time()
 - set_name()
-- reset_waste_drawer()
 - get_activity_history()
 - get_insight()
 

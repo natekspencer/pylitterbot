@@ -42,18 +42,10 @@ async def test_robot_setup(mock_account: Account) -> None:
         str(robot)
         == f"Name: {ROBOT_NAME}, Model: Litter-Robot 3, Serial: {ROBOT_SERIAL}, id: {ROBOT_ID}"
     )
-    with pytest.warns(DeprecationWarning):
-        assert robot.auto_offline_disabled
     assert robot.clean_cycle_wait_time_minutes == 7
     assert robot.cycle_capacity == 30
     assert robot.cycle_count == 15
     assert robot.cycles_after_drawer_full == 0
-    with pytest.warns(DeprecationWarning):
-        assert robot.device_type == "udp"
-    with pytest.warns(DeprecationWarning):
-        assert not robot.did_notify_offline
-    with pytest.warns(DeprecationWarning):
-        assert robot.drawer_full_indicator_cycle_count == 0
     assert not robot.is_drawer_full_indicator_triggered
     assert robot.is_onboarded
     assert robot.is_online
@@ -262,7 +254,8 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
 
     mock_aioresponse.patch(url, callback=patch_callback5)
     assert robot.cycle_count > 0
-    await robot.reset_waste_drawer()
+    if isinstance(robot, LitterRobot3):
+        await robot.reset_waste_drawer()
     assert robot.cycle_count == 0
 
     history = await robot.get_activity_history(2)

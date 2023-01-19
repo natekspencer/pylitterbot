@@ -11,8 +11,8 @@ from pylitterbot.exceptions import InvalidCommandException
 from pylitterbot.robot.litterrobot4 import (
     LITTER_LEVEL_EMPTY,
     LR4_ENDPOINT,
+    BrightnessLevel,
     LitterRobot4,
-    NightLightLevel,
     NightLightMode,
 )
 
@@ -34,18 +34,10 @@ async def test_litter_robot_4(
         str(robot)
         == "Name: Litter-Robot 4, Model: Litter-Robot 4, Serial: LR4C000001, id: LR4ID"
     )
-    with pytest.warns(DeprecationWarning):
-        assert robot.auto_offline_disabled
     assert robot.clean_cycle_wait_time_minutes == 7
     assert robot.cycle_capacity == 58
     assert robot.cycle_count == 93
     assert robot.cycles_after_drawer_full == 0
-    with pytest.warns(DeprecationWarning):
-        assert robot.device_type is None
-    with pytest.warns(DeprecationWarning):
-        assert not robot.did_notify_offline
-    with pytest.warns(DeprecationWarning):
-        assert robot.drawer_full_indicator_cycle_count == 0
     assert robot.firmware == "ESP: 1.1.50 / PIC: 10512.2560.2.51 / TOF: 255.0.255.255"
     assert robot.firmware_update_status == "SUCCEEDED"
     assert not robot.firmware_update_triggered
@@ -61,9 +53,10 @@ async def test_litter_robot_4(
     assert robot.model == "Litter-Robot 4"
     assert robot.name == "Litter-Robot 4"
     assert robot.night_light_brightness == 100
-    assert robot.night_light_level == NightLightLevel.HIGH
+    assert robot.night_light_level == BrightnessLevel.HIGH
     assert robot.night_light_mode == NightLightMode.AUTO
     assert robot.night_light_mode_enabled
+    assert robot.panel_brightness == BrightnessLevel.HIGH
     assert not robot.panel_lock_enabled
     assert robot.pet_weight == 7.93
     assert robot.power_status == "AC"
@@ -197,6 +190,7 @@ async def test_litter_robot_4(
                     **LITTER_ROBOT_4_DATA,
                     "nightLightBrightness": 10,
                     "nightLightMode": "TEST",
+                    "panelBrightnessHigh": None,
                     "isDFIFull": True,
                 }
             }
@@ -206,6 +200,7 @@ async def test_litter_robot_4(
     assert robot.night_light_brightness == 10
     assert robot.night_light_level is None
     assert robot.night_light_mode is None  # type: ignore
+    assert robot.panel_brightness is None
     assert robot.status == LitterBoxStatus.DRAWER_FULL
 
     new_name = "Test Name"
@@ -238,6 +233,16 @@ async def test_litter_robot_4(
         },
     )
     await robot.set_night_light_mode(NightLightMode.AUTO)
+
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "sendLitterRobot4Command": 'command "panelBrightnessHigh (0x020E5A64)" sent'
+            }
+        },
+    )
+    await robot.set_panel_brightness(BrightnessLevel.HIGH)
 
     version_info = {
         "isEspFirmwareUpdateNeeded": True,

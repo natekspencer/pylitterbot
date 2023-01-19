@@ -9,17 +9,13 @@ from typing import Any
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
-from ..utils import send_deprecation_warning, to_timestamp
+from ..utils import to_timestamp
 from . import Robot
 
 _LOGGER = logging.getLogger(__name__)
 
 
 MINIMUM_CYCLES_LEFT_DEFAULT = 3
-
-
-# Deprecated, please use Robot.VALID_WAIT_TIMES
-VALID_WAIT_TIMES = [3, 7, 15]
 
 
 class LitterRobot(Robot):
@@ -50,19 +46,13 @@ class LitterRobot(Robot):
     _sleep_mode_end_time: datetime | None = None
 
     @property
-    def auto_offline_disabled(self) -> bool:
-        """Return `True` if the Litter-Robot's automatic offline status is disabled."""
-        send_deprecation_warning("auto_offline_disabled")
-        return self._data.get("autoOfflineDisabled", True)
-
-    @property
     @abstractmethod
     def clean_cycle_wait_time_minutes(self) -> int:
         """Return the number of minutes after a cat uses the Litter-Robot to begin an automatic clean cycle."""
 
     @property
     def cycle_capacity(self) -> int:
-        """Return the cycle capacity of the Litter-Robot."""
+        """Return the total anticpated number of clean cycles that can be performed before the waste drawer is full."""
         return int(
             self._data.get(self._data_cycle_capacity, self._data_cycle_capacity_default)
         )
@@ -76,24 +66,6 @@ class LitterRobot(Robot):
     def cycles_after_drawer_full(self) -> int:
         """Return the cycles after the drawer is full."""
         return int(self._data.get(self._data_drawer_full_cycles, 0))
-
-    @property
-    def device_type(self) -> str | None:
-        """Return the device type of the Litter-Robot."""
-        send_deprecation_warning("device_type")
-        return self._data.get("deviceType")
-
-    @property
-    def did_notify_offline(self) -> bool:
-        """Return `True` if a notification was sent about the Litter-Robot going offline."""
-        send_deprecation_warning("did_notify_offline")
-        return self._data.get("didNotifyOffline", False)
-
-    @property
-    def drawer_full_indicator_cycle_count(self) -> int:
-        """Return the cycle count since the drawer full indicator was triggered."""
-        send_deprecation_warning("drawer_full_indicator_cycle_count")
-        return int(self._data.get("DFICycleCount", 0))
 
     @property
     @abstractmethod
@@ -230,10 +202,6 @@ class LitterRobot(Robot):
     @abstractmethod
     async def set_wait_time(self, wait_time: int) -> bool:
         """Set the wait time on the Litter-Robot."""
-
-    async def reset_waste_drawer(self) -> bool:  # pragma: no cover
-        """Reset the Litter-Robot's cycle counts and capacity."""
-        raise NotImplementedError()
 
     @abstractmethod
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
