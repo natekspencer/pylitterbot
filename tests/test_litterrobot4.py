@@ -34,18 +34,10 @@ async def test_litter_robot_4(
         str(robot)
         == "Name: Litter-Robot 4, Model: Litter-Robot 4, Serial: LR4C000001, id: LR4ID"
     )
-    with pytest.warns(DeprecationWarning):
-        assert robot.auto_offline_disabled
     assert robot.clean_cycle_wait_time_minutes == 7
     assert robot.cycle_capacity == 58
     assert robot.cycle_count == 93
     assert robot.cycles_after_drawer_full == 0
-    with pytest.warns(DeprecationWarning):
-        assert robot.device_type is None
-    with pytest.warns(DeprecationWarning):
-        assert not robot.did_notify_offline
-    with pytest.warns(DeprecationWarning):
-        assert robot.drawer_full_indicator_cycle_count == 0
     assert robot.firmware == "ESP: 1.1.50 / PIC: 10512.2560.2.51 / TOF: 255.0.255.255"
     assert robot.firmware_update_status == "SUCCEEDED"
     assert not robot.firmware_update_triggered

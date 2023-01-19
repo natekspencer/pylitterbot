@@ -50,7 +50,7 @@ class LitterRobot3(LitterRobot):
 
     @property
     def cycle_capacity(self) -> int:
-        """Return the cycle capacity of the Litter-Robot."""
+        """Return the total anticpated number of clean cycles that can be performed before the waste drawer is full."""
         minimum_capacity = self.cycle_count + self._minimum_cycles_left
         if self._minimum_cycles_left < MINIMUM_CYCLES_LEFT_DEFAULT:
             return minimum_capacity
