@@ -11,8 +11,8 @@ from pylitterbot.exceptions import InvalidCommandException
 from pylitterbot.robot.litterrobot4 import (
     LITTER_LEVEL_EMPTY,
     LR4_ENDPOINT,
+    BrightnessLevel,
     LitterRobot4,
-    NightLightLevel,
     NightLightMode,
 )
 
@@ -53,10 +53,10 @@ async def test_litter_robot_4(
     assert robot.model == "Litter-Robot 4"
     assert robot.name == "Litter-Robot 4"
     assert robot.night_light_brightness == 100
-    assert robot.night_light_level == NightLightLevel.HIGH
+    assert robot.night_light_level == BrightnessLevel.HIGH
     assert robot.night_light_mode == NightLightMode.AUTO
     assert robot.night_light_mode_enabled
-    assert robot.panel_brightness == NightLightLevel.HIGH
+    assert robot.panel_brightness == BrightnessLevel.HIGH
     assert not robot.panel_lock_enabled
     assert robot.pet_weight == 7.93
     assert robot.power_status == "AC"
@@ -242,7 +242,7 @@ async def test_litter_robot_4(
             }
         },
     )
-    await robot.set_panel_brightness(NightLightLevel.HIGH)
+    await robot.set_panel_brightness(BrightnessLevel.HIGH)
 
     version_info = {
         "isEspFirmwareUpdateNeeded": True,
