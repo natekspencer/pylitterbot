@@ -254,7 +254,8 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
 
     mock_aioresponse.patch(url, callback=patch_callback5)
     assert robot.cycle_count > 0
-    await robot.reset_waste_drawer()
+    if isinstance(robot, LitterRobot3):
+        await robot.reset_waste_drawer()
     assert robot.cycle_count == 0
 
     history = await robot.get_activity_history(2)
