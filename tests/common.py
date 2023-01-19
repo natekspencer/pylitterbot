@@ -157,6 +157,8 @@ LITTER_ROBOT_4_DATA: dict[str, Any] = {
     "isNightLightLEDOn": True,
     "odometerPowerCycles": 9,
     "odometerCleanCycles": 93,
+    "panelBrightnessHigh": 100,
+    "panelBrightnessLow": 90,
     "odometerEmptyCycles": 0,
     "odometerFilterCycles": 0,
     "isDFIResetPending": False,

@@ -200,6 +200,14 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return bool(self._data.get("nightLightMode", "OFF") != "OFF")
 
     @property
+    def panel_brightness(self) -> NightLightLevel | None:
+        """Return the panel brightness."""
+        brightness = self._data.get("panelBrightnessHigh")
+        if brightness in list(NightLightLevel):
+            return NightLightLevel(brightness)
+        return None
+
+    @property
     def panel_lock_enabled(self) -> bool:
         """Return `True` if the buttons on the robot are disabled."""
         return self._data.get("isKeypadLockout", False)
@@ -388,6 +396,15 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             NightLightMode.AUTO: LitterRobot4Command.NIGHT_LIGHT_MODE_AUTO,
         }
         return await self._dispatch_command(mode_to_command[mode])
+
+    async def set_panel_brightness(self, brightness: NightLightLevel) -> bool:
+        """Set the panel brightness."""
+        level_to_command = {
+            NightLightLevel.LOW: LitterRobot4Command.PANEL_BRIGHTNESS_LOW,
+            NightLightLevel.MEDIUM: LitterRobot4Command.PANEL_BRIGHTNESS_MEDIUM,
+            NightLightLevel.HIGH: LitterRobot4Command.PANEL_BRIGHTNESS_HIGH,
+        }
+        return await self._dispatch_command(level_to_command[brightness])
 
     async def set_wait_time(self, wait_time: int) -> bool:
         """Set the wait time on the Litter-Robot."""
