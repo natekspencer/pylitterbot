@@ -7,7 +7,7 @@ from aioresponses import aioresponses
 
 from pylitterbot import Account
 from pylitterbot.enums import LitterBoxStatus
-from pylitterbot.exceptions import InvalidCommandException
+from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
 from pylitterbot.robot.litterrobot4 import (
     LITTER_LEVEL_EMPTY,
     LR4_ENDPOINT,
@@ -125,6 +125,13 @@ async def test_litter_robot_4(
     )
     insight = await robot.get_insight(days=7)
     assert len(insight.cycle_history) == 7
+
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": {"getLitterRobot4Insights": None}},
+    )
+    with pytest.raises(LitterRobotException):
+        await robot.get_insight(days=7)
 
     mock_aioresponse.post(
         LR4_ENDPOINT,

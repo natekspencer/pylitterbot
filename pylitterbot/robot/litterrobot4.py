@@ -15,7 +15,7 @@ except ImportError:  # pragma: no cover
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxStatus, LitterRobot4Command
-from ..exceptions import InvalidCommandException
+from ..exceptions import InvalidCommandException, LitterRobotException
 from ..utils import encode, to_timestamp, utcnow
 from .litterrobot import LitterRobot
 from .models import LITTER_ROBOT_4_MODEL
@@ -508,6 +508,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             }
         )
         insight = cast(dict, data).get("data", {}).get("getLitterRobot4Insights", {})
+        if insight is None:
+            raise LitterRobotException("Insight data could not be retrieved.")
         return Insight(
             insight["totalCycles"],
             insight["averageCycles"],
