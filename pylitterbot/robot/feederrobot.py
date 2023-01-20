@@ -27,7 +27,7 @@ COMMAND_ENDPOINT_KEY = decode(
     "dzJ0UEZiamxQMTNHVW1iOGRNalVMNUIyWXlQVkQzcEo3RXk2Zno4dg=="
 )
 
-# FOOD_LEVEL_PERCENT_MAP = {9: 100, 8: 70, 7: 60, 6: 50, 5: 40, 4: 30, 3: 20, 2: 10, 1: 5, 0: 0}
+FOOD_LEVEL_MAP = {9: 100, 8: 70, 7: 60, 6: 50, 5: 40, 4: 30, 3: 20, 2: 10, 1: 5, 0: 0}
 MEAL_INSERT_SIZE_CUPS_MAP = {0: 1 / 4, 1: 1 / 8}
 MEAL_INSERT_SIZE_CUPS_REVERSE_MAP = {v: k for k, v in MEAL_INSERT_SIZE_CUPS_MAP.items()}
 
@@ -61,7 +61,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     @property
     def food_level(self) -> int:
         """Return the food level."""
-        return int(round(self._state_info("level") / 9 * 100, -1))
+        return FOOD_LEVEL_MAP.get(self._state_info("level"), 0)
 
     @property
     def is_online(self) -> bool:

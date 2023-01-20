@@ -26,7 +26,7 @@ async def test_feeder_robot(
         == "Name: Feeder-Robot, Model: Feeder-Robot, Serial: RF1C000001, id: 1"
     )
     assert robot.firmware == "1.0.0"
-    assert robot.food_level == 20
+    assert robot.food_level == 10
     assert robot.is_online
     assert robot.last_feeding == robot.last_meal
     assert robot.meal_insert_size == 0.125
