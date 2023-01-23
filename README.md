@@ -24,7 +24,7 @@ pip install pylitterbot
 Alternatively, clone the repository and run
 
 ```bash
-python setup.py install
+poetry install
 ```
 
 ## Usage
