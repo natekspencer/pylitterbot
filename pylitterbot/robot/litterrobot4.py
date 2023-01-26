@@ -32,7 +32,7 @@ LR4_STATUS_MAP = {
     "ROBOT_CAT_DETECT_DELAY": LitterBoxStatus.CAT_SENSOR_TIMING,
     "ROBOT_CLEAN": LitterBoxStatus.CLEAN_CYCLE,
     "ROBOT_EMPTY": LitterBoxStatus.EMPTY_CYCLE,
-    "ROBOT_FIND_DUMP": LitterBoxStatus.DUMP_POSITION_FAULT,
+    "ROBOT_FIND_DUMP": LitterBoxStatus.CLEAN_CYCLE,
     "ROBOT_IDLE": LitterBoxStatus.READY,
     "ROBOT_POWER_DOWN": LitterBoxStatus.POWER_DOWN,
     "ROBOT_POWER_OFF": LitterBoxStatus.OFF,
