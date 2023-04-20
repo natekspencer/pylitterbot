@@ -80,7 +80,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     _attr_model = "Litter-Robot 4"
 
-    VALID_WAIT_TIMES = [3, 5, 7, 15, 30]
+    VALID_WAIT_TIMES = [3, 7, 15, 25, 30]
 
     _data_cycle_capacity = "DFINumberOfCycles"
     _data_cycle_count = "odometerCleanCycles"
