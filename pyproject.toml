@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pylitterbot"
-version = "2023.1.2"
+version = "2023.4.0"
 description = "Python package for controlling Whisker automatic robots."
 authors = ["Nathan Spencer <natekspencer@gmail.com>"]
 license = "MIT"
