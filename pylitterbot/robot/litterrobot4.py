@@ -465,6 +465,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             }
         )
         activities = cast(dict, data).get("data", {}).get("getLitterRobot4Activity", {})
+        if activities is None:
+            raise LitterRobotException("Activity history could not be retrieved.")
         return [
             Activity(timestamp, self._parse_activity(activity))
             for activity in activities
