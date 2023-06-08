@@ -71,6 +71,8 @@ class Session(ABC):
         self, method: str, url: str, **kwargs: Any
     ) -> dict | list[dict] | None:
         """Make a request."""
+        _LOGGER.debug("Making %s request to %s", method, url)
+
         if "headers" not in kwargs:
             kwargs["headers"] = {}
 
@@ -99,6 +101,7 @@ class Session(ABC):
 
             resp.raise_for_status()
             data = await resp.json()
+            _LOGGER.debug("Received %s response: %s", resp.status, data)
             return data  # type: ignore
 
     async def __aenter__(self: T) -> T:
