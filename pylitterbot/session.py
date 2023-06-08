@@ -10,7 +10,7 @@ import jwt
 from aiohttp import ClientSession
 
 from .exceptions import InvalidCommandException
-from .utils import decode, utcnow
+from .utils import decode, redact, utcnow
 
 T = TypeVar("T", bound="Session")
 
@@ -101,7 +101,7 @@ class Session(ABC):
 
             resp.raise_for_status()
             data = await resp.json()
-            _LOGGER.debug("Received %s response: %s", resp.status, data)
+            _LOGGER.debug("Received %s response: %s", resp.status, redact(data))
             return data  # type: ignore
 
     async def __aenter__(self: T) -> T:
