@@ -23,6 +23,9 @@ from .common import (
     COMMAND_RESPONSE,
     INVALID_COMMAND_RESPONSE,
     ROBOT_DATA,
+    ROBOT_DELETED_DATA,
+    ROBOT_DELETED_ID,
+    ROBOT_DELETED_NAME,
     ROBOT_ENDPOINT,
     ROBOT_FULL_ID,
     ROBOT_ID,
@@ -163,6 +166,38 @@ async def test_robot_with_drawer_full_status(mock_aioresponse: aioresponses) -> 
     assert robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
 
     await robot._account.disconnect()
+
+async def test_robot_deleted(mock_account: Account) -> None:
+    """Tests that robot setup is successful and parses as expected."""
+    robot = LitterRobot3(data=ROBOT_DELETED_DATA, account=mock_account)
+    assert robot
+    assert (
+        str(robot)
+        == f"Name: {ROBOT_DELETED_NAME}, Model: Litter-Robot 3, Serial: , id: {ROBOT_DELETED_ID}"
+    )
+    assert robot.clean_cycle_wait_time_minutes == 7
+    assert robot.cycle_capacity == 30
+    assert robot.cycle_count == 0
+    assert robot.cycles_after_drawer_full == 0
+    assert not robot.is_drawer_full_indicator_triggered
+    assert not robot.is_onboarded
+    assert not robot.is_online
+    assert not robot.is_sleeping
+    assert not robot.is_waste_drawer_full
+    assert not robot.last_seen
+    assert robot.model == "Litter-Robot 3"
+    assert robot.name == ROBOT_DELETED_NAME
+    assert not robot.night_light_mode_enabled
+    assert not robot.panel_lock_enabled
+    assert robot.power_status == "NC"
+    assert not robot.setup_date
+    assert not robot.sleep_mode_enabled
+    assert not robot.sleep_mode_start_time
+    assert not robot.sleep_mode_end_time
+    assert robot.status == LitterBoxStatus.UNKNOWN
+    assert not robot.status_code
+    assert robot.status_text == LitterBoxStatus.UNKNOWN.text
+    assert robot.waste_drawer_level == 0
 
 
 @pytest.mark.parametrize(

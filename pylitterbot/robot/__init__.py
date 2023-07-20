@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from aiohttp import ClientWebSocketResponse
 from deepdiff import DeepDiff
 
-from ..utils import to_timestamp, urljoin
+from ..utils import DictWithStrictDefault, to_timestamp, urljoin
 
 if TYPE_CHECKING:
     from ..account import Account
@@ -34,7 +34,7 @@ class Robot:
 
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a robot."""
-        self._data: dict = {}
+        self._data: dict = DictWithStrictDefault({})
         self._account = account
 
         self._is_loaded = False
