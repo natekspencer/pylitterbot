@@ -7,7 +7,7 @@ import re
 from base64 import b64decode, b64encode
 from collections.abc import Mapping
 from datetime import datetime, time, timezone
-from typing import Any, TypeVar, cast, overload
+from typing import TypeVar, cast, overload
 from urllib.parse import urljoin as _urljoin
 from warnings import warn
 
@@ -133,13 +133,3 @@ def redact(data: _T) -> _T:
             redacted[key] = [redact(item) for item in value]
 
     return cast(_T, redacted)
-
-class DictWithStrictDefault(dict):
-    """Subclass of built-in dict class. Overrides get() method to provide more strict default values.
-    If the key exists in the dictionary and its value is not None, it will return the value.
-    If the key does not exist or its value is None, this class will return the provided default value.
-    Useful in scenarios when you want to prevent returning None even if a key is present in the dictionary."""
-    def get(self, key: str, default: Any = None) -> Any:
-        if key in self and self[key] is not None:
-            return self[key]
-        return default

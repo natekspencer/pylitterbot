@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from aiohttp import ClientWebSocketResponse
 from deepdiff import DeepDiff
 
-from ..utils import DictWithStrictDefault, to_timestamp, urljoin
+from ..utils import to_timestamp, urljoin
 
 if TYPE_CHECKING:
     from ..account import Account
@@ -34,7 +34,7 @@ class Robot:
 
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a robot."""
-        self._data: dict = DictWithStrictDefault({})
+        self._data: dict = {}
         self._account = account
 
         self._is_loaded = False
@@ -44,6 +44,8 @@ class Robot:
         self._ws_subscription_id: str | None = None
 
         if data:
+            if data.get(self._data_serial) is None:
+                raise ValueError("Robot data must include a serial number")
             self._update_data(data)
 
     def __str__(self) -> str:

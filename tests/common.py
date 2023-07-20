@@ -68,9 +68,6 @@ ROBOT_FULL_DATA = {
     "setupDate": "2021-01-01T00:00:00.000000",
 }
 
-ROBOT_DELETED_ID = "00a2d005ceae00"
-ROBOT_DELETED_NAME = "Deleted Test"
-ROBOT_DELETED_SERIAL = None
 ROBOT_DELETED_DATA = {
     "litterRobotId": "00a2d005ceae00",
     "litterRobotSerial": None,

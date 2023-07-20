@@ -142,6 +142,9 @@ class Account:
                 robot_cls: type[Robot], data: dict
             ) -> None:
                 # pylint: disable=protected-access
+                if data.get(robot_cls._data_serial) is None:
+                    _LOGGER.info("skipping robot without serial number (id=%s, name=%s)", data.get(robot_cls._data_id), data.get(robot_cls._data_name))
+                    return
                 if robot := self.get_robot(data.get(robot_cls._data_id)):
                     robot._update_data(data)
                 else:
