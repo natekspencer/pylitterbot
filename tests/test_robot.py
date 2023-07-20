@@ -165,10 +165,12 @@ async def test_robot_with_drawer_full_status(mock_aioresponse: aioresponses) -> 
 
     await robot._account.disconnect()
 
+
 async def test_robot_deleted(mock_account: Account) -> None:
     """Tests that robot setup for a deleted robot without serial number throws an error."""
     with pytest.raises(ValueError):
         LitterRobot3(data=ROBOT_DELETED_DATA, account=mock_account)
+
 
 @pytest.mark.parametrize(
     "method_call,dispatch_command,args",
