@@ -44,6 +44,8 @@ class Robot:
         self._ws_subscription_id: str | None = None
 
         if data:
+            if data.get(self._data_serial) is None:
+                raise ValueError("Robot data must include a serial number")
             self._update_data(data)
 
     def __str__(self) -> str:

@@ -23,6 +23,7 @@ from .common import (
     COMMAND_RESPONSE,
     INVALID_COMMAND_RESPONSE,
     ROBOT_DATA,
+    ROBOT_DELETED_DATA,
     ROBOT_ENDPOINT,
     ROBOT_FULL_ID,
     ROBOT_ID,
@@ -163,6 +164,12 @@ async def test_robot_with_drawer_full_status(mock_aioresponse: aioresponses) -> 
     assert robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
 
     await robot._account.disconnect()
+
+
+async def test_robot_deleted(mock_account: Account) -> None:
+    """Tests that robot setup for a deleted robot without serial number throws an error."""
+    with pytest.raises(ValueError):
+        LitterRobot3(data=ROBOT_DELETED_DATA, account=mock_account)
 
 
 @pytest.mark.parametrize(

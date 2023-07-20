@@ -68,6 +68,42 @@ ROBOT_FULL_DATA = {
     "setupDate": "2021-01-01T00:00:00.000000",
 }
 
+ROBOT_DELETED_DATA = {
+    "litterRobotId": "00a2d005ceae00",
+    "litterRobotSerial": None,
+    "litterRobotNickname": "Deleted Test",
+    "deviceType": "udp",
+    "cycleCount": None,
+    "totalCycleCount": None,
+    "cycleCapacity": None,
+    "newCycleCapacity": None,
+    "savedCycleCapacity": None,
+    "isDFITriggered": None,
+    "isDf1Triggered": None,
+    "isDf2Triggered": None,
+    "isDfsTriggered": None,
+    "isManualReset": None,
+    "savedIsManualReset": None,
+    "previousDFITriggered": None,
+    "DFICycleCount": None,
+    "savedCycleCount": None,
+    "cleanCycleWaitTimeMinutes": None,
+    "cyclesAfterDrawerFull": None,
+    "nightLightActive": None,
+    "panelLockActive": None,
+    "sleepModeActive": None,
+    "sleepModeTime": None,
+    "powerStatus": None,
+    "unitStatus": None,
+    "sleepModeEndTime": None,
+    "sleepModeStartTime": None,
+    "lastSeen": None,
+    "setupDate": None,
+    "isOnboarded": False,
+    "didNotifyOffline": None,
+    "autoOfflineDisabled": True,
+}
+
 ROBOT_ENDPOINT = f"{DEFAULT_ENDPOINT}/users/{USER_ID}/robots/%s"
 
 
