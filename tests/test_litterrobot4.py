@@ -353,7 +353,8 @@ async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
 
     # simulate update to cleaning
     robot._update_data({"robotStatus": "ROBOT_CLEAN"}, partial=True)
-    assert robot.status == LitterBoxStatus.CLEAN_CYCLE
+    status = LitterBoxStatus.CLEAN_CYCLE
+    assert robot.status == status
     assert robot.status_code == "CCP"
     assert robot.litter_level == 40
 
