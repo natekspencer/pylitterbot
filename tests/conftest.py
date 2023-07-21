@@ -20,6 +20,7 @@ from .common import (
     INSIGHT_RESPONSE,
     LITTER_ROBOT_4_DATA,
     ROBOT_DATA,
+    ROBOT_DELETED_DATA,
     ROBOT_FULL_DATA,
     USER_RESPONSE,
     get_account,
@@ -75,7 +76,9 @@ def mock_aioresponse() -> aioresponses:
         )
         mock.get(re.compile(".*/users$"), payload=USER_RESPONSE)
         mock.get(
-            re.compile(".*/robots$"), payload=[ROBOT_DATA, ROBOT_FULL_DATA], repeat=True
+            re.compile(".*/robots$"),
+            payload=[ROBOT_DATA, ROBOT_DELETED_DATA, ROBOT_FULL_DATA],
+            repeat=True,
         )
         mock.get(re.compile(".*/activity?.*$"), payload=ACTIVITY_RESPONSE, repeat=True)
         mock.get(re.compile(".*/insights?.*$"), payload=INSIGHT_RESPONSE, repeat=True)
