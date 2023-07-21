@@ -1,5 +1,6 @@
 """Test account module."""
 from __future__ import annotations
+import logging
 
 from unittest.mock import patch
 
@@ -28,7 +29,9 @@ pytestmark = pytest.mark.asyncio
 ROBOT_COUNT = 4
 
 
-async def test_account(mock_aioresponse: aioresponses) -> None:
+async def test_account(
+    mock_aioresponse: aioresponses, caplog: pytest.LogCaptureFixture
+) -> None:
     """Tests that an account is properly setup."""
     account = await get_account()
     assert account.user_id is None
@@ -46,7 +49,12 @@ async def test_account(mock_aioresponse: aioresponses) -> None:
         payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_DATA]}},
         repeat=True,
     )
+    caplog.set_level(logging.INFO)
     await account.load_robots()
+    assert (
+        caplog.messages[-1]
+        == "skipping robot without serial number (id=00a2d005ceae00, name=Deleted Test)"
+    )
     assert len(account.robots) == ROBOT_COUNT
 
     mock_aioresponse.get(ROBOT_ENDPOINT % ROBOT_ID, payload={})
