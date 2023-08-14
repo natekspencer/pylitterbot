@@ -624,7 +624,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                     ),
                     "extensions": {
                         "authorization": {
-                            "Authorization": await self._account.get_bearer_authorization()
+                            "Authorization": await self._account.get_bearer_authorization(),
+                            "host": "lr4.iothings.site",
                         }
                     },
                 },
