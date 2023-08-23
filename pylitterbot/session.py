@@ -213,3 +213,12 @@ class LitterRobotSession(Session):
         if not kwargs.pop("skip_auth", False) and not self.is_token_valid():
             await self.refresh_token()
         return await super().request(method, url, **kwargs)
+
+    def get_user_id(self) -> str | None:
+        """Get the user id from the session."""
+        if self._token is None:
+            return None
+        return jwt.decode(
+            self._token.get("idToken"),
+            options={"verify_signature": False, "verify_exp": False},
+        )["mid"]

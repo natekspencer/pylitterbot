@@ -36,6 +36,7 @@ class Account:
         self._session._custom_args[DEFAULT_ENDPOINT] = {
             "headers": {"x-api-key": decode(DEFAULT_ENDPOINT_KEY)}
         }
+        self._user_id = self._session.get_user_id() if token else None
         self._user: dict = {}
         self._robots: list[Robot] = []
         self._monitors: dict[type[Robot], WebSocketMonitor] = {}
@@ -43,7 +44,9 @@ class Account:
     @property
     def user_id(self) -> str | None:
         """Return the logged in user's id."""
-        return self._user.get("userId")
+        if not self._user_id and self.session:
+            self._user_id = self.session.get_user_id()
+        return self._user_id
 
     @property
     def robots(self) -> list[Robot]:
@@ -84,7 +87,6 @@ class Account:
                     )
 
             if load_robots:
-                await self.refresh_user()
                 await self.load_robots(subscribe_for_updates)
         except ClientResponseError as ex:
             if ex.status == 401:
@@ -103,7 +105,10 @@ class Account:
 
     async def refresh_user(self) -> None:
         """Refresh the logged in user's info."""
-        data = cast(dict, await self.session.get(urljoin(DEFAULT_ENDPOINT, "users")))
+        data = cast(
+            dict,
+            await self.session.get(urljoin(DEFAULT_ENDPOINT, f"users/{self.user_id}")),
+        )
         self._user.update(data.get("user", {}))
 
     async def load_robots(self, subscribe_for_updates: bool = False) -> None:
