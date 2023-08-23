@@ -47,7 +47,10 @@ def mock_aioresponse() -> aioresponses:
             payload={
                 "kind": "kindResponse",
                 "idToken": jwt.encode(
-                    {"exp": datetime.now(tz=timezone.utc) + timedelta(hours=1)},
+                    {
+                        "exp": datetime.now(tz=timezone.utc) + timedelta(hours=1),
+                        "mid": "000000",
+                    },
                     "secret",
                 ),
                 "refreshToken": "refreshTokenResponse",
@@ -61,7 +64,10 @@ def mock_aioresponse() -> aioresponses:
             payload={
                 "access_token": (
                     token := jwt.encode(
-                        {"exp": datetime.now(tz=timezone.utc) + timedelta(hours=1)},
+                        {
+                            "exp": datetime.now(tz=timezone.utc) + timedelta(hours=1),
+                            "mid": "000000",
+                        },
                         "secret",
                     )
                 ),

@@ -218,7 +218,8 @@ class LitterRobotSession(Session):
         """Get the user id from the session."""
         if self._token is None:
             return None
-        return jwt.decode(
+        user_id = jwt.decode(
             self._token.get("idToken"),
             options={"verify_signature": False, "verify_exp": False},
         )["mid"]
+        return cast(str, user_id)
