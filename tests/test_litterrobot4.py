@@ -371,3 +371,40 @@ async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
     robot._update_data({"litterLevel": 481}, partial=True)
     assert robot.status == LitterBoxStatus.READY
     assert robot.litter_level == 30
+
+
+@pytest.mark.parametrize(
+    "updated_data,status",
+    [
+        ({"isOnline": False}, LitterBoxStatus.OFFLINE),
+        (
+            {"isOnline": False, "robotCycleState": "CYCLE_STATE_PAUSE"},
+            LitterBoxStatus.OFFLINE,
+        ),
+        ({"robotCycleState": "CYCLE_STATE_PAUSE"}, LitterBoxStatus.PAUSED),
+        (
+            {"robotCycleState": "CYCLE_STATE_PAUSE", "robotStatus": "ROBOT_CLEAN"},
+            LitterBoxStatus.PAUSED,
+        ),
+        ({"robotStatus": "ROBOT_BONNET"}, LitterBoxStatus.BONNET_REMOVED),
+        ({"robotStatus": "ROBOT_CAT_DETECT"}, LitterBoxStatus.CAT_DETECTED),
+        ({"robotStatus": "ROBOT_CAT_DETECT_DELAY"}, LitterBoxStatus.CAT_SENSOR_TIMING),
+        ({"robotStatus": "ROBOT_CLEAN"}, LitterBoxStatus.CLEAN_CYCLE),
+        ({"robotStatus": "ROBOT_EMPTY"}, LitterBoxStatus.EMPTY_CYCLE),
+        ({"robotStatus": "ROBOT_FIND_DUMP"}, LitterBoxStatus.CLEAN_CYCLE),
+        ({"robotStatus": "ROBOT_IDLE"}, LitterBoxStatus.READY),
+        ({"robotStatus": "ROBOT_POWER_DOWN"}, LitterBoxStatus.POWER_DOWN),
+        ({"robotStatus": "ROBOT_POWER_OFF"}, LitterBoxStatus.OFF),
+        ({"robotStatus": "ROBOT_POWER_UP"}, LitterBoxStatus.POWER_UP),
+    ],
+)
+async def test_litter_robot_4_status(
+    mock_account: Account, updated_data: dict[str, str | bool], status: LitterBoxStatus
+) -> None:
+    """Tests Litter-Robot 4 in various statuses."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+    assert robot.status == LitterBoxStatus.READY
+
+    # update data and assert expected result
+    robot._update_data(updated_data, partial=True)
+    assert robot.status == status
