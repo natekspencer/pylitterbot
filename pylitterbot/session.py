@@ -101,7 +101,9 @@ class Session(ABC):
 
             resp.raise_for_status()
             data = await resp.json()
-            _LOGGER.debug("Received %s response: %s", resp.status, redact(data))
+            _LOGGER.debug(
+                "Received %s response from %s: %s", resp.status, url, redact(data)
+            )
             return data  # type: ignore
 
     async def __aenter__(self: T) -> T:
