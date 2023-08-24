@@ -49,6 +49,7 @@ ACTIVITY_STATUS_MAP: dict[str, LitterBoxStatus | str] = {
     "robotCycleStatusIdle": LitterBoxStatus.CLEAN_CYCLE_COMPLETE,
     "robotStatusCatDetect": LitterBoxStatus.CAT_DETECTED,
 }
+CYCLE_STATE_STATUS_MAP = {"CYCLE_STATE_PAUSE": LitterBoxStatus.PAUSED}
 
 LITTER_LEVEL_EMPTY = 500
 
@@ -242,10 +243,15 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def status(self) -> LitterBoxStatus:
         """Return the status of the Litter-Robot."""
+        if not self.is_online:
+            return LitterBoxStatus.OFFLINE
+        cycle_state = self._data["robotCycleState"]
         status = self._data["robotStatus"]
         if status == "ROBOT_IDLE" and self.is_waste_drawer_full:
             return LitterBoxStatus.DRAWER_FULL
-        return LR4_STATUS_MAP.get(status, LitterBoxStatus.UNKNOWN)
+        return CYCLE_STATE_STATUS_MAP.get(
+            cycle_state, LR4_STATUS_MAP.get(status, LitterBoxStatus.UNKNOWN)
+        )
 
     @property
     def status_code(self) -> str | None:

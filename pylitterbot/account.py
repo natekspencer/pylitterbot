@@ -89,12 +89,14 @@ class Account:
             if load_robots:
                 await self.load_robots(subscribe_for_updates)
         except ClientResponseError as ex:
+            _LOGGER.error(ex)
             if ex.status == 401:
                 raise LitterRobotLoginException(
                     "Unable to login to Litter-Robot with the supplied credentials."
                 ) from ex
             raise LitterRobotException("Unable to login to Litter-Robot.") from ex
         except ClientConnectorError as ex:
+            _LOGGER.error(ex)
             raise LitterRobotException("Unable to reach the Litter-Robot api.") from ex
 
     async def disconnect(self) -> None:
