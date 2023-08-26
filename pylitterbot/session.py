@@ -3,22 +3,27 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from threading import Lock
 from types import TracebackType
 from typing import Any, TypeVar, cast
 
 import jwt
 from aiohttp import ClientSession
 
+from .event import EVENT_UPDATE, Event
 from .exceptions import InvalidCommandException
-from .utils import decode, redact, utcnow
+from .utils import decode, first_value, redact, utcnow
 
 T = TypeVar("T", bound="Session")
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class Session(ABC):
+class Session(Event):
     """Abstract session class."""
+
+    _token: dict | None = None
+    _lock = Lock()
 
     def __init__(self, websession: ClientSession | None = None) -> None:
         """Initialize the session."""
@@ -31,6 +36,18 @@ class Session(ABC):
         if self._websession is None:
             self._websession = ClientSession()
         return self._websession
+
+    @property
+    def tokens(self) -> dict[str, str | None] | None:
+        """Return the tokens."""
+        if not self._token:
+            return None
+        return {
+            "id_token": first_value(self._token, ("id_token", "idToken")),
+            "refresh_token": first_value(
+                self._token, ("refresh_token", "refreshToken")
+            ),
+        }
 
     async def close(self) -> None:
         """Close the session."""
@@ -57,9 +74,19 @@ class Session(ABC):
     def is_token_valid(self) -> bool:
         """Return `True` if the token is stills valid."""
 
-    @abstractmethod
-    async def refresh_token(self) -> None:
+    async def refresh_token(self, ignore_unexpired: bool = False) -> None:
         """Refresh the access token."""
+        if self._token is None:
+            return None
+        with self._lock:
+            if not ignore_unexpired and self.is_token_valid():
+                return
+            self._token = await self._refresh_token()
+            self.emit(EVENT_UPDATE)
+
+    @abstractmethod
+    async def _refresh_token(self) -> dict:
+        """Actual implementation to refresh the access token."""
 
     async def get_bearer_authorization(self) -> str | None:
         """Get the bearer authorization."""
@@ -139,6 +166,7 @@ class LitterRobotSession(Session):
 
         self._token = token
         self._custom_args: dict = {}
+        self._lock = Lock()
 
     def generate_args(self, url: str, **kwargs: Any) -> dict[str, Any]:
         """Generate args."""
@@ -157,7 +185,7 @@ class LitterRobotSession(Session):
             return False
         try:
             jwt.decode(
-                self._token.get("access_token", self._token.get("idToken")),
+                first_value(self._token, ("id_token", "idToken")),
                 options={"verify_signature": False, "verify_exp": True},
                 leeway=-30,
             )
@@ -169,7 +197,7 @@ class LitterRobotSession(Session):
         """Return a valid access token."""
         if self._token is None or not self.is_token_valid():
             return None
-        return self._token.get("access_token", self._token.get("idToken"))
+        return first_value(self._token, ("id_token", "idToken"))
 
     async def login(self, username: str, password: str) -> None:
         """Login to the Litter-Robot api and generate a new token."""
@@ -189,10 +217,8 @@ class LitterRobotSession(Session):
         )
         self._token = cast(dict, data)
 
-    async def refresh_token(self) -> None:
+    async def _refresh_token(self) -> dict:
         """Refresh the access token."""
-        if self._token is None:
-            return None
         data = await self.post(
             self.TOKEN_REFRESH_ENDPOINT,
             skip_auth=True,
@@ -200,12 +226,12 @@ class LitterRobotSession(Session):
             params={"key": decode(self.TOKEN_KEY)},
             json={
                 "grantType": "refresh_token",
-                "refreshToken": self._token.get(
-                    "refresh_token", self._token.get("refreshToken")
+                "refreshToken": first_value(
+                    self._token, ("refresh_token", "refreshToken")
                 ),
             },
         )
-        self._token = cast(dict, data)
+        return cast(dict, data)
 
     async def request(
         self, method: str, url: str, **kwargs: Any
@@ -221,7 +247,11 @@ class LitterRobotSession(Session):
         if self._token is None:
             return None
         user_id = jwt.decode(
-            self._token.get("idToken"),
+            first_value(self._token, ("id_token", "idToken")),
             options={"verify_signature": False, "verify_exp": False},
         )["mid"]
         return cast(str, user_id)
+
+    def has_refresh_token(self) -> bool:
+        """Return `True` if the session has a refresh token."""
+        return first_value(self._token, ("refresh_token", "refreshToken")) is not None

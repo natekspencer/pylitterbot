@@ -388,6 +388,10 @@ async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
             {"robotCycleState": "CYCLE_STATE_PAUSE", "robotStatus": "ROBOT_CLEAN"},
             LitterBoxStatus.PAUSED,
         ),
+        (
+            {"robotCycleState": "CYCLE_STATE_CAT_DETECT"},
+            LitterBoxStatus.CAT_SENSOR_INTERRUPTED,
+        ),
         ({"robotStatus": "ROBOT_BONNET"}, LitterBoxStatus.BONNET_REMOVED),
         ({"robotStatus": "ROBOT_CAT_DETECT"}, LitterBoxStatus.CAT_DETECTED),
         ({"robotStatus": "ROBOT_CAT_DETECT_DELAY"}, LitterBoxStatus.CAT_SENSOR_TIMING),
