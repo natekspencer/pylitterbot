@@ -19,7 +19,7 @@ T = TypeVar("T", bound="Session")
 _LOGGER = logging.getLogger(__name__)
 
 
-class Session(Event):
+class Session(Event, ABC):
     """Abstract session class."""
 
     _token: dict | None = None

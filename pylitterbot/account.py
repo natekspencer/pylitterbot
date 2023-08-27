@@ -49,7 +49,7 @@ class Account:
         if token_update_callback:
             self._session.on(
                 EVENT_UPDATE,
-                lambda session=self._session: token_update_callback(session._token),
+                lambda session=self._session: token_update_callback(session.tokens),  # type: ignore
             )
 
     @property
