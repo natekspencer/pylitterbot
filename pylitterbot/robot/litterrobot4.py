@@ -49,7 +49,10 @@ ACTIVITY_STATUS_MAP: dict[str, LitterBoxStatus | str] = {
     "robotCycleStatusIdle": LitterBoxStatus.CLEAN_CYCLE_COMPLETE,
     "robotStatusCatDetect": LitterBoxStatus.CAT_DETECTED,
 }
-CYCLE_STATE_STATUS_MAP = {"CYCLE_STATE_PAUSE": LitterBoxStatus.PAUSED}
+CYCLE_STATE_STATUS_MAP = {
+    "CYCLE_STATE_CAT_DETECT": LitterBoxStatus.CAT_SENSOR_INTERRUPTED,
+    "CYCLE_STATE_PAUSE": LitterBoxStatus.PAUSED,
+}
 
 LITTER_LEVEL_EMPTY = 500
 

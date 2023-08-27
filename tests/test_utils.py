@@ -1,5 +1,6 @@
 """Test utils module."""
-from pylitterbot.utils import decode, encode, round_time, to_timestamp
+
+from pylitterbot.utils import REDACTED, decode, encode, redact, round_time, to_timestamp
 
 
 def test_round_time_default() -> None:
@@ -20,3 +21,13 @@ def test_encode_decode() -> None:
     assert (encoded := encode(value)) == "dGVzdA=="
     assert decode(encoded) == value
     assert encode({value: value}) == "eyJ0ZXN0IjogInRlc3QifQ=="
+
+
+def test_redact() -> None:
+    """Test redacting values from a dictionary."""
+    assert redact({"litterRobotId": None}) == {"litterRobotId": None}
+    assert redact({"litterRobotId": "someId"}) == {"litterRobotId": REDACTED}
+
+    data = {"key": "value"}
+    assert redact(data) == data
+    assert redact([data, data]) == [data, data]

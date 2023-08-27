@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import TypeVar, cast
 
 from aiohttp import (
@@ -12,6 +13,7 @@ from aiohttp import (
     ClientWebSocketResponse,
 )
 
+from .event import EVENT_UPDATE
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .robot import Robot
 from .robot.feederrobot import FEEDER_ENDPOINT, FEEDER_ROBOT_MODEL, FeederRobot
@@ -29,7 +31,10 @@ class Account:
     """Class with data and methods for interacting with a user's Litter-Robots."""
 
     def __init__(
-        self, token: dict | None = None, websession: ClientSession | None = None
+        self,
+        token: dict | None = None,
+        websession: ClientSession | None = None,
+        token_update_callback: Callable[[dict | None], None] | None = None,
     ) -> None:
         """Initialize the account data."""
         self._session = LitterRobotSession(token=token, websession=websession)
@@ -40,6 +45,12 @@ class Account:
         self._user: dict = {}
         self._robots: list[Robot] = []
         self._monitors: dict[type[Robot], WebSocketMonitor] = {}
+
+        if token_update_callback:
+            self._session.on(
+                EVENT_UPDATE,
+                lambda session=self._session: token_update_callback(session.tokens),  # type: ignore
+            )
 
     @property
     def user_id(self) -> str | None:
@@ -79,7 +90,9 @@ class Account:
         """Connect to the Litter-Robot API."""
         try:
             if not self.session.is_token_valid():
-                if username and password:
+                if self.session.has_refresh_token():
+                    await self.session.refresh_token()
+                elif username and password:
                     await self.session.login(username=username, password=password)
                 else:
                     raise LitterRobotLoginException(

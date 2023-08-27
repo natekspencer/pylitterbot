@@ -12,10 +12,13 @@ from pylitterbot.session import LitterRobotSession
 pytestmark = pytest.mark.asyncio
 
 EXPIRED_ACCESS_TOKEN = {
-    "access_token": jwt.encode(
-        {"exp": datetime.now(tz=timezone.utc) - timedelta(hours=1)},
-        "secret",
+    "access_token": (
+        token := jwt.encode(
+            {"exp": datetime.now(tz=timezone.utc) - timedelta(hours=1)},
+            "secret",
+        )
     ),
+    "id_token": token,
     "refresh_token": "some_refresh_token",
 }
 

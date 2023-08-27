@@ -5,9 +5,9 @@ import json
 import logging
 import re
 from base64 import b64decode, b64encode
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import datetime, time, timezone
-from typing import TypeVar, cast, overload
+from typing import Any, TypeVar, cast, overload
 from urllib.parse import urljoin as _urljoin
 from warnings import warn
 
@@ -18,7 +18,10 @@ ENCODING = "utf-8"
 REDACTED = "**REDACTED**"
 REDACT_FIELDS = [
     "token",
+    "access_token",
+    "id_token",
     "idToken",
+    "refresh_token",
     "refreshToken",
     "userId",
     "userEmail",
@@ -133,3 +136,18 @@ def redact(data: _T) -> _T:
             redacted[key] = [redact(item) for item in value]
 
     return cast(_T, redacted)
+
+
+def first_value(
+    data: dict | None,
+    keys: Iterable,
+    default: Any | None = None,
+    return_none: bool = False,
+) -> Any | None:
+    """Return the first valid key's value."""
+    if not data:
+        return default
+    for key in keys:
+        if key in data and ((value := data[key]) is not None or return_none):
+            return value
+    return default
