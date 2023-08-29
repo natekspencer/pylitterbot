@@ -33,6 +33,7 @@ class Robot(Event):
 
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a robot."""
+        super().__init__()
         self._data: dict = {}
         self._account = account
 

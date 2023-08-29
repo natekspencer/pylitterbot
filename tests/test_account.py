@@ -8,6 +8,7 @@ import pytest
 from aiohttp.client_exceptions import ClientError
 from aioresponses import aioresponses
 
+from pylitterbot import FeederRobot, LitterRobot3
 from pylitterbot.exceptions import LitterRobotException, LitterRobotLoginException
 from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
 
@@ -33,9 +34,10 @@ async def test_account(
     mock_aioresponse: aioresponses, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Tests that an account is properly setup."""
-    account = await get_account()
+    account = await get_account(token_update_callback=lambda token: None)
     assert account.user_id is None
     assert account.robots == []
+    assert len(account.session._listeners) == 1  # pylint: disable=protected-access
 
     with pytest.raises(LitterRobotLoginException):
         await account.connect()
@@ -43,6 +45,12 @@ async def test_account(
     await account.connect(username=USERNAME, password=PASSWORD, load_robots=True)
     assert account.user_id == USER_ID
     assert len(account.robots) == ROBOT_COUNT
+
+    assert len(account.get_robots(LitterRobot3)) == 2
+    assert len(account.get_robots(FeederRobot)) == 1
+
+    for robot in account.robots:
+        assert len(robot._listeners) == 0  # pylint: disable=protected-access
 
     mock_aioresponse.post(
         LR4_ENDPOINT,

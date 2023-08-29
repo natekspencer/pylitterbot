@@ -1,17 +1,18 @@
 """Event handling class for pylitterbot."""
 from __future__ import annotations
 
-from abc import ABC
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 EVENT_UPDATE = "update"
 
 
-class Event(ABC):
+@dataclass
+class Event:
     """Abstract event class properties and methods."""
 
-    _listeners: dict[str, list[Callable]] = {}
+    _listeners: dict[str, list[Callable]] = field(default_factory=dict)
 
     def emit(self, event_name: str, *args: Any, **kwargs: Any) -> None:
         """Run all callbacks for an event."""

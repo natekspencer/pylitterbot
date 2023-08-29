@@ -1,6 +1,7 @@
 """Common test module."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -269,7 +270,11 @@ FEEDER_ROBOT_DATA: dict[str, Any] = {
 }
 
 
-async def get_account(logged_in: bool = False, load_robots: bool = False) -> Account:
+async def get_account(
+    logged_in: bool = False,
+    load_robots: bool = False,
+    token_update_callback: Callable[[dict | None], None] | None = None,
+) -> Account:
     """Get an account that has the underlying API patched."""
     with patch(
         "pylitterbot.session.ClientSession.ws_connect",
@@ -277,7 +282,7 @@ async def get_account(logged_in: bool = False, load_robots: bool = False) -> Acc
             Mock(), Mock(), Mock(), Mock(), Mock(), Mock(), Mock(), Mock()
         ),
     ):
-        account = Account()
+        account = Account(token_update_callback=token_update_callback)
         if logged_in:
             await account.connect(
                 username=USERNAME, password=PASSWORD, load_robots=load_robots
