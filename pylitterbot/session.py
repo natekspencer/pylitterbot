@@ -27,6 +27,7 @@ class Session(Event, ABC):
 
     def __init__(self, websession: ClientSession | None = None) -> None:
         """Initialize the session."""
+        super().__init__()
         self._websession_provided = websession is not None
         self._websession = websession
 
