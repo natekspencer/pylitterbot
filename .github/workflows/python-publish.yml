@@ -12,13 +12,12 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Build and publish to pypi
-        uses: JRubics/poetry-publish@v1.16
+        uses: JRubics/poetry-publish@v1.17
         with:
-          poetry_version: "==1.5.1"
           pypi_token: ${{ secrets.PYPI_TOKEN }}
-          plugins: "poetry-dynamic-versioning-plugin"
+          plugins: "poetry-dynamic-versioning[plugin]"
