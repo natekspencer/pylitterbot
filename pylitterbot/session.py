@@ -79,7 +79,7 @@ class Session(Event, ABC):
         """Refresh the access token."""
         if self._token is None:
             return None
-        with self._lock:
+        async with self._lock:
             if not ignore_unexpired and self.is_token_valid():
                 return
             self._token = await self._refresh_token()
