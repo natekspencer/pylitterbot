@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from threading import Lock
+from asyncio import Lock
 from types import TracebackType
 from typing import Any, TypeVar, cast
 
@@ -83,7 +83,7 @@ class Session(Event, ABC):
             if not ignore_unexpired and self.is_token_valid():
                 return
             self._token = await self._refresh_token()
-            self.emit(EVENT_UPDATE)
+        self.emit(EVENT_UPDATE)
 
     @abstractmethod
     async def _refresh_token(self) -> dict:
@@ -167,7 +167,6 @@ class LitterRobotSession(Session):
 
         self._token = token
         self._custom_args: dict = {}
-        self._lock = Lock()
 
     def generate_args(self, url: str, **kwargs: Any) -> dict[str, Any]:
         """Generate args."""
