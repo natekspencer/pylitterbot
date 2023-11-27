@@ -117,7 +117,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
         """Return the number of minutes after a cat uses the Litter-Robot to begin an automatic clean cycle."""
-        return self._data.get("cleanCycleWaitTime", 7)
+        return cast(int, self._data.get("cleanCycleWaitTime", 7))
 
     @property
     def firmware(self) -> str:
@@ -131,22 +131,22 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def firmware_update_status(self) -> str:
         """Return the firmware update status."""
-        return self._data.get("firmwareUpdateStatus", "UNKNOWN")
+        return cast(str, self._data.get("firmwareUpdateStatus", "UNKNOWN"))
 
     @property
     def firmware_update_triggered(self) -> bool:
         """Return `True` if a firmware update has been triggered."""
-        return self._data.get("isFirmwareUpdateTriggered", False)
+        return self._data.get("isFirmwareUpdateTriggered") is True
 
     @property
     def is_drawer_full_indicator_triggered(self) -> bool:
         """Return `True` if the drawer full indicator has been triggered."""
-        return self._data.get("isDFIFull", False)
+        return self._data.get("isDFIFull") is True
 
     @property
     def is_online(self) -> bool:
         """Return `True` if the robot is online."""
-        return self._data.get("isOnline", False)
+        return self._data.get("isOnline") is True
 
     @property
     def is_sleeping(self) -> bool:
@@ -156,7 +156,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def is_waste_drawer_full(self) -> bool:
         """Return `True` if the Litter-Robot is reporting that the waste drawer is full."""
-        return self._data.get("isDFIFull", False)
+        return self._data.get("isDFIFull") is True
 
     @property
     def litter_level(self) -> float:
@@ -218,12 +218,12 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def panel_lock_enabled(self) -> bool:
         """Return `True` if the buttons on the robot are disabled."""
-        return self._data.get("isKeypadLockout", False)
+        return self._data.get("isKeypadLockout") is True
 
     @property
     def pet_weight(self) -> float:
         """Return the last recorded pet weight in pounds (lbs)."""
-        return self._data.get("catWeight", 0)
+        return cast(float, self._data.get("catWeight", 0))
 
     @property
     def sleep_mode_enabled(self) -> bool:
@@ -268,7 +268,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def waste_drawer_level(self) -> float:
         """Return the approximate waste drawer level."""
-        return self._data.get("DFILevelPercent", 0)
+        return cast(float, self._data.get("DFILevelPercent", 0))
 
     def _revalidate_sleep_info(self) -> None:
         """Revalidate sleep info."""

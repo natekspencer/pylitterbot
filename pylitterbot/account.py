@@ -49,7 +49,7 @@ class Account:
         if token_update_callback:
             self._session.on(
                 EVENT_UPDATE,
-                lambda session=self._session: token_update_callback(session.tokens),  # type: ignore
+                lambda session=self._session: token_update_callback(session.tokens),
             )
 
     @property
@@ -177,11 +177,11 @@ class Account:
                         await robot.subscribe()
                 robots.append(robot)
 
-            for robot_data in resp[0]:
+            for robot_data in resp[0]:  # type: ignore
                 await update_or_create_robot(LitterRobot3, robot_data)
-            for robot_data in resp[1].get("data").get("getLitterRobot4ByUser") or []:
+            for robot_data in resp[1].get("data").get("getLitterRobot4ByUser") or []:  # type: ignore
                 await update_or_create_robot(LitterRobot4, robot_data)
-            for robot_data in resp[2].get("data").get("feeder_unit") or []:
+            for robot_data in resp[2].get("data", {}).get("feeder_unit") or []:  # type: ignore
                 await update_or_create_robot(FeederRobot, robot_data)
 
             self._robots = robots

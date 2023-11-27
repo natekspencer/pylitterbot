@@ -5,7 +5,7 @@ import logging
 from abc import abstractmethod
 from collections.abc import Callable
 from datetime import datetime, time
-from typing import Any
+from typing import Any, cast
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
@@ -75,7 +75,7 @@ class LitterRobot(Robot):
     @property
     def is_onboarded(self) -> bool:
         """Return `True` if the Litter-Robot is onboarded."""
-        return self._data.get("isOnboarded", False)
+        return self._data.get("isOnboarded") is True
 
     @property
     @abstractmethod
@@ -100,7 +100,7 @@ class LitterRobot(Robot):
         `DC` = battery backup
         `NC` = unknown, not connected or off
         """
-        return self._data.get(self._data_power_status, "NC")
+        return cast(str, self._data.get(self._data_power_status, "NC"))
 
     @property
     @abstractmethod
