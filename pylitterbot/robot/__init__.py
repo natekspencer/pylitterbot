@@ -5,7 +5,7 @@ import logging
 from abc import abstractmethod
 from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from aiohttp import ClientWebSocketResponse
 from deepdiff import DeepDiff
@@ -69,7 +69,7 @@ class Robot(Event):
     @property
     def name(self) -> str:
         """Return the name of the robot, if any."""
-        return self._data.get(self._data_name, "")
+        return cast(str, self._data.get(self._data_name, ""))
 
     @property
     @abstractmethod
@@ -94,7 +94,7 @@ class Robot(Event):
     @property
     def serial(self) -> str:
         """Return the serial of the robot, if any."""
-        return self._data.get(self._data_serial, "")
+        return cast(str, self._data.get(self._data_serial, ""))
 
     @property
     def setup_date(self) -> datetime | None:
