@@ -6,6 +6,7 @@ To run tests, you must have `pytest`, `pytest-asyncio` and `pytest-cov` installe
 
 ```bash
 mypy pylitterbot tests
-pylint pylitterbot tests
+ruff check
+ruff format
 pytest --cov --cov-report term-missing -vv
 ```
