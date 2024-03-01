@@ -15,14 +15,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install poetry
         run: pipx install poetry
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: "poetry"
@@ -30,11 +30,8 @@ jobs:
         run: poetry install
       - name: Run linting
         run: |
-          poetry run isort .
-          poetry run black . --check
-          poetry run flake8 .
-          poetry run pylint pylitterbot tests
-          poetry run pydocstyle pylitterbot tests
+          poetry run ruff check .
+          poetry run ruff format . --check
       - name: Run mypy
         run: poetry run mypy pylitterbot tests
       - name: Test with pytest
