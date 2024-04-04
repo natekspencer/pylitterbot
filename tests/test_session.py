@@ -1,4 +1,5 @@
 """Test session module."""
+
 # pylint: disable=protected-access
 from datetime import datetime, timedelta, timezone
 

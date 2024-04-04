@@ -1,4 +1,5 @@
 """Account access and data handling for Litter-Robot endpoint."""
+
 from __future__ import annotations
 
 import asyncio

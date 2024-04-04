@@ -1,4 +1,5 @@
 """Tests module."""
+
 from pylitterbot import __version__
 
 

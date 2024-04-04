@@ -1,4 +1,5 @@
 """Utilities module."""
+
 from __future__ import annotations
 
 import json
@@ -109,8 +110,7 @@ def redact(data: Mapping) -> dict:  # type: ignore[overload-overlap]
 
 
 @overload
-def redact(data: _T) -> _T:
-    ...
+def redact(data: _T) -> _T: ...
 
 
 def redact(data: _T) -> _T:

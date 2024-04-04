@@ -1,4 +1,5 @@
 """Test feederrobot module."""
+
 # pylint: disable=protected-access
 import pytest
 from aioresponses import aioresponses
