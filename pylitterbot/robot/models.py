@@ -1,4 +1,5 @@
 """pylitterbot robot models."""
+
 FEEDER_ROBOT_MODEL = """
 {
     id

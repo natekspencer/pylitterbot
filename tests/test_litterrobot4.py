@@ -1,4 +1,5 @@
 """Test litterrobot4 module."""
+
 # pylint: disable=protected-access
 from __future__ import annotations
 

@@ -1,4 +1,5 @@
 """Test robot module."""
+
 # pylint: disable=protected-access
 import asyncio
 import logging

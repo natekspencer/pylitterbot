@@ -1,4 +1,5 @@
 """Litter-Robot 3."""
+
 from __future__ import annotations
 
 import logging
