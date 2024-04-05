@@ -117,5 +117,8 @@ LITTER_ROBOT_4_MODEL = f"""
     USBFaultStatus
     isDFIPartialFull
     isLaserDirty
+    surfaceType
+    hopperStatus
+    scoopsSavedCount
 }}
 """
