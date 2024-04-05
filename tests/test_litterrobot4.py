@@ -405,6 +405,17 @@ async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
         ({"robotStatus": "ROBOT_POWER_OFF"}, LitterBoxStatus.OFF),
         ({"robotStatus": "ROBOT_POWER_UP"}, LitterBoxStatus.POWER_UP),
         ({"displayCode": "DC_CAT_DETECT"}, LitterBoxStatus.CAT_DETECTED),
+        (
+            {"displayCode": "DC_CAT_DETECT", "robotStatus": "ROBOT_CAT_DETECT_DELAY"},
+            LitterBoxStatus.CAT_SENSOR_TIMING,
+        ),
+        (
+            {
+                "displayCode": "DC_CAT_DETECT",
+                "robotCycleState": "CYCLE_STATE_CAT_DETECT",
+            },
+            LitterBoxStatus.CAT_SENSOR_INTERRUPTED,
+        ),
     ],
 )
 async def test_litter_robot_4_status(

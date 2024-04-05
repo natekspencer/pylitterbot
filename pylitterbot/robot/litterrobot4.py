@@ -260,11 +260,12 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             return LitterBoxStatus.OFFLINE
         if status := CYCLE_STATE_STATUS_MAP.get(self._data["robotCycleState"]):
             return status
-        if status := DISPLAY_CODE_STATUS_MAP.get(self._data["displayCode"]):
-            return status
         status = LR4_STATUS_MAP.get(self._data["robotStatus"], LitterBoxStatus.UNKNOWN)
-        if status == LitterBoxStatus.READY and self.is_waste_drawer_full:
-            return LitterBoxStatus.DRAWER_FULL
+        if status == LitterBoxStatus.READY:
+            if display_code := DISPLAY_CODE_STATUS_MAP.get(self._data["displayCode"]):
+                return display_code
+            if self.is_waste_drawer_full:
+                return LitterBoxStatus.DRAWER_FULL
         return status
 
     @property
