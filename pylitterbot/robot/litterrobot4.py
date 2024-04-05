@@ -54,6 +54,7 @@ CYCLE_STATE_STATUS_MAP = {
     "CYCLE_STATE_CAT_DETECT": LitterBoxStatus.CAT_SENSOR_INTERRUPTED,
     "CYCLE_STATE_PAUSE": LitterBoxStatus.PAUSED,
 }
+DISPLAY_CODE_STATUS_MAP = {"DC_CAT_DETECT": LitterBoxStatus.CAT_DETECTED}
 
 LITTER_LEVEL_EMPTY = 500
 
@@ -246,16 +247,25 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def status(self) -> LitterBoxStatus:
-        """Return the status of the Litter-Robot."""
+        """Return the status of the Litter-Robot.
+
+        The Litter-Robot 4's status is determined based on the values of:
+          - `displayCode`
+          - `robotCycleState`
+          - `robotStatus`
+          - `isDFIFull`
+          - `isOnline`
+        """
         if not self.is_online:
             return LitterBoxStatus.OFFLINE
-        cycle_state = self._data["robotCycleState"]
-        status = self._data["robotStatus"]
-        if status == "ROBOT_IDLE" and self.is_waste_drawer_full:
+        if status := CYCLE_STATE_STATUS_MAP.get(self._data["robotCycleState"]):
+            return status
+        if status := DISPLAY_CODE_STATUS_MAP.get(self._data["displayCode"]):
+            return status
+        status = LR4_STATUS_MAP.get(self._data["robotStatus"], LitterBoxStatus.UNKNOWN)
+        if status == LitterBoxStatus.READY and self.is_waste_drawer_full:
             return LitterBoxStatus.DRAWER_FULL
-        return CYCLE_STATE_STATUS_MAP.get(
-            cycle_state, LR4_STATUS_MAP.get(status, LitterBoxStatus.UNKNOWN)
-        )
+        return status
 
     @property
     def status_code(self) -> str | None:
