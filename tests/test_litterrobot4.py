@@ -379,6 +379,7 @@ async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
 @pytest.mark.parametrize(
     "updated_data,status",
     [
+        ({"isDFIFull": True}, LitterBoxStatus.DRAWER_FULL),
         ({"isOnline": False}, LitterBoxStatus.OFFLINE),
         (
             {"isOnline": False, "robotCycleState": "CYCLE_STATE_PAUSE"},
@@ -403,6 +404,7 @@ async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
         ({"robotStatus": "ROBOT_POWER_DOWN"}, LitterBoxStatus.POWER_DOWN),
         ({"robotStatus": "ROBOT_POWER_OFF"}, LitterBoxStatus.OFF),
         ({"robotStatus": "ROBOT_POWER_UP"}, LitterBoxStatus.POWER_UP),
+        ({"displayCode": "DC_CAT_DETECT"}, LitterBoxStatus.CAT_DETECTED),
     ],
 )
 async def test_litter_robot_4_status(

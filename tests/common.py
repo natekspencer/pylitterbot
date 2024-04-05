@@ -168,6 +168,7 @@ LITTER_ROBOT_4_DATA: dict[str, Any] = {
     "firmwareUpdateStatus": "SUCCEEDED",
     "unitPowerType": "AC",
     "catWeight": 7.93,
+    "displayCode": "DC_MODE_IDLE",
     "unitTimezone": "America/Denver",
     "cleanCycleWaitTime": 7,
     "isKeypadLockout": False,
