@@ -16,6 +16,7 @@ from aiohttp import (
 
 from .event import EVENT_UPDATE
 from .exceptions import LitterRobotException, LitterRobotLoginException
+from .pet import Pet
 from .robot import Robot
 from .robot.feederrobot import FEEDER_ENDPOINT, FEEDER_ROBOT_MODEL, FeederRobot
 from .robot.litterrobot3 import DEFAULT_ENDPOINT, DEFAULT_ENDPOINT_KEY, LitterRobot3
@@ -45,6 +46,7 @@ class Account:
         self._user_id = self._session.get_user_id() if token else None
         self._user: dict = {}
         self._robots: list[Robot] = []
+        self._pets: list[Pet] = []
         self._monitors: dict[type[Robot], WebSocketMonitor] = {}
 
         if token_update_callback:
@@ -66,6 +68,11 @@ class Account:
         return self._robots
 
     @property
+    def pets(self) -> list[Robot]:
+        """Return the set of pets for the logged in account."""
+        return self._pets
+
+    @property
     def session(self) -> LitterRobotSession:
         """Return the associated session on the account."""
         return self._session
@@ -81,11 +88,23 @@ class Account:
         """If found, return the specified class of robots."""
         return [robot for robot in self._robots if isinstance(robot, robot_class)]
 
+    def get_pet(self, pet_id: str | int | None) -> Pet | None:
+        """If found, return the robot with the specified id."""
+        return next(
+            (pet for pet in self._pets if pet.id == str(pet_id)),
+            None,
+        )
+
+    def get_pets(self) -> list[Pet]:
+        """Return all pets."""
+        return self._pets
+
     async def connect(
         self,
         username: str | None = None,
         password: str | None = None,
         load_robots: bool = False,
+        load_pets: bool = False,
         subscribe_for_updates: bool = False,
     ) -> None:
         """Connect to the Litter-Robot API."""
@@ -102,6 +121,10 @@ class Account:
 
             if load_robots:
                 await self.load_robots(subscribe_for_updates)
+
+            if load_pets:
+                await self.load_pets()
+
         except ClientResponseError as ex:
             _LOGGER.error(ex)
             if ex.status == 401:
@@ -126,6 +149,11 @@ class Account:
             await self.session.get(urljoin(DEFAULT_ENDPOINT, f"users/{self.user_id}")),
         )
         self._user.update(data.get("user", {}))
+
+    async def load_pets(self) -> None:
+        """Get information about the pets connected to the account."""
+        self._pets = await Pet.fetch_pets_for_user(self.user_id, self._session)
+        return self._pets
 
     async def load_robots(self, subscribe_for_updates: bool = False) -> None:
         """Get information about robots connected to the account."""
