@@ -1,3 +1,5 @@
+"""Sample file."""
+
 import asyncio
 
 from pylitterbot import Account
@@ -8,6 +10,7 @@ password = "Your password"
 
 
 async def main():
+    """Run main function."""
     # Create an account.
     account = Account()
 
