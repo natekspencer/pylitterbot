@@ -27,12 +27,7 @@ async def main():
 
         print("Pets:")
         for pet in account.pets:
-            await pet.fetch_image()
-            if pet.image:
-                pet.image.save(pet.name + ".jpeg")
-            else:
-                print("No pet image.")
-
+            print(pet)
             weight_history = await pet.fetch_weight_history()
             for weight in weight_history:
                 print(weight)

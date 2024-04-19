@@ -68,7 +68,7 @@ class Account:
         return self._robots
 
     @property
-    def pets(self) -> list[Robot]:
+    def pets(self) -> list[Pet]:
         """Return the set of pets for the logged in account."""
         return self._pets
 
@@ -88,24 +88,20 @@ class Account:
         """If found, return the specified class of robots."""
         return [robot for robot in self._robots if isinstance(robot, robot_class)]
 
-    def get_pet(self, pet_id: str | int | None) -> Pet | None:
-        """If found, return the robot with the specified id."""
+    def get_pet(self, pet_id: str) -> Pet | None:
+        """If found, return the pet with the specified id."""
         return next(
-            (pet for pet in self._pets if pet.id == str(pet_id)),
+            (pet for pet in self._pets if pet.id == pet_id),
             None,
         )
-
-    def get_pets(self) -> list[Pet]:
-        """Return all pets."""
-        return self._pets
 
     async def connect(
         self,
         username: str | None = None,
         password: str | None = None,
         load_robots: bool = False,
-        load_pets: bool = False,
         subscribe_for_updates: bool = False,
+        load_pets: bool = False,
     ) -> None:
         """Connect to the Litter-Robot API."""
         try:
@@ -152,8 +148,16 @@ class Account:
 
     async def load_pets(self) -> None:
         """Get information about the pets connected to the account."""
-        self._pets = await Pet.fetch_pets_for_user(self.user_id, self._session)
-        return self._pets
+        assert self.user_id
+        pets = await Pet.fetch_pets_for_user(self._session, self.user_id)
+        if not self._pets:
+            self._pets = pets
+        else:
+            for pet in pets:
+                if existing_pet := self.get_pet(pet.id):
+                    existing_pet._update_data(pet._data)
+                else:
+                    self._pets.append(pet)
 
     async def load_robots(self, subscribe_for_updates: bool = False) -> None:
         """Get information about robots connected to the account."""

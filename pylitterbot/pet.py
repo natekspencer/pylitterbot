@@ -1,182 +1,187 @@
+"""Pet profiles."""
+
+from __future__ import annotations
+
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum, unique
-from io import BytesIO
-from typing import Optional, cast
+from typing import cast
 
-from aiohttp import ClientSession
-from PIL import Image
+from deepdiff import DeepDiff
 
-from .event import Event
+from .event import EVENT_UPDATE, Event
 from .exceptions import InvalidCommandException, LitterRobotException
 from .session import Session
 from .utils import to_timestamp
 
+_LOGGER = logging.getLogger(__name__)
+
 PET_PROFILE_ENDPOINT = "https://pet-profile.iothings.site/graphql/"
 
-
-@unique
-class PetGender(Enum):
-    MALE = "MALE"
-    FEMALE = "FEMALE"
+PET_MODEL = """
+{
+    petId
+    userId
+    createdAt
+    name
+    type
+    gender
+    weight
+    weightLastUpdated
+    lastWeightReading
+    breeds
+    age
+    birthday
+    adoptionDate
+    s3ImageURL
+    diet
+    isFixed
+    environmentType
+    healthConcerns
+    isActive
+    whiskerProducts
+    petTagId
+    weightIdFeatureEnabled
+}
+"""
 
 
 @unique
 class PetDiet(Enum):
-    WET = "WET"
-    DRY = "DRY"
+    """Pet diet."""
+
+    WET = "WET_FOOD"
+    DRY = "DRY_FOOD"
     BOTH = "BOTH"
 
+    def __str__(self) -> str:
+        """Return str(self)."""
+        return "wet/dry" if self == PetDiet.BOTH else self.name.lower()
 
-class PetEnvironmentType(Enum):
+
+@unique
+class PetEnvironment(Enum):
+    """Pet environment."""
+
     INDOOR = "INDOOR"
     OUTDOOR = "OUTDOOR"
     BOTH = "BOTH"
 
+    def __str__(self) -> str:
+        """Return str(self)."""
+        return "indoor/outdoor" if self == PetEnvironment.BOTH else self.name.lower()
+
+
+@unique
+class PetGender(Enum):
+    """Pet gender."""
+
+    FEMALE = "FEMALE"
+    MALE = "MALE"
+
+    def __str__(self) -> str:
+        """Return str(self)."""
+        return self.name.lower()
+
+
+@unique
+class PetType(Enum):
+    """Pet type."""
+
+    CAT = "CAT"
+    DOG = "DOG"
+
+    def __str__(self) -> str:
+        """Return str(self)."""
+        return self.name.lower()
+
 
 @dataclass
 class WeightMeasurement:
-    KG_TO_LBS = 2.20462262185
+    """Weight measurement."""
 
-    timestamp: datetime | date
+    timestamp: datetime
     weight: float
 
-    def in_kg(self) -> float:
-        return self.weight / self.KG_TO_LBS
-
-    def in_lbs(self) -> float:
-        return self.weight
-
     def __str__(self) -> str:
+        """Return self(str)."""
         return f"{self.timestamp.isoformat()}: {self.weight} lbs"
 
 
 class Pet(Event):
-    @classmethod
-    async def fetch_pets_for_user(cls, user_id: str, session: Session) -> list["Pet"]:
-        query = """
-            query GetPetsByUser($userId: String!) {
-                getPetsByUser(userId: $userId ) {
-                    petId
-                    userId
-                    name
-                    type
-                    gender
-                    weight
-                    lastWeightReading
-                    breeds
-                    age
-                    birthday
-                    adoptionDate
-                    s3ImageURL
-                    diet
-                    isFixed
-                    environmentType
-                    healthConcerns
-                    isActive
-                    petTagId
-                    weightIdFeatureEnabled
-                }
-            }
-        """
-        vars = {"userId": user_id}
+    """Pet profile."""
 
-        res = await cls.query_graphql_api(session, PET_PROFILE_ENDPOINT, query, vars)
-
-        pets_data = cast(dict, res).get("data", {}).get("getPetsByUser", {})
-
-        return [cls(pet_data, session) for pet_data in pets_data]
-
-    @classmethod
-    async def fetch_pet_with_id(
-        cls, pet_id: str, session: Session, fetch_weight_history=True
-    ) -> "Pet":
-        query = """
-            query GetPetByPetId($petId: String!) {
-                getPetByPetId(petId: $petId ) {
-                    petId
-                    userId
-                    name
-                    type
-                    gender
-                    weight
-                    lastWeightReading
-                    breeds
-                    age
-                    birthday
-                    adoptionDate
-                    s3ImageURL
-                    diet
-                    isFixed
-                    environmentType
-                    healthConcerns
-                    isActive
-                    petTagId
-                    weightIdFeatureEnabled
-                }
-            }
-        """
-        vars = {"petId": pet_id}
-
-        res = await cls.query_graphql_api(session, PET_PROFILE_ENDPOINT, query, vars)
-
-        pet_data = cast(dict, res).get("data", {}).get("getPetByPetId", {})
-
-        pet = cls(pet_data, session)
-
-        return pet
-
-    def __init__(self, data: dict, session: Session, fetch_image: bool = False) -> None:
+    def __init__(self, data: dict, session: Session) -> None:
+        """Initialize a pet profile."""
         super().__init__()
         self._data: dict = data
-        self._image: Optional[Image.Image] = None
         self._session: Session = session
 
-    @property
-    def id(self) -> Optional[str]:
-        return self._data.get("petId")
+    def __str__(self) -> str:
+        """Return str(self)."""
+        return f"Name: {self.name}, Gender: {self.gender}, Type: {self.pet_type}, Breed: {self.breeds}, id: {self.id}"
 
     @property
-    def name(self) -> Optional[str]:
-        return self._data.get("name")
+    def id(self) -> str:
+        """Return the id of the pet."""
+        return cast(str, self._data.get("petId"))
 
     @property
-    def animal_type(self) -> Optional[str]:
-        return self._data.get("type")
+    def name(self) -> str:
+        """Return the name of the pet."""
+        return cast(str, self._data.get("name"))
 
     @property
-    def gender(self) -> Optional[PetGender]:
-        gender_str = self._data.get("gender")
-        return PetGender(gender_str) if gender_str else None
+    def pet_type(self) -> PetType | None:
+        """Return the type of pet."""
+        if (pet_type := self._data.get("type")) not in PetType:
+            _LOGGER.error('Unknown pet type "%s"', pet_type)
+            return None
+        return PetType(pet_type)
 
     @property
-    def manually_recorded_weight(self) -> Optional[float]:
-        return self._data.get("weight")
+    def gender(self) -> PetGender | None:
+        """Return the gender."""
+        if (gender := self._data.get("gender")) not in PetGender:
+            _LOGGER.error('Unknown gender "%s"', gender)
+            return None
+        return PetGender(gender)
 
     @property
-    def last_weight_reading(self) -> Optional[float]:
+    def estimated_weight(self) -> float:
+        """Return the estimated weight in pounds (lbs)."""
+        return cast(float, self._data.get("weight"))
+
+    @property
+    def last_weight_reading(self) -> float | None:
+        """Return the last weight reading in pounds (lbs), if any."""
         return self._data.get("lastWeightReading")
 
     @property
-    def weight(self) -> Optional[float]:
-        return self.last_weight_reading or self.manually_recorded_weight
+    def weight(self) -> float:
+        """Return the weight in pounds (lbs)."""
+        return self.last_weight_reading or self.estimated_weight
 
     @property
-    def breeds(self) -> Optional[list[str]]:
+    def breeds(self) -> list[str] | None:
+        """Return the breeds, if known."""
         return self._data.get("breeds")
 
     @property
-    def age(self) -> Optional[int]:
-        age = self._data.get("age")
-        return int(age) if age is not None else None
+    def age(self) -> int | None:
+        """Return the age, if known."""
+        return self._data.get("age")
 
     @property
-    def birthday(self) -> Optional[date]:
+    def birthday(self) -> date | None:
+        """Return the birthday, if known."""
         birthday_str = self._data.get("birthday")
         return datetime.fromisoformat(birthday_str).date() if birthday_str else None
 
     @property
-    def adoption_date(self) -> Optional[date]:
+    def adoption_date(self) -> date | None:
+        """Return the adoption date, if known."""
         adoption_date_str = self._data.get("adoptionDate")
         return (
             datetime.fromisoformat(adoption_date_str).date()
@@ -185,54 +190,125 @@ class Pet(Event):
         )
 
     @property
-    def image(self) -> Optional[Image.Image]:
-        return self._image
+    def diet(self) -> PetDiet | None:
+        """Return the diet, if any."""
+        if (diet := self._data.get("diet")) not in PetDiet:
+            _LOGGER.error('Unknown diet "%s"', diet)
+            return None
+        return PetDiet(diet)
 
     @property
-    def diet(self) -> Optional[PetDiet]:
-        diet_str = self._data.get("diet")
-        return PetDiet(diet_str) if diet_str else None
+    def environment_type(self) -> PetEnvironment | None:
+        """Return the environment type, if any."""
+        if (environment := self._data.get("environmentType")) not in PetEnvironment:
+            _LOGGER.error('Unknown environment type "%s"', environment)
+            return None
+        return PetEnvironment(environment)
 
     @property
-    def neutered(self) -> Optional[bool]:
-        return self._data.get("fixed")
-
-    @property
-    def environment_type(self) -> Optional[PetEnvironmentType]:
-        env_type_str = self._data.get("environmentType")
-        return PetEnvironmentType(env_type_str) if env_type_str else None
-
-    @property
-    def health_concerns(self) -> Optional[list[str]]:
+    def health_concerns(self) -> list[str] | None:
+        """Return a list of health concerns, if any."""
         return self._data.get("healthConcerns")
 
     @property
-    def is_active(self) -> Optional[bool]:
-        return self._data.get("isActive", False)
+    def image_url(self) -> str | None:
+        """Return image url, if any."""
+        return self._data.get("s3ImageURL")
 
     @property
-    def pet_tag_id(self) -> Optional[str]:
+    def is_active(self) -> bool | None:
+        """Return if the pet profile is active."""
+        return cast(bool, self._data.get("isActive", False))
+
+    @property
+    def is_fixed(self) -> bool | None:
+        """Return `True` if the pet is fixed."""
+        return cast(bool, self._data.get("isFixed", False))
+
+    @property
+    def pet_tag_id(self) -> str | None:
+        """Return the pet tag id, if any."""
         return self._data.get("petTagID")
 
     @property
-    def weighing_feature_enabled(self) -> bool:
-        return self._data.get("weightIdFeatureEnabled", False)
+    def weight_id_feature_enabled(self) -> bool:
+        """Return `True` if the weight id feature is enabled."""
+        return cast(bool, self._data.get("weightIdFeatureEnabled", False))
 
-    async def fetch_image(self) -> Optional[Image.Image]:
-        img_url = self._data.get("s3ImageURL")
-        if not img_url:
-            return None
+    def _update_data(self, data: dict, partial: bool = False) -> None:
+        """Save the pet info from a data dictionary."""
+        if diff := DeepDiff(
+            self._data,
+            {**self._data, **data} if partial else data,
+            ignore_order=True,
+            report_repetition=True,
+            verbose_level=2,
+        ):
+            _LOGGER.debug("%s updated: %s", self.name, diff)
 
-        async with self._session.websession.get(img_url) as res:
-            if res.status == 200:
-                self._image = Image.open(BytesIO(await res.read()), formats=["jpeg"])
-                return self._image
-            elif res.status == 403 and "Request has expired" in await res.text():
-                pass
-                # Access denied, possibly due to expired request
-                # "<?xml version="1.0" encoding="UTF-8"?><Error><Code>AccessDenied</Code><Message>Request has expired</Message><X-Amz-Expires>3600</X-Amz-Expires><Expires>2023-12-19T05:07:47Z</Expires><ServerTime>2023-12-19T18:45:49Z</ServerTime><RequestId>AH6DJ93C53S21WNS</RequestId><HostId>74sFJR/IgOHg0yih5GXIR8pjK30D79IMRHBFNe/tRAY3jGvmP+cGKJPXJrGRS1ZGW690gym2AMI=</HostId></Error>"
+        self._data.update(data)
+        self.emit(EVENT_UPDATE)
 
     async def fetch_weight_history(self, limit: int = 50) -> list[WeightMeasurement]:
+        """Fetch a pet's weight history."""
+        weight_data = await self.query_weight_history(self._session, self.id, limit)
+        return [
+            WeightMeasurement(
+                cast(datetime, to_timestamp(entry["timestamp"])), entry["weight"]
+            )
+            for entry in weight_data
+            if entry["timestamp"]
+        ]
+
+    async def refresh(self) -> None:
+        """Refresh the data for the pet."""
+        data = await self.query_by_id(self._session, self.id)
+        self._update_data(data)
+
+    @classmethod
+    async def fetch_pets_for_user(cls, session: Session, user_id: str) -> list[Pet]:
+        """Fetch pets for a user."""
+        pets_data = await cls.query_by_user(session, user_id)
+        return [cls(pet_data, session) for pet_data in pets_data]
+
+    @classmethod
+    async def fetch_pet_by_id(cls, session: Session, pet_id: str) -> Pet:
+        """Fetch a pet by id."""
+        pet_data = await cls.query_by_id(session, pet_id)
+        pet = cls(pet_data, session)
+        return pet
+
+    @staticmethod
+    async def query_by_user(session: Session, user_id: str) -> list[dict]:
+        """Query pets for a user."""
+        query = f"""
+            query GetPetsByUser($userId: String!) {{
+                getPetsByUser(userId: $userId ) {PET_MODEL}
+            }}
+        """
+        vars = {"userId": user_id}
+
+        res = cast(dict, await Pet.query_graphql_api(session, query, vars))
+        return cast(list[dict], res.get("data", {}).get("getPetsByUser", []))
+
+    @staticmethod
+    async def query_by_id(session: Session, pet_id: str) -> dict:
+        """Query a pet by id."""
+        query = f"""
+            query GetPetByPetId($petId: String!) {{
+                getPetByPetId(petId: $petId ) {PET_MODEL}
+            }}
+        """
+        vars = {"petId": pet_id}
+
+        res = cast(dict, await Pet.query_graphql_api(session, query, vars))
+        return cast(dict, res.get("data", {}).get("getPetByPetId", {}))
+
+    @staticmethod
+    async def query_weight_history(
+        session: Session, pet_id: str, limit: int = 50
+    ) -> list[dict]:
+        """Query a pet's weight history."""
         if limit < 1:
             raise InvalidCommandException(
                 f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
@@ -246,25 +322,23 @@ class Pet(Event):
                 }
             }
             """
-        vars = {"petId": self.id, "limit": limit}
+        vars = {"petId": pet_id, "limit": limit}
 
-        res = await self.query_graphql_api(
-            self._session, PET_PROFILE_ENDPOINT, query, vars
-        )
+        res = cast(dict, await Pet.query_graphql_api(session, query, vars))
 
-        weight_data = cast(dict, res).get("data", {}).get("getWeightHistoryByPetId", {})
-
-        if not weight_data:
+        if not (weight_data := res.get("data", {}).get("getWeightHistoryByPetId", [])):
             raise LitterRobotException("Weight history could not be retrieved.")
 
-        return [
-            WeightMeasurement(to_timestamp(entry["timestamp"]), entry["weight"])
-            for entry in weight_data
-            if entry["timestamp"]
-        ]
+        return cast(list[dict], weight_data)
 
     @staticmethod
-    async def query_graphql_api(session, endpoint, query, variables):
+    async def query_graphql_api(
+        session: Session,
+        query: str,
+        variables: dict | None = None,
+        endpoint: str = PET_PROFILE_ENDPOINT,
+    ) -> dict | list[dict] | None:
+        """Query GraphQL API."""
         return await session.post(
             endpoint, json={"query": query, "variables": variables}
         )

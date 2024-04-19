@@ -3,6 +3,7 @@
 __version__ = "0.0.0"
 
 from .account import Account
+from .pet import Pet
 from .robot import Robot
 from .robot.feederrobot import FeederRobot
 from .robot.litterrobot import LitterRobot
@@ -16,4 +17,5 @@ __all__ = [
     "LitterRobot3",
     "LitterRobot4",
     "FeederRobot",
+    "Pet",
 ]
