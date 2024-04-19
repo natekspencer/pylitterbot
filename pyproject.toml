@@ -33,6 +33,24 @@ enable = true
 vcs = "git"
 style = "semver"
 
+[tool.ruff.lint]
+select = [
+    "D", # pydocstyle
+    "E", # pycodestyle Error
+    "F", # Pyflakes
+    "I", # isort
+    "W", # pycodestyle Warning
+]
+ignore = [
+    "D203", # 1 blank line required before class docstring
+    "D213", # Multi-line docstring summary should start at the second line
+    "E501", # Line too long
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+split-on-trailing-comma = false
+
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
 build-backend = "poetry_dynamic_versioning.backend"

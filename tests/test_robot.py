@@ -124,7 +124,6 @@ async def test_robot_with_invalid_sleep_mode_active(
 
 async def test_robot_with_unknown_status(mock_account: Account) -> None:
     """Tests that a robot with an unknown `unitStatus` is setup correctly."""
-
     random_status = "_" + "".join(random.sample(ascii_letters, 3))
 
     robot = LitterRobot3(
