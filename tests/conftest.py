@@ -11,6 +11,7 @@ import pytest_asyncio
 from aioresponses import aioresponses
 
 from pylitterbot import Account
+from pylitterbot.pet import PET_PROFILE_ENDPOINT
 from pylitterbot.robot.feederrobot import FEEDER_ENDPOINT
 from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
 from pylitterbot.session import LitterRobotSession
@@ -20,6 +21,7 @@ from .common import (
     FEEDER_ROBOT_DATA,
     INSIGHT_RESPONSE,
     LITTER_ROBOT_4_DATA,
+    PET_DATA,
     ROBOT_DATA,
     ROBOT_DELETED_DATA,
     ROBOT_FULL_DATA,
@@ -105,4 +107,5 @@ def mock_aioresponse() -> aioresponses:
             payload={"data": {"feeder_unit": [FEEDER_ROBOT_DATA]}},
             repeat=True,
         )
+        mock.post(PET_PROFILE_ENDPOINT, payload={"data": {"getPetsByUser": [PET_DATA]}})
         yield mock

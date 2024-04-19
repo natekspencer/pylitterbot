@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 from aiohttp import ClientConnectorError, ClientResponseError, ClientWebSocketResponse
 
-from pylitterbot import Account, LitterRobot
+from pylitterbot import Account, LitterRobot, Pet
 from pylitterbot.robot.litterrobot3 import DEFAULT_ENDPOINT
 
 USERNAME = "username@username.com"
@@ -271,10 +271,42 @@ FEEDER_ROBOT_DATA: dict[str, Any] = {
     ],
 }
 
+PET_ID = "PET-ID"
+PET_DATA: dict[str, Any] = {
+    "petId": PET_ID,
+    "userId": USER_ID,
+    "createdAt": "2024-04-16T13:26:49.813Z",
+    "name": "Cat",
+    "type": "CAT",
+    "gender": "FEMALE",
+    "weight": 8.5,
+    "weightLastUpdated": None,
+    "lastWeightReading": 8.6,
+    "breeds": ["sphynx"],
+    "age": 0,
+    "birthday": "2016-07-02 00:00:00.000",
+    "adoptionDate": None,
+    "s3ImageURL": None,
+    "diet": "BOTH",
+    "isFixed": True,
+    "environmentType": "INDOOR",
+    "healthConcerns": [],
+    "isActive": True,
+    "whiskerProducts": [],
+    "petTagId": None,
+    "weightIdFeatureEnabled": True,
+    "weightHistory": [
+        {"weight": 8.68, "timestamp": "2024-04-17T12:35:42.000Z"},
+        {"weight": 8.69, "timestamp": "2024-04-17T02:27:58.000Z"},
+    ],
+    "weightHistoryErrorType": None,
+}
+
 
 async def get_account(
     logged_in: bool = False,
     load_robots: bool = False,
+    load_pets: bool = False,
     token_update_callback: Callable[[dict | None], None] | None = None,
 ) -> Account:
     """Get an account that has the underlying API patched."""
@@ -287,7 +319,10 @@ async def get_account(
         account = Account(token_update_callback=token_update_callback)
         if logged_in:
             await account.connect(
-                username=USERNAME, password=PASSWORD, load_robots=load_robots
+                username=USERNAME,
+                password=PASSWORD,
+                load_robots=load_robots,
+                load_pets=load_pets,
             )
         return account
 
@@ -304,6 +339,20 @@ async def get_robot(robot_id: str = ROBOT_ID) -> LitterRobot:
     assert robot
 
     return robot
+
+
+async def get_pet(pet_id: str = PET_ID) -> Pet:
+    """Get a pet that has the underlying API patched."""
+    account = await get_account(logged_in=True, load_pets=True)
+    pet = next(
+        filter(
+            lambda pet: (pet.id == pet_id),
+            account.pets,
+        )
+    )
+    assert pet
+
+    return pet
 
 
 def mock_client_response_error(status: int | None = None) -> ClientResponseError:
