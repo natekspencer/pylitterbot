@@ -135,7 +135,7 @@ class Pet(Event):
     @property
     def pet_type(self) -> PetType | None:
         """Return the type of pet."""
-        if (pet_type := self._data.get("type")) not in PetType:
+        if (pet_type := self._data.get("type")) not in PetType.__members__:
             _LOGGER.error('Unknown pet type "%s"', pet_type)
             return None
         return PetType(pet_type)
@@ -143,7 +143,7 @@ class Pet(Event):
     @property
     def gender(self) -> PetGender | None:
         """Return the gender."""
-        if (gender := self._data.get("gender")) not in PetGender:
+        if (gender := self._data.get("gender")) not in PetGender.__members__:
             _LOGGER.error('Unknown gender "%s"', gender)
             return None
         return PetGender(gender)
@@ -192,7 +192,7 @@ class Pet(Event):
     @property
     def diet(self) -> PetDiet | None:
         """Return the diet, if any."""
-        if (diet := self._data.get("diet")) not in PetDiet:
+        if (diet := self._data.get("diet")) not in PetDiet.__members__:
             _LOGGER.error('Unknown diet "%s"', diet)
             return None
         return PetDiet(diet)
@@ -200,7 +200,9 @@ class Pet(Event):
     @property
     def environment_type(self) -> PetEnvironment | None:
         """Return the environment type, if any."""
-        if (environment := self._data.get("environmentType")) not in PetEnvironment:
+        if (
+            environment := self._data.get("environmentType")
+        ) not in PetEnvironment.__members__:
             _LOGGER.error('Unknown environment type "%s"', environment)
             return None
         return PetEnvironment(environment)
