@@ -256,6 +256,7 @@ class LitterRobotSession(Session):
                     refresh_token=self.__refresh_token,
                 ),
             )
+            assert self._user
             if self.__access_token and self.__id_token:
                 try:
                     self._user.check_token()
