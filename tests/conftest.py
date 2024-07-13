@@ -9,6 +9,7 @@ import jwt
 import pytest
 import pytest_asyncio
 from aioresponses import aioresponses
+from pycognito import TokenVerificationException
 
 from pylitterbot import Account
 from pylitterbot.pet import PET_PROFILE_ENDPOINT
@@ -30,6 +31,43 @@ from .common import (
 )
 
 
+@pytest.fixture(autouse=True)
+def no_cognito(monkeypatch):  # type: ignore
+    """Remove pycognito.aws_srp.AWSSRP.authenticate_user for all tests."""
+
+    def _mock_authenticate_user(_, client=None, client_metadata=None):  # type: ignore
+        return {
+            "AuthenticationResult": {
+                "TokenType": "admin",
+                "IdToken": jwt.encode(
+                    {
+                        "exp": datetime.now(tz=timezone.utc) + timedelta(hours=1),
+                        "mid": "000000",
+                    },
+                    "secret",
+                ),
+                "AccessToken": "dummy_token",
+                "RefreshToken": "dummy_token",
+            }
+        }
+
+    def _mock_verify_tokens(self, token, id_name, token_use):  # type: ignore
+        if "wrong" in token:
+            raise TokenVerificationException
+        setattr(self, id_name, token)
+
+    def _mock_renew_access_token(self):  # type: ignore
+        self._set_tokens(_mock_authenticate_user(None))  # type: ignore
+
+    monkeypatch.setattr(
+        "pycognito.aws_srp.AWSSRP.authenticate_user", _mock_authenticate_user
+    )
+    monkeypatch.setattr("pycognito.Cognito.verify_token", _mock_verify_tokens)
+    monkeypatch.setattr(
+        "pycognito.Cognito.renew_access_token", _mock_renew_access_token
+    )
+
+
 @pytest_asyncio.fixture
 async def mock_account() -> Account:
     """Mock an account."""
@@ -40,49 +78,6 @@ async def mock_account() -> Account:
 def mock_aioresponse() -> aioresponses:
     """Mock aioresponses fixture."""
     with aioresponses() as mock:
-        mock.post(
-            LitterRobotSession.AUTH_ENDPOINT,
-            payload={"token": "tokenResponse"},
-            repeat=True,
-        )
-        mock.post(
-            re.compile(re.escape(LitterRobotSession.TOKEN_EXCHANGE_ENDPOINT)),
-            payload={
-                "kind": "kindResponse",
-                "idToken": jwt.encode(
-                    {
-                        "exp": datetime.now(tz=timezone.utc) + timedelta(hours=1),
-                        "mid": "000000",
-                    },
-                    "secret",
-                ),
-                "refreshToken": "refreshTokenResponse",
-                "expiresIn": "3600",
-                "isNewUser": False,
-            },
-            repeat=True,
-        )
-        mock.post(
-            re.compile(re.escape(LitterRobotSession.TOKEN_REFRESH_ENDPOINT)),
-            payload={
-                "access_token": (
-                    token := jwt.encode(
-                        {
-                            "exp": datetime.now(tz=timezone.utc) + timedelta(hours=1),
-                            "mid": "000000",
-                        },
-                        "secret",
-                    )
-                ),
-                "expires_in": "3600",
-                "token_type": "Bearer",
-                "refresh_token": "refreshTokenResponse",
-                "id_token": token,
-                "user_id": "userIdResponse",
-                "project_id": "projectId",
-            },
-            repeat=True,
-        )
         mock.get(re.compile(".*/users$"), payload=USER_RESPONSE)
         mock.get(
             re.compile(".*/robots$"),

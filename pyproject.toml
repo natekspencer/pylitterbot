@@ -16,6 +16,7 @@ aiohttp = "^3.8.1"
 deepdiff = ">=6.2.1,<8.0.0"
 PyJWT = "^2.7.0"
 "backports.zoneinfo" = {version = "^0.2.1", python = "<3.9"}
+pycognito = "^2024.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.3.1,<9.0.0"
@@ -50,6 +51,9 @@ ignore = [
 [tool.ruff.lint.isort]
 combine-as-imports = true
 split-on-trailing-comma = false
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**.py" = ["F401"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]

@@ -34,9 +34,7 @@ async def test_token_refresh(mock_aioresponse: aioresponses) -> None:
         assert not session.is_token_valid()
 
     async with LitterRobotSession(token=EXPIRED_ACCESS_TOKEN) as session:
-        assert not session.is_token_valid()
-        await session.patch("localhost")
-        assert session.is_token_valid()
+        assert session.is_token_valid()  # pycognito auto refreshes
 
 
 async def test_custom_headers() -> None:
