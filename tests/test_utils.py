@@ -1,6 +1,14 @@
 """Test utils module."""
 
-from pylitterbot.utils import REDACTED, decode, encode, redact, round_time, to_timestamp
+from pylitterbot.utils import (
+    REDACTED,
+    decode,
+    encode,
+    first_value,
+    redact,
+    round_time,
+    to_timestamp,
+)
 
 
 def test_round_time_default() -> None:
@@ -31,3 +39,14 @@ def test_redact() -> None:
     data = {"key": "value"}
     assert redact(data) == data
     assert redact([data, data]) == [data, data]
+
+
+def test_first_value() -> None:
+    """Test looking up values from a dictionary."""
+    values = {"key1": 1, "key2": 2, "key4": 4}
+    assert first_value(values, ("key1", "key2")) == 1
+    assert first_value(values, ("key2", "key3")) == 2
+    assert first_value(values, ("key3", "key4")) == 4
+    assert first_value(values, ("key3", "key5")) is None
+    assert first_value(values, ("key3", "key5"), 0) == 0
+    assert first_value(None, ("key3", "key5"), 10) == 10
