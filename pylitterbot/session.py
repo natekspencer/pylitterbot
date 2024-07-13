@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from asyncio import Lock
+from functools import partial
 from types import TracebackType
 from typing import Any, Final, TypeVar, cast
 
@@ -171,8 +173,11 @@ class LitterRobotSession(Session):
     @property
     def tokens(self) -> dict[str, str] | None:
         """Return the Cognito user tokens."""
-        user = self.get_user()
-        if None in (user.access_token, user.id_token, user.refresh_token):
+        if not (user := self._user) or None in (
+            user.access_token,
+            user.id_token,
+            user.refresh_token,
+        ):
             return None
         return {
             "access_token": user.access_token,
@@ -214,13 +219,17 @@ class LitterRobotSession(Session):
     async def login(self, username: str, password: str) -> None:
         """Login to the Litter-Robot api and generate a new token."""
         self._username = username
-        self.get_user().authenticate(password=password)
+        user = await self.get_user()
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, partial(user.authenticate, password=password))
 
     async def _refresh_token(self) -> None:
         """Refresh the access token."""
         # This should be handled by pycognito automatically, but in case we do get here, we'll manually refresh
         _LOGGER.debug("Manually refreshing token")
-        self.get_user().renew_access_token()
+        user = await self.get_user()
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, user.renew_access_token)
 
     async def request(
         self, method: str, url: str, **kwargs: Any
@@ -231,16 +240,21 @@ class LitterRobotSession(Session):
             await self.refresh_token()
         return await super().request(method, url, **kwargs)
 
-    def get_user(self) -> Cognito:
+    async def get_user(self) -> Cognito:
         """Return the Cognito user."""
         if self._user is None:
-            self._user = Cognito(
-                decode(self.USER_POOL_ID),
-                decode(self.CLIENT_ID),
-                username=self._username,
-                access_token=self.__access_token,
-                id_token=self.__id_token,
-                refresh_token=self.__refresh_token,
+            loop = asyncio.get_running_loop()
+            self._user = await loop.run_in_executor(
+                None,
+                partial(
+                    Cognito,
+                    decode(self.USER_POOL_ID),
+                    decode(self.CLIENT_ID),
+                    username=self._username,
+                    access_token=self.__access_token,
+                    id_token=self.__id_token,
+                    refresh_token=self.__refresh_token,
+                ),
             )
             if self.__access_token and self.__id_token:
                 try:
