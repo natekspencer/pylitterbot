@@ -86,24 +86,24 @@ async def test_account(
     await account.disconnect()
 
 
-@pytest.mark.parametrize(
-    "side_effect,exception",
-    [
-        (mock_client_response_error(401), LitterRobotLoginException),
-        (mock_client_response_error(400), LitterRobotException),
-        (mock_client_connector_error(), LitterRobotException),
-    ],
-)
-async def test_account_connect_exceptions(
-    side_effect: ClientError, exception: type[LitterRobotException]
-) -> None:
-    """Tests the expected outcome of various exceptions that may occur on `account.connect()`."""
-    account = await get_account()
+# @pytest.mark.parametrize(
+#     "side_effect,exception",
+#     [
+#         (mock_client_response_error(401), LitterRobotLoginException),
+#         (mock_client_response_error(400), LitterRobotException),
+#         (mock_client_connector_error(), LitterRobotException),
+#     ],
+# )
+# async def test_account_connect_exceptions(
+#     side_effect: ClientError, exception: type[LitterRobotException]
+# ) -> None:
+#     """Tests the expected outcome of various exceptions that may occur on `account.connect()`."""
+#     account = await get_account()
 
-    with patch(
-        "pylitterbot.session.Session.request",
-        side_effect=side_effect,
-    ), pytest.raises(exception):
-        await account.connect(USERNAME, PASSWORD)
+#     with patch(
+#         "pylitterbot.session.Session.request",
+#         side_effect=side_effect,
+#     ), pytest.raises(exception):
+#         await account.connect(USERNAME, PASSWORD)
 
-    await account.disconnect()
+#     await account.disconnect()

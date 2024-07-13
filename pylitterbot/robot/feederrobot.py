@@ -20,7 +20,7 @@ _T = TypeVar("_T")
 
 _LOGGER = logging.getLogger(__name__)
 
-FEEDER_ENDPOINT = "https://graphql.whisker.iothings.site/v1/graphql"
+FEEDER_ENDPOINT = "https://cognito.hasura.iothings.site/v1/graphql"
 COMMAND_ENDPOINT = (
     "https://42nk7qrhdg.execute-api.us-east-1.amazonaws.com/prod/command/feeder"
 )

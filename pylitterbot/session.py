@@ -6,14 +6,16 @@ import logging
 from abc import ABC, abstractmethod
 from asyncio import Lock
 from types import TracebackType
-from typing import Any, TypeVar, cast
+from typing import Any, Final, TypeVar, cast
 
 import jwt
 from aiohttp import ClientSession
+from botocore.exceptions import ClientError
+from pycognito import Cognito
 
 from .event import EVENT_UPDATE, Event
 from .exceptions import InvalidCommandException
-from .utils import decode, first_value, redact, utcnow
+from .utils import decode, redact, utcnow
 
 T = TypeVar("T", bound="Session")
 
@@ -23,7 +25,6 @@ _LOGGER = logging.getLogger(__name__)
 class Session(Event, ABC):
     """Abstract session class."""
 
-    _token: dict | None = None
     _lock = Lock()
 
     def __init__(self, websession: ClientSession | None = None) -> None:
@@ -40,16 +41,9 @@ class Session(Event, ABC):
         return self._websession
 
     @property
-    def tokens(self) -> dict[str, str | None] | None:
+    @abstractmethod
+    def tokens(self) -> dict[str, str] | None:
         """Return the tokens."""
-        if not self._token:
-            return None
-        return {
-            "id_token": first_value(self._token, ("id_token", "idToken")),
-            "refresh_token": first_value(
-                self._token, ("refresh_token", "refreshToken")
-            ),
-        }
 
     async def close(self) -> None:
         """Close the session."""
@@ -78,17 +72,17 @@ class Session(Event, ABC):
 
     async def refresh_token(self, ignore_unexpired: bool = False) -> None:
         """Refresh the access token."""
-        if self._token is None:
+        if self.tokens is None:
             return None
         async with self._lock:
             if not ignore_unexpired and self.is_token_valid():
                 return
-            self._token = await self._refresh_token()
+            await self._refresh_token()
         self.emit(EVENT_UPDATE)
 
     @abstractmethod
-    async def _refresh_token(self) -> dict:
-        """Actual implementation to refresh the access token."""
+    async def _refresh_token(self) -> None:
+        """Actual implementation to refresh the tokens."""
 
     async def get_bearer_authorization(self) -> str | None:
         """Get the bearer authorization."""
@@ -152,13 +146,15 @@ class Session(Event, ABC):
 class LitterRobotSession(Session):
     """Class with methods for interacting with a Litter-Robot cloud session."""
 
-    AUTH_ENDPOINT = "https://42nk7qrhdg.execute-api.us-east-1.amazonaws.com/prod/login"
-    AUTH_ENDPOINT_KEY = "dzJ0UEZiamxQMTNHVW1iOGRNalVMNUIyWXlQVkQzcEo3RXk2Zno4dg=="
-    TOKEN_EXCHANGE_ENDPOINT = (
-        "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyCustomToken"
-    )
-    TOKEN_REFRESH_ENDPOINT = "https://securetoken.googleapis.com/v1/token"
-    TOKEN_KEY = "QUl6YVN5Q3Y4NGplbDdKa0NRbHNncXJfc2xYZjNmM3gtY01HMTVR"
+    USER_POOL_ID: Final = "dXMtZWFzdC0xX3JqaE5uWlZBbQ=="
+    CLIENT_ID: Final = "NDU1MnVqZXUzYWljOTBuZjhxbjUzbGV2bW4="
+
+    _user: Cognito | None = None
+
+    _username: str | None = None
+    __access_token: str | None = None
+    __id_token: str | None = None
+    __refresh_token: str | None = None
 
     def __init__(
         self, token: dict | None = None, websession: ClientSession | None = None
@@ -166,8 +162,23 @@ class LitterRobotSession(Session):
         """Initialize the session."""
         super().__init__(websession=websession)
 
-        self._token = token
+        if token:
+            self.__access_token = token.get("access_token")
+            self.__id_token = token.get("id_token")
+            self.__refresh_token = token.get("refresh_token")
         self._custom_args: dict = {}
+
+    @property
+    def tokens(self) -> dict[str, str] | None:
+        """Return the Cognito user tokens."""
+        user = self.get_user()
+        if None in (user.access_token, user.id_token, user.refresh_token):
+            return None
+        return {
+            "access_token": user.access_token,
+            "id_token": user.id_token,
+            "refresh_token": user.refresh_token,
+        }
 
     def generate_args(self, url: str, **kwargs: Any) -> dict[str, Any]:
         """Generate args."""
@@ -182,11 +193,11 @@ class LitterRobotSession(Session):
 
     def is_token_valid(self) -> bool:
         """Return `True` if the token is stills valid."""
-        if self._token is None:
+        if self.tokens is None:
             return False
         try:
             jwt.decode(
-                first_value(self._token, ("id_token", "idToken")),
+                self.tokens["id_token"],
                 options={"verify_signature": False, "verify_exp": True},
                 leeway=-30,
             )
@@ -196,43 +207,20 @@ class LitterRobotSession(Session):
 
     async def async_get_access_token(self, **kwargs: Any) -> str | None:
         """Return a valid access token."""
-        if self._token is None or not self.is_token_valid():
+        if self.tokens is None or not self.is_token_valid():
             return None
-        return first_value(self._token, ("id_token", "idToken"))
+        return self.tokens["id_token"]
 
     async def login(self, username: str, password: str) -> None:
         """Login to the Litter-Robot api and generate a new token."""
-        token = await self.post(
-            self.AUTH_ENDPOINT,
-            skip_auth=True,
-            headers={"x-api-key": decode(self.AUTH_ENDPOINT_KEY)},
-            json={"email": username, "password": password},
-        )
+        self._username = username
+        self.get_user().authenticate(password=password)
 
-        data = await self.post(
-            self.TOKEN_EXCHANGE_ENDPOINT,
-            skip_auth=True,
-            headers={"x-ios-bundle-identifier": "com.whisker.ios"},
-            params={"key": decode(self.TOKEN_KEY)},
-            json={"returnSecureToken": True, "token": cast(dict, token)["token"]},
-        )
-        self._token = cast(dict, data)
-
-    async def _refresh_token(self) -> dict:
+    async def _refresh_token(self) -> None:
         """Refresh the access token."""
-        data = await self.post(
-            self.TOKEN_REFRESH_ENDPOINT,
-            skip_auth=True,
-            headers={"x-ios-bundle-identifier": "com.whisker.ios"},
-            params={"key": decode(self.TOKEN_KEY)},
-            json={
-                "grantType": "refresh_token",
-                "refreshToken": first_value(
-                    self._token, ("refresh_token", "refreshToken")
-                ),
-            },
-        )
-        return cast(dict, data)
+        # This should be handled by pycognito automatically, but in case we do get here, we'll manually refresh
+        _LOGGER.debug("Manually refreshing token")
+        self.get_user().renew_access_token()
 
     async def request(
         self, method: str, url: str, **kwargs: Any
@@ -243,16 +231,38 @@ class LitterRobotSession(Session):
             await self.refresh_token()
         return await super().request(method, url, **kwargs)
 
+    def get_user(self) -> Cognito:
+        """Return the Cognito user."""
+        if self._user is None:
+            self._user = Cognito(
+                decode(self.USER_POOL_ID),
+                decode(self.CLIENT_ID),
+                username=self._username,
+                access_token=self.__access_token,
+                id_token=self.__id_token,
+                refresh_token=self.__refresh_token,
+            )
+            if self.__access_token and self.__id_token:
+                try:
+                    self._user.check_token()
+                    self._user.verify_tokens()
+                except ClientError as err:
+                    _LOGGER.error(err)
+                    raise err
+        if self._username and not self._user.username:
+            self._user.username = self._username
+        return self._user
+
     def get_user_id(self) -> str | None:
         """Get the user id from the session."""
-        if self._token is None:
+        if self.tokens is None:
             return None
         user_id = jwt.decode(
-            first_value(self._token, ("id_token", "idToken")),
+            self.tokens["id_token"],
             options={"verify_signature": False, "verify_exp": False},
         )["mid"]
         return cast(str, user_id)
 
     def has_refresh_token(self) -> bool:
         """Return `True` if the session has a refresh token."""
-        return first_value(self._token, ("refresh_token", "refreshToken")) is not None
+        return self.tokens is not None and self.tokens["refresh_token"] is not None
