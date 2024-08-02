@@ -106,8 +106,7 @@ def send_deprecation_warning(
 
 
 @overload
-def redact(data: Mapping) -> dict:  # type: ignore[overload-overlap]
-    ...
+def redact(data: Mapping) -> dict: ...
 
 
 @overload
