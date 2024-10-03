@@ -1,7 +1,7 @@
 [![pypi](https://img.shields.io/pypi/v/pylitterbot?style=for-the-badge)](https://pypi.org/project/pylitterbot)
 [![downloads](https://img.shields.io/pypi/dm/pylitterbot?style=for-the-badge)](https://pypi.org/project/pylitterbot)
 [![Buy Me A Coffee/Beer](https://img.shields.io/badge/Buy_Me_A_☕/🍺-F16061?style=for-the-badge&logo=ko-fi&logoColor=white&labelColor=grey)](https://ko-fi.com/natekspencer)
-[![Purchase Litter-Robot](https://img.shields.io/badge/Buy_a_Litter--Robot-Save_$50-lightgrey?style=for-the-badge&labelColor=grey)](https://share.litter-robot.com/x/JUdcNx)
+[![Purchase Litter-Robot](https://img.shields.io/badge/Buy_a_Litter--Robot-Save_$50-lightgrey?style=for-the-badge&labelColor=grey)](https://share.litter-robot.com/x/QJGfYd)
 
 # pylitterbot
 
@@ -101,7 +101,7 @@ Currently the following methods are available in the Robot class:
 
 I'm not employed by Whisker and provide this python package as-is.
 
-If you don't already own a Litter-Robot, please consider using [my referral link](https://share.litter-robot.com/x/JUdcNx) to purchase your own robot and save $25!
+If you don't already own a Litter-Robot, please consider using [my referral link](https://share.litter-robot.com/x/QJGfYd) to purchase your own robot and save $50!
 
 If you already own a Litter-Robot and/or want to donate to me directly, consider buying me a coffee (or beer) instead by using the link below:
 
