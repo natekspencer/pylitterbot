@@ -373,6 +373,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         data = cast(dict, data)
         self._update_data(data.get("data", {}).get("getLitterRobot4BySerial", {}))
 
+    async def reset(self) -> bool:
+        """Perform a reset on the Litter-Robot."""
+        return await self._dispatch_command(LitterRobot4Command.SHORT_RESET_PRESS)
+
     async def set_name(self, name: str) -> bool:
         """Set the name."""
         data = await self._post(
