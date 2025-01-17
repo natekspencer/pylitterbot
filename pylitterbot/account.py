@@ -13,6 +13,7 @@ from aiohttp import (
     ClientSession,
     ClientWebSocketResponse,
 )
+from botocore.exceptions import ClientError
 
 from .event import EVENT_UPDATE
 from .exceptions import LitterRobotException, LitterRobotLoginException
@@ -107,7 +108,7 @@ class Account:
         try:
             if not self.session.is_token_valid():
                 if self.session.has_refresh_token():
-                    await self.session.refresh_token()
+                    await self.session.refresh_tokens()
                 elif username and password:
                     await self.session.login(username=username, password=password)
                 else:
@@ -121,6 +122,11 @@ class Account:
             if load_pets:
                 await self.load_pets()
 
+        except ClientError as err:
+            _LOGGER.error(err)
+            raise LitterRobotLoginException(
+                f"Unable to login to Litter-Robot: {err.response['message']}"
+            ) from err
         except ClientResponseError as ex:
             _LOGGER.error(ex)
             if ex.status == 401:
@@ -231,7 +237,7 @@ class Account:
     async def get_bearer_authorization(self) -> str | None:
         """Return the authorization token."""
         if not self.session.is_token_valid():
-            await self.session.refresh_token()
+            await self.session.refresh_tokens()
         return await self.session.get_bearer_authorization()
 
     async def ws_connect(self, robot: Robot) -> ClientWebSocketResponse:
