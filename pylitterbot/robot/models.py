@@ -120,5 +120,9 @@ LITTER_ROBOT_4_MODEL = f"""
     surfaceType
     hopperStatus
     scoopsSavedCount
+    isHopperRemoved
+    optimalLitterLevel
+    litterLevelPercentage
+    litterLevelState
 }}
 """

@@ -217,6 +217,18 @@ LITTER_ROBOT_4_DATA: dict[str, Any] = {
     "isOnboarded": True,
     "lastSeen": "2022-07-20T00:13:00.000000Z",
     "setupDateTime": "2022-07-16T21:40:00.000000Z",
+    "wifiModeStatus": "ROUTER_CONNECTED",
+    "isUSBPowerOn": True,
+    "USBFaultStatus": "CLEAR",
+    "isDFIPartialFull": False,
+    "isLaserDirty": False,
+    "surfaceType": "TILE",
+    "hopperStatus": None,
+    "scoopsSavedCount": 3769,
+    "isHopperRemoved": None,
+    "optimalLitterLevel": 450,
+    "litterLevelPercentage": 0.4,
+    "litterLevelState": "OPTIMAL",
 }
 
 FEEDER_ROBOT_DATA: dict[str, Any] = {

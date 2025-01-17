@@ -356,6 +356,7 @@ async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
     robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
     assert robot.status == LitterBoxStatus.READY
     assert robot.litter_level == 40
+    assert robot.litter_level_calculated == 40
 
     # simulate update to cleaning
     robot._update_data({"robotStatus": "ROBOT_CLEAN"}, partial=True)
@@ -363,20 +364,24 @@ async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
     assert robot.status == status
     assert robot.status_code == "CCP"
     assert robot.litter_level == 40
+    assert robot.litter_level_calculated == 40
 
     # simulate litter level read mid-cycle
     robot._update_data({"litterLevel": LITTER_LEVEL_EMPTY}, partial=True)
     assert robot.litter_level == 40
+    assert robot.litter_level_calculated == 40
 
     # simulate stopped cleaning
     robot._update_data({"robotStatus": "ROBOT_IDLE"}, partial=True)
     assert robot.status == LitterBoxStatus.READY
     assert robot.litter_level == 40
+    assert robot.litter_level_calculated == 40
 
     # simulate litter level read after clean
-    robot._update_data({"litterLevel": 481}, partial=True)
+    robot._update_data({"litterLevel": 481, "litterLevelPercentage": 0.3}, partial=True)
     assert robot.status == LitterBoxStatus.READY
     assert robot.litter_level == 30
+    assert robot.litter_level_calculated == 30
 
 
 @pytest.mark.parametrize(
