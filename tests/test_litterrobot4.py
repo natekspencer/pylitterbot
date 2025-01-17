@@ -3,7 +3,9 @@
 # pylint: disable=protected-access
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
+from typing import Any
 
 import pytest
 from aioresponses import aioresponses
@@ -16,6 +18,7 @@ from pylitterbot.robot.litterrobot4 import (
     LR4_ENDPOINT,
     BrightnessLevel,
     LitterRobot4,
+    LitterRobot4Command,
     NightLightMode,
 )
 
@@ -374,6 +377,43 @@ async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
     robot._update_data({"litterLevel": 481}, partial=True)
     assert robot.status == LitterBoxStatus.READY
     assert robot.litter_level == 30
+
+
+@pytest.mark.parametrize(
+    "method_call,dispatch_command,mock_response_data,args",
+    [
+        (
+            LitterRobot4.reset,
+            LitterRobot4Command.SHORT_RESET_PRESS,
+            {"sendLitterRobot4Command": 'command "shortResetPress (0x02010401)" sent'},
+            {},
+        ),
+    ],
+)
+async def test_litter_robot_4_commands(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+    method_call: Callable,
+    dispatch_command: str,
+    mock_response_data: dict,
+    args: Any,
+) -> None:
+    """Tests that commands for Litter-Robot 4 are sent as expected."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": mock_response_data},
+    )
+
+    await getattr(robot, method_call.__name__)(*args)
+
+    json = list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json", {})
+    assert "sendLitterRobot4Command" in json.get("query", "")
+    assert json.get("variables", {}).get("command") == dispatch_command
+
+    await robot._account.disconnect()
 
 
 @pytest.mark.parametrize(
