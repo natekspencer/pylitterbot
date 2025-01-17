@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover
 from ..activity import Activity, Insight
 from ..enums import LitterBoxStatus, LitterRobot4Command
 from ..exceptions import InvalidCommandException, LitterRobotException
-from ..utils import encode, to_timestamp, utcnow
+from ..utils import encode, to_enum, to_timestamp, utcnow
 from .litterrobot import LitterRobot
 from .models import LITTER_ROBOT_4_MODEL
 
@@ -73,12 +73,93 @@ NightLightLevel = BrightnessLevel
 
 
 @unique
+class FirmwareUpdateStatus(Enum):
+    """Firmware update status."""
+
+    NONE = "NONE"
+    TRIGGERED = "TRIGGERED"
+    PICTRIGGERED = "PICTRIGGERED"
+    LASERBOARDTRIGGERED = "LASERBOARDTRIGGERED"
+    ESPTRIGGERED = "ESPTRIGGERED"
+    STARTED = "STARTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    CANCELED = "CANCELED"
+    DELETED = "DELETED"
+    REJECTED = "REJECTED"
+    TIMED_OUT = "TIMED_OUT"
+    REMOVED = "REMOVED"
+    COMPLETED = "COMPLETED"
+    CANCELLATION_IN_PROGRESS = "CANCELLATION_IN_PROGRESS"
+    DELETION_IN_PROGRESS = "DELETION_IN_PROGRESS"
+
+
+@unique
+class HopperStatus(Enum):
+    """Hopper status."""
+
+    ENABLED = "ENABLED"
+    DISABLED = "DISABLED"
+    MOTOR_FAULT_SHORT = "MOTOR_FAULT_SHORT"
+    MOTOR_OT_AMPS = "MOTOR_OT_AMPS"
+    MOTOR_DISCONNECTED = "MOTOR_DISCONNECTED"
+    EMPTY = "EMPTY"
+
+
+@unique
+class LitterLevelState(Enum):
+    """Litter level state."""
+
+    OVERFILL = "OVERFILL"
+    OPTIMAL = "OPTIMAL"
+    REFILL = "REFILL"
+    LOW = "LOW"
+    EMPTY = "EMPTY"
+
+
+@unique
 class NightLightMode(Enum):
     """Night light mode of a Litter-Robot 4 unit."""
 
-    ON = "ON"
     OFF = "OFF"
+    ON = "ON"
     AUTO = "AUTO"
+
+
+@unique
+class SurfaceType(Enum):
+    """Surface type."""
+
+    TILE = "TILE"
+    CARPET = "CARPET"
+    UNKNOWN = "UNKNOWN"
+
+
+@unique
+class UsbFaultStatus(Enum):
+    """USB fault status."""
+
+    NONE = "NONE"
+    CLEAR = "CLEAR"
+    SET = "SET"
+
+
+@unique
+class WifiModeStatus(Enum):
+    """Wi-Fi mode status."""
+
+    NONE = "NONE"
+    OFF = "OFF"
+    OFF_WAITING = "OFF_WAITING"
+    OFF_CONNECTED = "OFF_CONNECTED"
+    OFF_FAULT = "OFF_FAULT"
+    HOTSPOT_WAITING = "HOTSPOT_WAITING"
+    HOTSPOT_CONNECTED = "HOTSPOT_CONNECTED"
+    HOTSPOT_FAULT = "HOTSPOT_FAULT"
+    ROUTER_WAITING = "ROUTER_WAITING"
+    ROUTER_CONNECTED = "ROUTER_CONNECTED"
+    ROUTER_FAULT = "ROUTER_FAULT"
 
 
 class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
@@ -141,9 +222,19 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return self._data.get("isFirmwareUpdateTriggered") is True
 
     @property
+    def hopper_status(self) -> HopperStatus | None:
+        """Return the hopper status."""
+        return to_enum(self._data.get("hopperStatus"), HopperStatus)
+
+    @property
     def is_drawer_full_indicator_triggered(self) -> bool:
         """Return `True` if the drawer full indicator has been triggered."""
         return self._data.get("isDFIFull") is True
+
+    @property
+    def is_hopper_removed(self) -> bool | None:
+        """Return `True` if the hopper is removed."""
+        return self._data.get("isHopperRemoved") is True
 
     @property
     def is_online(self) -> bool:
@@ -162,7 +253,12 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def litter_level(self) -> float:
-        """Return the litter level.
+        """Return the litter level."""
+        return cast(float, self._data.get("litterLevelPercentage", 0)) * 100
+
+    @property
+    def litter_level_calculated(self) -> float:
+        """Return the calculated litter level.
 
         The litterLevel field from the API is a millimeter distance to the
         top center time of flight (ToF) sensor and is interpreted as:
@@ -185,24 +281,24 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return max(round(100 - (self._litter_level - 440) / 0.6, -1), 0)
 
     @property
+    def litter_level_state(self) -> LitterLevelState | None:
+        """Return the litter level state."""
+        return to_enum(self._data.get("litterLevelState"), LitterLevelState)
+
+    @property
     def night_light_brightness(self) -> int:
         """Return the night light brightness."""
         return int(self._data.get("nightLightBrightness", 0))
 
     @property
     def night_light_level(self) -> BrightnessLevel | None:
-        """Return the night light brightness."""
-        if (brightness := self.night_light_brightness) in list(BrightnessLevel):
-            return BrightnessLevel(brightness)
-        return None
+        """Return the night light level."""
+        return to_enum(self.night_light_brightness, BrightnessLevel, False)
 
     @property
     def night_light_mode(self) -> NightLightMode | None:
         """Return the night light mode setting."""
-        mode = self._data.get("nightLightMode", None)
-        if mode in (mode.value for mode in NightLightMode):
-            return NightLightMode(mode)
-        return None
+        return to_enum(self._data.get("nightLightMode"), NightLightMode)
 
     @property
     def night_light_mode_enabled(self) -> bool:
@@ -226,6 +322,11 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     def pet_weight(self) -> float:
         """Return the last recorded pet weight in pounds (lbs)."""
         return cast(float, self._data.get("catWeight", 0))
+
+    @property
+    def scoops_saved_count(self) -> int:
+        """Return the scoops saved count."""
+        return cast(int, self._data.get("scoopsSavedCount", 0))
 
     @property
     def sleep_mode_enabled(self) -> bool:
@@ -278,9 +379,24 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         )
 
     @property
+    def surface_type(self) -> SurfaceType | None:
+        """Return the surface type."""
+        return to_enum(self._data.get("surfaceType"), SurfaceType)
+
+    @property
+    def usb_fault_status(self) -> UsbFaultStatus | None:
+        """Return the USB fault status."""
+        return to_enum(self._data.get("USBFaultStatus"), UsbFaultStatus)
+
+    @property
     def waste_drawer_level(self) -> float:
         """Return the approximate waste drawer level."""
         return cast(float, self._data.get("DFILevelPercent", 0))
+
+    @property
+    def wifi_mode_status(self) -> WifiModeStatus | None:
+        """Return the Wi-Fi mode status."""
+        return to_enum(self._data.get("wifiModeStatus"), WifiModeStatus)
 
     def _revalidate_sleep_info(self) -> None:
         """Revalidate sleep info."""
@@ -374,7 +490,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         self._update_data(data.get("data", {}).get("getLitterRobot4BySerial", {}))
 
     async def reset(self) -> bool:
-        """Perform a reset on the Litter-Robot."""
+        """Perform a reset on the Litter-Robot.
+
+        Clears errors and may trigger a cycle. Make sure the globe is clear before proceeding.
+        """
         return await self._dispatch_command(LitterRobot4Command.SHORT_RESET_PRESS)
 
     async def set_name(self, name: str) -> bool:

@@ -8,12 +8,14 @@ import re
 from base64 import b64decode, b64encode
 from collections.abc import Iterable, Mapping
 from datetime import datetime, time, timezone
-from typing import Any, TypeVar, cast, overload
+from enum import Enum
+from typing import Any, Type, TypeVar, cast, overload
 from urllib.parse import urljoin as _urljoin
 from warnings import warn
 
 _LOGGER = logging.getLogger(__name__)
 _T = TypeVar("_T")
+_E = TypeVar("_E", bound=Enum)
 
 ENCODING = "utf-8"
 REDACTED = "**REDACTED**"
@@ -151,3 +153,17 @@ def first_value(
         if key in data and ((value := data[key]) is not None or return_none):
             return value
     return default
+
+
+def to_enum(value: Any, typ: Type[_E], log_warning: bool = True) -> _E | None:
+    """Get the corresponding enum member from a value."""
+    if value is None:
+        return None
+    try:
+        return typ(value)
+    except ValueError:
+        if log_warning:
+            logging.warning("Value '%s' not found in enum %s", value, typ.__name__)
+    except (AttributeError, TypeError):
+        logging.error("Provided class %s is not a valid Enum", typ)
+    return None
