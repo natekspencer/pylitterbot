@@ -36,4 +36,4 @@ class Insight:
 
     def __str__(self) -> str:
         """Return self(str)."""
-        return f"Completed {pluralize('cycle',self.total_cycles)} averaging {self.average_cycles} cycles per day over the last {pluralize('day',self.total_days)}"
+        return f"Completed {pluralize('cycle', self.total_cycles)} averaging {self.average_cycles} cycles per day over the last {pluralize('day', self.total_days)}"
