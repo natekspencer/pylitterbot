@@ -9,7 +9,7 @@ username = "Your username"
 password = "Your password"
 
 
-async def main():
+async def main() -> None:
     """Run main function."""
     # Create an account.
     account = Account()

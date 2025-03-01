@@ -88,6 +88,47 @@ Currently the following methods are available in the Robot class:
 - get_activity_history()
 - get_insight()
 
+## Contributing
+
+Thank you for your interest in contributing! Follow these steps to set up your environment and ensure your changes meet the project's standards.
+
+### Setup
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/natekspencer/pylitterbot.git
+   cd pylitterbot
+   ```
+2. Install dependencies and pre-commit hooks:
+   ```bash
+   poetry install
+   pre-commit install
+   ```
+
+### Guidelines
+
+- **Code Formatting:** Ensure your code is properly formatted. This project uses `ruff` for linting and formatting.
+- **Typing:** All code must be fully typed. Use `mypy` to check for type issues:
+  ```bash
+  mypy .
+  ```
+- **Testing:** Add tests for any new features or changes. Run the test suite with:
+  ```bash
+  pytest
+  ```
+- **Commit Messages:** Follow conventional commit messages, e.g., feat: add new feature or fix: resolve issue with X
+
+### Submitting Changes
+
+1. Create a new branch for your feature or fix:
+   ```bash
+   git checkout -b feature/your-feature
+   ```
+2. Make your changes and commit them.
+3. Push to your fork and open a pull request.
+
+I appreciate your contributions! 🚀
+
 ---
 
 ## TODO
