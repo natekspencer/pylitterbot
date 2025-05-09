@@ -97,14 +97,26 @@ async def test_litter_robot_4(
                         "value": "catWeight",
                         "actionValue": "6.35",
                     },
+                    {
+                        "timestamp": "2022-09-17 20:40:07.000000000",
+                        "value": "odometerCleanCycles",
+                        "actionValue": "42",
+                    },
+                    {
+                        "timestamp": "2022-09-17 20:39:56.000000000",
+                        "value": "litterHopperDispensed",
+                        "actionValue": "84",
+                    },
                 ]
             }
         },
     )
-    activities = await robot.get_activity_history(3)
-    assert len(activities) == 3
+    activities = await robot.get_activity_history(5)
+    assert len(activities) == 5
     assert activities[0].action == LitterBoxStatus.CLEAN_CYCLE_COMPLETE
     assert activities[2].action == "Pet Weight Recorded: 6.35 lbs"
+    assert activities[3].action == "Clean Cycles: 42"
+    assert activities[4].action == "Litter Dispensed: 84"
     with pytest.raises(InvalidCommandException):
         await robot.get_activity_history(0)
 
