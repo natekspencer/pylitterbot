@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
 from json import dumps
-import os
 from typing import TYPE_CHECKING, Any, Dict, Union, cast
 from uuid import uuid4
 
@@ -753,8 +753,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return bool(firmware.get("isUpdateTriggered", False))
 
     async def toggle_hopper(self, is_removed: bool) -> bool:
-        """Enables/Disables the LitterHopper. A disabled hopper is synonymous
-        with being removed. Returns `True` if request was successful."""
+        """Enables/Disables the LitterHopper. A disabled hopper is synonymous with being removed. Returns `True` if request was successful."""
         data = await self._post(
             json={
                 "query": """
