@@ -464,7 +464,7 @@ async def test_litter_hopper_toggle(
     expected_hopper_status: HopperStatus | None,
     expected_return: bool,
 ) -> None:
-    """Tests that commands for Litter-Robot 4 are sent as expected."""
+    """Tests that LitterHopper toggling works as expected."""
     robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
 
     mock_aioresponse.clear()
