@@ -44,6 +44,8 @@ ACTIVITY_STATUS_MAP: dict[str, LitterBoxStatus | str] = {
     "catDetectStuckLaser": LitterBoxStatus.CAT_SENSOR_FAULT,
     "catWeight": "Pet Weight Recorded",
     "DFIFullFlagOn": LitterBoxStatus.DRAWER_FULL,
+    "litterHopperDispensed": "Litter Dispensed",
+    "odometerCleanCycles": "Clean Cycles",
     "powerTypeDC": "Battery Backup",
     "robotCycleStateCatDetect": LitterBoxStatus.CAT_SENSOR_INTERRUPTED,
     "robotCycleStatusDump": LitterBoxStatus.CLEAN_CYCLE,
@@ -413,6 +415,11 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         action = ACTIVITY_STATUS_MAP.get(value, value)
         if value == "catWeight":
             action = f"{action}: {activity['actionValue']} lbs"
+        if value == self._data_cycle_count:
+            action = f"{action}: {activity['actionValue']}"
+        if value == "litterHopperDispensed":
+            # TODO: figure out what this value refers to. Could it be a fraction of lbs? Number of motor revolutions?
+            action = f"{action}: {activity['actionValue']}"
         return action
 
     def _parse_sleep_info(self) -> None:
