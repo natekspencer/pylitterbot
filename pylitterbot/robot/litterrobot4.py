@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
 from json import dumps
+import os
 from typing import TYPE_CHECKING, Any, Dict, Union, cast
 from uuid import uuid4
 
@@ -57,6 +59,8 @@ CYCLE_STATE_STATUS_MAP = {
 DISPLAY_CODE_STATUS_MAP = {"DC_CAT_DETECT": LitterBoxStatus.CAT_DETECTED}
 
 LITTER_LEVEL_EMPTY = 500
+
+POST_MUTATION_REFRESH_DELAY_SECONDS = 5
 
 
 @unique
@@ -224,6 +228,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def hopper_status(self) -> HopperStatus | None:
         """Return the hopper status."""
+        if self._data.get("hopperStatus") is None:
+            return None
         return to_enum(self._data.get("hopperStatus"), HopperStatus)
 
     @property
@@ -233,7 +239,9 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def is_hopper_removed(self) -> bool | None:
-        """Return `True` if the hopper is removed."""
+        """Return `True` if the hopper is removed/disabled."""
+        if self._data.get("isHopperRemoved") is None:
+            return None
         return self._data.get("isHopperRemoved") is True
 
     @property
@@ -743,6 +751,41 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         data = cast(dict, data)
         firmware = data.get("data", {}).get("litterRobot4TriggerFirmwareUpdate", {})
         return bool(firmware.get("isUpdateTriggered", False))
+
+    async def toggle_hopper(self, is_removed: bool) -> bool:
+        """Enables/Disables the LitterHopper. A disabled hopper is synonymous
+        with being removed. Returns `True` if request was successful."""
+        data = await self._post(
+            json={
+                "query": """
+                    mutation ToggleHopper($serial: String!, $isRemoved: Boolean!) {
+                        toggleHopper(serial: $serial, isRemoved: $isRemoved) {
+                            success
+                        }
+                    }
+                """,
+                "variables": {"serial": self.serial, "isRemoved": is_removed},
+            }
+        )
+        data = cast(dict, data)
+        toggle_hopper = data.get("data", {}).get("toggleHopper", {})
+        is_success = bool(toggle_hopper.get("success", False))
+        if is_success:
+            # data is now stale, hopper-related properties will have changed as
+            # a consequence. This mutation doesn't expose robot data for a
+            # partial update, so we refresh the data instead.
+            #
+            # Unfortunately `hopperStatus` doesn't instantaneously update to
+            # reflect the changes from the mutation. This is likely due to the
+            # LitterHopper device reporting back its own status back to the
+            # API. Wait 5s
+            if "PYTEST_CURRENT_TEST" not in os.environ:
+                _LOGGER.debug(
+                    f"sleeping {POST_MUTATION_REFRESH_DELAY_SECONDS}s before refreshing data"
+                )
+                await asyncio.sleep(POST_MUTATION_REFRESH_DELAY_SECONDS)
+            await self.refresh()
+        return is_success
 
     async def send_subscribe_request(self, send_stop: bool = False) -> None:
         """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
