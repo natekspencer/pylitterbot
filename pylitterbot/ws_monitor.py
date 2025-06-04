@@ -83,9 +83,9 @@ class WebSocketMonitor:
                     break
                 self._last_received = utcnow()
                 if msg.type == WSMsgType.TEXT:
-                    data = loads(msg.data)
+                    m_data = loads(msg.data)
                     # pylint: disable=protected-access
-                    if (data := self._robot_class.parse_websocket_message(data)) and (
+                    if (data := self._robot_class.parse_websocket_message(m_data)) and (
                         robot := self._account.get_robot(
                             data.get(self._robot_class._data_id)
                         )
