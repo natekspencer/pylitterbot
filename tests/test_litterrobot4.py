@@ -472,18 +472,6 @@ async def test_litter_hopper_toggle(
         LR4_ENDPOINT,
         payload={"data": mock_mutation_response_data},
     )
-    mock_aioresponse.post(
-        LR4_ENDPOINT,
-        payload={
-            "data": {
-                "getLitterRobot4BySerial": {
-                    **LITTER_ROBOT_4_DATA,
-                    "isHopperRemoved": is_removed,
-                    "hopperStatus": "DISABLED" if is_removed else "ENABLED",
-                }
-            }
-        },
-    )
 
     assert (await robot.toggle_hopper(is_removed)) is expected_return
     assert robot.hopper_status == expected_hopper_status

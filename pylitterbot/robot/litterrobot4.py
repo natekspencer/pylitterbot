@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
 from json import dumps
@@ -59,8 +57,6 @@ CYCLE_STATE_STATUS_MAP = {
 DISPLAY_CODE_STATUS_MAP = {"DC_CAT_DETECT": LitterBoxStatus.CAT_DETECTED}
 
 LITTER_LEVEL_EMPTY = 500
-
-POST_MUTATION_REFRESH_DELAY_SECONDS = 5
 
 
 @unique
@@ -751,7 +747,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return bool(firmware.get("isUpdateTriggered", False))
 
     async def toggle_hopper(self, is_removed: bool) -> bool:
-        """Enables/Disables the LitterHopper. A disabled hopper is synonymous with being removed. Returns `True` if request was successful."""
+        """Enables/Disables the LitterHopper. A disabled hopper is synonymous with being removed. Returns `True` if request was successful.
+
+        NOTE: The API appears to take ~5 seconds to reflect the data changes made by this method. To prevent surprises, this method will fake the expected changes to Hopper-related data properties before returning. If you need a guaranteed state, refresh the data afterwards.
+        """
         data = await self._post(
             json={
                 "query": """
@@ -770,18 +769,19 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         if is_success:
             # data is now stale, hopper-related properties will have changed as
             # a consequence. This mutation doesn't expose robot data for a
-            # partial update, so we refresh the data instead.
+            # partial update, so we splice in reasonable data changes instead.
             #
             # Unfortunately `hopperStatus` doesn't instantaneously update to
-            # reflect the changes from the mutation. This is likely due to the
-            # LitterHopper device reporting back its own status back to the
-            # API. Wait 5s
-            if "PYTEST_CURRENT_TEST" not in os.environ:
-                _LOGGER.debug(
-                    f"sleeping {POST_MUTATION_REFRESH_DELAY_SECONDS}s before refreshing data"
-                )
-                await asyncio.sleep(POST_MUTATION_REFRESH_DELAY_SECONDS)
-            await self.refresh()
+            # reflect the changes from the mutation, so we can't perform a
+            # simple data refresh. This is likely due to the LitterHopper
+            # device reporting back its own status back to the API.
+            self._update_data(
+                {
+                    "isHopperRemoved": is_removed,
+                    "hopperStatus": "DISABLED" if is_removed else "ENABLED",
+                },
+                partial=True,
+            )
         return is_success
 
     async def send_subscribe_request(self, send_stop: bool = False) -> None:
