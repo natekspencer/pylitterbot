@@ -228,8 +228,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def hopper_status(self) -> HopperStatus | None:
         """Return the hopper status."""
-        if self._data.get("hopperStatus") is None:
-            return None
         return to_enum(self._data.get("hopperStatus"), HopperStatus)
 
     @property
