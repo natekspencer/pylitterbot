@@ -442,14 +442,14 @@ async def test_litter_robot_4_commands(
         (
             True,
             {"toggleHopper": {"success": False}},
-            None,
+            False,
             None,
             False,
         ),
         (
             False,
             {"toggleHopper": {"success": False}},
-            None,
+            False,
             None,
             False,
         ),
