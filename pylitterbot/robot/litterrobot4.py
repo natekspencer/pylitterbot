@@ -235,7 +235,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def is_hopper_removed(self) -> bool | None:
-        """Return `True` if the hopper is removed."""
+        """Return `True` if the hopper is removed/disabled."""
         return self._data.get("isHopperRemoved") is True
 
     @property
@@ -750,6 +750,44 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         data = cast(dict, data)
         firmware = data.get("data", {}).get("litterRobot4TriggerFirmwareUpdate", {})
         return bool(firmware.get("isUpdateTriggered", False))
+
+    async def toggle_hopper(self, is_removed: bool) -> bool:
+        """Enables/Disables the LitterHopper. A disabled hopper is synonymous with being removed. Returns `True` if request was successful.
+
+        NOTE: The API appears to take ~5 seconds to reflect the data changes made by this method. To prevent surprises, this method will fake the expected changes to Hopper-related data properties before returning. If you need a guaranteed state, refresh the data afterwards.
+        """
+        data = await self._post(
+            json={
+                "query": """
+                    mutation ToggleHopper($serial: String!, $isRemoved: Boolean!) {
+                        toggleHopper(serial: $serial, isRemoved: $isRemoved) {
+                            success
+                        }
+                    }
+                """,
+                "variables": {"serial": self.serial, "isRemoved": is_removed},
+            }
+        )
+        data = cast(dict, data)
+        toggle_hopper = data.get("data", {}).get("toggleHopper", {})
+        is_success = bool(toggle_hopper.get("success", False))
+        if is_success:
+            # data is now stale, hopper-related properties will have changed as
+            # a consequence. This mutation doesn't expose robot data for a
+            # partial update, so we splice in reasonable data changes instead.
+            #
+            # Unfortunately `hopperStatus` doesn't instantaneously update to
+            # reflect the changes from the mutation, so we can't perform a
+            # simple data refresh. This is likely due to the LitterHopper
+            # device reporting back its own status back to the API.
+            self._update_data(
+                {
+                    "isHopperRemoved": is_removed,
+                    "hopperStatus": "DISABLED" if is_removed else "ENABLED",
+                },
+                partial=True,
+            )
+        return is_success
 
     async def send_subscribe_request(self, send_stop: bool = False) -> None:
         """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""

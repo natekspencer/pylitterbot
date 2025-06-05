@@ -17,6 +17,7 @@ from pylitterbot.robot.litterrobot4 import (
     LITTER_LEVEL_EMPTY,
     LR4_ENDPOINT,
     BrightnessLevel,
+    HopperStatus,
     LitterRobot4,
     LitterRobot4Command,
     NightLightMode,
@@ -429,6 +430,68 @@ async def test_litter_robot_4_commands(
     json = list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json", {})
     assert "sendLitterRobot4Command" in json.get("query", "")
     assert json.get("variables", {}).get("command") == dispatch_command
+
+    await robot._account.disconnect()
+
+
+@pytest.mark.parametrize(
+    "is_removed,mock_mutation_response_data,expected_is_hopper_removed,expected_hopper_status,expected_return",
+    [
+        (
+            True,
+            {"toggleHopper": {"success": True}},
+            True,
+            HopperStatus.DISABLED,
+            True,
+        ),
+        (
+            False,
+            {"toggleHopper": {"success": True}},
+            False,
+            HopperStatus.ENABLED,
+            True,
+        ),
+        (
+            True,
+            {"toggleHopper": {"success": False}},
+            False,
+            None,
+            False,
+        ),
+        (
+            False,
+            {"toggleHopper": {"success": False}},
+            False,
+            None,
+            False,
+        ),
+    ],
+)
+async def test_litter_hopper_toggle(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+    is_removed: bool,
+    mock_mutation_response_data: dict,
+    expected_is_hopper_removed: bool | None,
+    expected_hopper_status: HopperStatus | None,
+    expected_return: bool,
+) -> None:
+    """Tests that LitterHopper toggling works as expected."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": mock_mutation_response_data},
+    )
+
+    assert (await robot.toggle_hopper(is_removed)) is expected_return
+    assert robot.hopper_status == expected_hopper_status
+    assert robot.is_hopper_removed is expected_is_hopper_removed
+
+    json = list(mock_aioresponse.requests.items())[-1][-1][0].kwargs.get("json", {})
+    assert "toggleHopper" in json.get("query", "")
+    assert json.get("variables", {}).get("isRemoved") == is_removed
 
     await robot._account.disconnect()
 
