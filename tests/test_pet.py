@@ -40,8 +40,14 @@ async def test_pet_setup(mock_aioresponse: aioresponses) -> None:
     assert pet.image_url is None
     assert pet.is_active
     assert pet.is_fixed
+    assert pet.is_healthy
     assert pet.pet_tag_id is None
     assert pet.weight_id_feature_enabled
+    assert len(pet.weight_history) == 2
+    assert pet.weight_history[0].timestamp == datetime.datetime(
+        2024, 4, 17, 12, 35, 42, tzinfo=datetime.timezone.utc
+    )
+    assert pet.weight_history[0].weight == 8.68
 
 
 async def test_pet_with_unexpected_values(
