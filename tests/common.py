@@ -304,6 +304,7 @@ PET_DATA: dict[str, Any] = {
     "environmentType": "INDOOR",
     "healthConcerns": [],
     "isActive": True,
+    "isHealthy": True,
     "whiskerProducts": [],
     "petTagId": None,
     "weightIdFeatureEnabled": True,

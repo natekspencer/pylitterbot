@@ -39,10 +39,16 @@ PET_MODEL = """
     isFixed
     environmentType
     healthConcerns
+    isHealthy
     isActive
     whiskerProducts
     petTagId
     weightIdFeatureEnabled
+    weightHistory {
+        weight
+        timestamp
+    }
+    weightHistoryErrorType
 }
 """
 
@@ -228,6 +234,11 @@ class Pet(Event):
         return cast(bool, self._data.get("isFixed", False))
 
     @property
+    def is_healthy(self) -> bool | None:
+        """Return `True` if the pet is healthy."""
+        return cast(bool, self._data.get("isHealthy", False))
+
+    @property
     def pet_tag_id(self) -> str | None:
         """Return the pet tag id, if any."""
         return self._data.get("petTagID")
@@ -236,6 +247,18 @@ class Pet(Event):
     def weight_id_feature_enabled(self) -> bool:
         """Return `True` if the weight id feature is enabled."""
         return cast(bool, self._data.get("weightIdFeatureEnabled", False))
+
+    @property
+    def weight_history(self) -> list[WeightMeasurement]:
+        """Return the weight history for the pet."""
+        weight_data = self._data.get("weightHistory") or []
+        return [
+            WeightMeasurement(
+                cast(datetime, to_timestamp(entry["timestamp"])), entry["weight"]
+            )
+            for entry in weight_data
+            if entry["timestamp"]
+        ]
 
     def _update_data(self, data: dict, partial: bool = False) -> None:
         """Save the pet info from a data dictionary."""
