@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum, unique
-from typing import cast
+from typing import Any, cast
 
 from deepdiff import DeepDiff
 
@@ -103,7 +103,7 @@ class PetType(Enum):
         return self.name.lower()
 
 
-@dataclass
+@dataclass(frozen=True)
 class WeightMeasurement:
     """Weight measurement."""
 
@@ -115,6 +115,21 @@ class WeightMeasurement:
         return f"{self.timestamp.isoformat()}: {self.weight} lbs"
 
 
+def parse_weight_history(
+    weight_data: list[dict[str, Any]] | None,
+) -> list[WeightMeasurement]:
+    """Parse weight history from a list."""
+    if not weight_data:
+        return []
+    return [
+        WeightMeasurement(
+            cast(datetime, to_timestamp(entry["timestamp"])), entry["weight"]
+        )
+        for entry in weight_data
+        if entry["timestamp"]
+    ]
+
+
 class Pet(Event):
     """Pet profile."""
 
@@ -123,6 +138,9 @@ class Pet(Event):
         super().__init__()
         self._data: dict = data
         self._session: Session = session
+        self._weight_history: list[WeightMeasurement] = []
+        if weight_data := data.get("weightHistory"):
+            self._weight_history = parse_weight_history(weight_data)
 
     def __str__(self) -> str:
         """Return str(self)."""
@@ -251,14 +269,7 @@ class Pet(Event):
     @property
     def weight_history(self) -> list[WeightMeasurement]:
         """Return the weight history for the pet."""
-        weight_data = self._data.get("weightHistory") or []
-        return [
-            WeightMeasurement(
-                cast(datetime, to_timestamp(entry["timestamp"])), entry["weight"]
-            )
-            for entry in weight_data
-            if entry["timestamp"]
-        ]
+        return self._weight_history
 
     def _update_data(self, data: dict, partial: bool = False) -> None:
         """Save the pet info from a data dictionary."""
@@ -271,19 +282,16 @@ class Pet(Event):
         ):
             _LOGGER.debug("%s updated: %s", self.name, diff)
 
+        if weight_data := data.get("weightHistory"):
+            self._weight_history = parse_weight_history(weight_data)
         self._data.update(data)
         self.emit(EVENT_UPDATE)
 
     async def fetch_weight_history(self, limit: int = 50) -> list[WeightMeasurement]:
         """Fetch a pet's weight history."""
         weight_data = await self.query_weight_history(self._session, self.id, limit)
-        return [
-            WeightMeasurement(
-                cast(datetime, to_timestamp(entry["timestamp"])), entry["weight"]
-            )
-            for entry in weight_data
-            if entry["timestamp"]
-        ]
+        self._weight_history = parse_weight_history(weight_data)
+        return self._weight_history
 
     async def refresh(self) -> None:
         """Refresh the data for the pet."""
