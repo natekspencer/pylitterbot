@@ -271,6 +271,10 @@ class Pet(Event):
         """Return the weight history for the pet."""
         return self._weight_history
 
+    def get_visits_since(self, start: datetime) -> int:
+        """Return the number of visits (recorded via weight history) since the given datetime."""
+        return sum(entry.timestamp >= start for entry in self.weight_history)
+
     def _update_data(self, data: dict, partial: bool = False) -> None:
         """Save the pet info from a data dictionary."""
         if diff := DeepDiff(

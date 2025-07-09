@@ -1,6 +1,6 @@
 """Test pet module."""
 
-import datetime
+from datetime import date, datetime, timezone
 
 import pytest
 from aioresponses import aioresponses
@@ -32,7 +32,7 @@ async def test_pet_setup(mock_aioresponse: aioresponses) -> None:
     assert pet.weight == 8.6
     assert pet.breeds == ["sphynx"]
     assert pet.age == 0
-    assert pet.birthday == datetime.date(2016, 7, 2)
+    assert pet.birthday == date(2016, 7, 2)
     assert pet.adoption_date is None
     assert pet.diet == PetDiet.BOTH
     assert pet.environment_type == PetEnvironment.INDOOR
@@ -44,10 +44,11 @@ async def test_pet_setup(mock_aioresponse: aioresponses) -> None:
     assert pet.pet_tag_id is None
     assert pet.weight_id_feature_enabled
     assert len(pet.weight_history) == 2
-    assert pet.weight_history[0].timestamp == datetime.datetime(
-        2024, 4, 17, 12, 35, 42, tzinfo=datetime.timezone.utc
+    assert pet.weight_history[0].timestamp == datetime(
+        2024, 4, 17, 12, 35, 42, tzinfo=timezone.utc
     )
     assert pet.weight_history[0].weight == 8.68
+    assert pet.get_visits_since(datetime(2024, 4, 17, 9, tzinfo=timezone.utc)) == 1
 
 
 async def test_pet_with_unexpected_values(
@@ -87,7 +88,8 @@ async def test_pet_weight_history(mock_aioresponse: aioresponses) -> None:
     )
     weight_history = await pet.fetch_weight_history()
     assert len(weight_history) == 2
-    assert weight_history[0].__str__() == "2024-04-17T18:30:12+00:00: 8.6 lbs"
+    assert str(weight_history[0]) == "2024-04-17T18:30:12+00:00: 8.6 lbs"
+    assert pet.get_visits_since(datetime(2024, 4, 17, 13, tzinfo=timezone.utc)) == 1
 
     with pytest.raises(InvalidCommandException):
         await pet.fetch_weight_history(-1)
