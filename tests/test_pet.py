@@ -98,8 +98,8 @@ async def test_pet_weight_history(mock_aioresponse: aioresponses) -> None:
         PET_PROFILE_ENDPOINT,
         payload={"data": {"getWeightHistoryByPetId": []}},
     )
-    with pytest.raises(LitterRobotException):
-        await pet.fetch_weight_history()
+    weight_history = await pet.fetch_weight_history()
+    assert len(weight_history) == 0
 
 
 async def test_fetch_pet_by_id(mock_aioresponse: aioresponses) -> None:
