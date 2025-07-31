@@ -11,7 +11,7 @@ from typing import Any, cast
 from deepdiff import DeepDiff
 
 from .event import EVENT_UPDATE, Event
-from .exceptions import InvalidCommandException, LitterRobotException
+from .exceptions import InvalidCommandException
 from .session import Session
 from .utils import to_timestamp
 
@@ -362,11 +362,7 @@ class Pet(Event):
         vars = {"petId": pet_id, "limit": limit}
 
         res = cast(dict, await Pet.query_graphql_api(session, query, vars))
-
-        if not (weight_data := res.get("data", {}).get("getWeightHistoryByPetId", [])):
-            raise LitterRobotException("Weight history could not be retrieved.")
-
-        return cast(list[dict], weight_data)
+        return cast(list[dict], res.get("data", {}).get("getWeightHistoryByPetId", []))
 
     @staticmethod
     async def query_graphql_api(
