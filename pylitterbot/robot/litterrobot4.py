@@ -239,6 +239,16 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return self._data.get("isHopperRemoved") is True
 
     @property
+    def is_hopper_enabled(self) -> bool | None:
+        """Return `True` if the hopper is enabled (not removed/disabled).
+
+        Returns `None` if unknown.
+        """
+        if (removed := self._data.get("isHopperRemoved")) is None:
+            return None
+        return removed is False
+
+    @property
     def is_online(self) -> bool:
         """Return `True` if the robot is online."""
         return self._data.get("isOnline") is True
@@ -788,6 +798,13 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                 partial=True,
             )
         return is_success
+
+    async def set_hopper_enabled(self, enabled: bool) -> bool:
+        """Enable or disable the hopper by inverting to the `toggle_hopper` API.
+
+        Setting `enabled=True` will send `isRemoved=False`, and vice versa.
+        """
+        return await self.toggle_hopper(is_removed=not enabled)
 
     async def send_subscribe_request(self, send_stop: bool = False) -> None:
         """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""

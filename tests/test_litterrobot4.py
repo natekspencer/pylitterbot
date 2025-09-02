@@ -496,6 +496,25 @@ async def test_litter_hopper_toggle(
     await robot._account.disconnect()
 
 
+async def test_hopper_enabled_helpers(mock_account: Account) -> None:
+    """Tests the helper for enabling/disabling hopper."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    # Initially unknown in fixture
+    assert robot.is_hopper_removed is None
+    assert robot.is_hopper_enabled is None
+
+    # When removed True -> enabled False
+    robot._update_data({"isHopperRemoved": True}, partial=True)
+    assert robot.is_hopper_removed is True
+    assert robot.is_hopper_enabled is False
+
+    # When removed False -> enabled True
+    robot._update_data({"isHopperRemoved": False}, partial=True)
+    assert robot.is_hopper_removed is False
+    assert robot.is_hopper_enabled is True
+
+
 @pytest.mark.parametrize(
     "updated_data,status",
     [

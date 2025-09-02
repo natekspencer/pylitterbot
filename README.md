@@ -88,6 +88,20 @@ Currently the following methods are available in the Robot class:
 - get_activity_history()
 - get_insight()
 
+For Litter-Robot 4 with a Litter Hopper accessory:
+
+- `hopper_status` (property)
+- `is_hopper_removed` / `is_hopper_enabled` (properties)
+- `toggle_hopper(is_removed: bool)` / `set_hopper_enabled(enabled: bool)`
+
+Example usage:
+
+```python
+# Enable the hopper (equivalent to toggle_hopper(is_removed=False))
+await robot.set_hopper_enabled(True)
+print(robot.hopper_status, robot.is_hopper_removed, robot.is_hopper_enabled)
+```
+
 ## Contributing
 
 Thank you for your interest in contributing! Follow these steps to set up your environment and ensure your changes meet the project's standards.
