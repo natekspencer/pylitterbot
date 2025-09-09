@@ -97,7 +97,7 @@ async def test_feeder_robot(
     assert await robot.give_snack()
     assert await robot.set_gravity_mode(True)
     assert robot.gravity_mode_enabled
-    assert robot.next_feeding is None
+    assert robot.next_feeding is None  # type: ignore[unreachable]
     assert await robot.set_night_light(True)
     assert await robot.set_panel_lockout(True)
 
