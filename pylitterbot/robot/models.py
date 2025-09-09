@@ -1,7 +1,19 @@
 """pylitterbot robot models."""
 
-FEEDER_ROBOT_MODEL = """
-{
+from datetime import datetime, timedelta, timezone
+
+FEEDING_FILTER = f"""(
+    order_by: {{ timestamp: desc }}
+    where: {{
+        _and: [
+            {{ status: {{ _eq: dispensed }} }}
+            {{ timestamp: {{ _gte: "{(datetime.now(timezone.utc) - timedelta(days=1)).isoformat()}" }} }}
+        ]
+    }}
+)"""
+
+FEEDER_ROBOT_MODEL = f"""
+{{
     id
     name
     serial
@@ -9,29 +21,29 @@ FEEDER_ROBOT_MODEL = """
     isEighthCupEnabled
     created_at
     household_id
-    state {
+    state {{
         id
         info
         updated_at
-        active_schedule {
+        active_schedule {{
             id
             name
             meals
             created_at
-        }
-    }
-    feeding_snack (limit: 10, order_by: {timestamp: desc}, where: {status:{_eq: dispensed}}) {
+        }}
+    }}
+    feeding_snack {FEEDING_FILTER} {{
         timestamp
         amount
-    }
-    feeding_meal (limit: 10, order_by: {timestamp: desc}, where: {status:{_eq: dispensed}}) {
+    }}
+    feeding_meal {FEEDING_FILTER} {{
         timestamp
         amount
         meal_name
         meal_number
         meal_total_portions
-    }
-}
+    }}
+}}
 """
 
 SLEEP_WAKE_ENABLED_MODEL = """

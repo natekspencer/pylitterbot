@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from datetime import datetime, time, timedelta
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from ..enums import FeederRobotCommand
 from ..exceptions import InvalidCommandException
@@ -32,6 +34,16 @@ FOOD_LEVEL_MAP = {9: 100, 8: 70, 7: 60, 6: 50, 5: 40, 4: 30, 3: 20, 2: 10, 1: 5,
 MEAL_INSERT_SIZE_CUPS_MAP = {0: 1 / 4, 1: 1 / 8}
 MEAL_INSERT_SIZE_CUPS_REVERSE_MAP = {v: k for k, v in MEAL_INSERT_SIZE_CUPS_MAP.items()}
 
+WEEKDAY_MAP = {
+    "Mon": 0,
+    "Tue": 1,
+    "Wed": 2,
+    "Thu": 3,
+    "Fri": 4,
+    "Sat": 5,
+    "Sun": 6,
+}
+
 
 class FeederRobot(Robot):  # pylint: disable=abstract-method
     """Data and methods for interacting with a Feeder-Robot automatic pet feeder."""
@@ -44,6 +56,9 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     _data_name = "name"
     _data_serial = "serial"
     _data_setup_date = "created_at"
+
+    _last_updated_at: str | None = None
+    _next_feeding: datetime | None = None
 
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a Feeder-Robot."""
@@ -63,6 +78,11 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     def food_level(self) -> int:
         """Return the food level."""
         return FOOD_LEVEL_MAP.get(self._state_info("level"), 0)
+
+    @property
+    def gravity_mode_enabled(self) -> bool:
+        """Return `True` if gravity mode is enabled."""
+        return bool(self._state_info("gravity"))
 
     @property
     def is_online(self) -> bool:
@@ -110,6 +130,13 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         return cups
 
     @property
+    def next_feeding(self) -> datetime | None:
+        """Return the next feeding, if any."""
+        if self._next_feeding and self._next_feeding < utcnow():
+            self._calculate_next_feeding()
+        return self._next_feeding
+
+    @property
     def night_light_mode_enabled(self) -> bool:
         """Return `True` if night light mode is enabled."""
         return bool(self._state_info("autoNightMode"))
@@ -132,6 +159,92 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         if bool(self._state_info("dcPower")):
             return "DC"
         return "NC"  # This *may* never happen
+
+    @property
+    def timezone(self) -> str:
+        """Return the timezone."""
+        return str(self._data.get("timezone"))
+
+    @property
+    def updated_at(self) -> str:
+        """Return the updated at string."""
+        return str(self._data["state"].get("updated_at"))
+
+    def get_food_dispensed_since(self, start: datetime) -> float:
+        """Return the amount of food (in cups) since the given datetime."""
+        feedings: list[dict] = list(self._data.get("feeding_meal") or [])
+        feedings += self._data.get("feeding_snack") or []
+        amount: float = sum(
+            feeding["amount"] * feeding.get("meal_total_portions", 1)
+            for feeding in feedings
+            if cast(datetime, to_timestamp(feeding["timestamp"])) >= start
+        )
+        return amount
+
+    def _calculate_next_feeding(self) -> None:
+        """Return the next scheduled feeding, if any."""
+        if self.gravity_mode_enabled:
+            self._next_feeding = None
+            return
+
+        schedule = self._data["state"].get("active_schedule")
+        if not schedule or "meals" not in schedule:
+            self._next_feeding = None
+            return
+
+        tz = ZoneInfo(self.timezone)
+        now = datetime.now(tz)
+
+        next_meal_time = None
+
+        for meal in schedule["meals"]:
+            if meal.get("paused"):
+                continue
+
+            # Skip meals with a skip date that is today or in the future
+            skip = meal.get("skip")
+            if skip and skip != "0000-01-01T00:00:00.000":
+                skip_dt = datetime.fromisoformat(skip)
+                if skip_dt.tzinfo is None:
+                    skip_dt = skip_dt.replace(tzinfo=tz)
+                if skip_dt.date() >= now.date():
+                    continue
+
+            meal_time = time(meal["hour"], meal["minute"])
+
+            for day in meal["days"]:
+                target_weekday = WEEKDAY_MAP[day]
+                days_ahead = (target_weekday - now.weekday() + 7) % 7
+
+                # If today, check if meal time has already passed
+                if days_ahead == 0 and meal_time <= now.time():
+                    days_ahead = 7
+
+                feeding_datetime = datetime.combine(
+                    now.date() + timedelta(days=days_ahead), meal_time
+                ).replace(tzinfo=tz)
+
+                if next_meal_time is None or feeding_datetime < next_meal_time:
+                    next_meal_time = feeding_datetime
+
+        self._next_feeding = next_meal_time
+
+    def _update_data(
+        self,
+        data: dict,
+        partial: bool = False,
+        callback: Callable[[], Any] | None = None,
+    ) -> None:
+        """Save the Feeder-Robot info from a data dictionary."""
+
+        def _callback() -> None:
+            if callback:
+                callback()
+            if self._last_updated_at != self.updated_at:
+                self._calculate_next_feeding()
+                self._last_updated_at = self.updated_at
+
+        super()._update_data(data, partial, _callback)
 
     async def _dispatch_command(self, command: str, value: bool) -> bool:
         """Send a command to the Feeder-Robot."""
@@ -228,6 +341,15 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
             {**self._data, **data.get("data", {}).get("update_feeder_unit_by_pk", {})}
         )
         return self.name == name
+
+    async def set_gravity_mode(self, value: bool) -> bool:
+        """Turn the gravity mode on or off."""
+        if await self._dispatch_command(FeederRobotCommand.SET_GRAVITY_MODE, value):
+            data = deepcopy(self._data)
+            data["state"]["info"]["gravity"] = value
+            data["state"]["updated_at"] = utcnow().isoformat()
+            self._update_data(data)
+        return self.gravity_mode_enabled == value
 
     async def set_night_light(self, value: bool) -> bool:
         """Turn the night light mode on or off."""
