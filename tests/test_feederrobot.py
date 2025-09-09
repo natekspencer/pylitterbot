@@ -2,7 +2,7 @@
 
 # pylint: disable=protected-access
 from copy import deepcopy
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from aioresponses import aioresponses
@@ -40,8 +40,9 @@ async def test_feeder_robot(
     assert not robot.panel_lock_enabled
     assert robot.power_status == "AC"
 
-    assert robot.get_food_dispensed_since(datetime(2022, 8, 1, tzinfo=UTC)) == 0.75
-    assert robot.get_food_dispensed_since(datetime(2022, 9, 1, tzinfo=UTC)) == 0.5
+    utc = timezone.utc
+    assert robot.get_food_dispensed_since(datetime(2022, 8, 1, tzinfo=utc)) == 0.75
+    assert robot.get_food_dispensed_since(datetime(2022, 9, 1, tzinfo=utc)) == 0.5
 
     # simulate different power statuses
     FEEDER_ROBOT_DATA["state"]["info"]["acPower"] = False

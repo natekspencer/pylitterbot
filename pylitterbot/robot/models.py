@@ -1,13 +1,13 @@
 """pylitterbot robot models."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 FEEDING_FILTER = f"""(
     order_by: {{ timestamp: desc }}
     where: {{
         _and: [
             {{ status: {{ _eq: dispensed }} }}
-            {{ timestamp: {{ _gte: "{(datetime.now(UTC) - timedelta(days=1)).isoformat()}" }} }}
+            {{ timestamp: {{ _gte: "{(datetime.now(timezone.utc) - timedelta(days=1)).isoformat()}" }} }}
         ]
     }}
 )"""
