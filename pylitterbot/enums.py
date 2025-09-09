@@ -14,6 +14,7 @@ class FeederRobotCommand:
 
     GIVE_SNACK = "giveSnack"
     SET_AUTO_NIGHT_MODE = "setAutoNightMode"
+    SET_GRAVITY_MODE = "setGravityMode"
     SET_PANEL_LOCKOUT = "setPanelLockout"
 
 
