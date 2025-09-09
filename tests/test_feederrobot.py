@@ -156,7 +156,7 @@ async def test_feeder_robot_schedule(
 
     assert not robot.gravity_mode_enabled
 
-    next_feeding = robot.next_feeding
+    assert (next_feeding := robot.next_feeding)
     assert next_feeding.isoformat() == expected_value
 
     freezer.move_to(next_feeding + timedelta(seconds=1))

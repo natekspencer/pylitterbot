@@ -177,7 +177,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         amount: float = sum(
             feeding["amount"] * feeding.get("meal_total_portions", 1)
             for feeding in feedings
-            if to_timestamp(feeding["timestamp"]) >= start
+            if cast(datetime, to_timestamp(feeding["timestamp"])) >= start
         )
         return amount
 
