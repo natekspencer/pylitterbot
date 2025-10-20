@@ -299,21 +299,22 @@ class Pet(Event):
 
     async def refresh(self) -> None:
         """Refresh the data for the pet."""
-        data = await self.query_by_id(self._session, self.id)
-        self._update_data(data)
+        if data := await self.query_by_id(self._session, self.id):
+            self._update_data(data)
 
     @classmethod
     async def fetch_pets_for_user(cls, session: Session, user_id: str) -> list[Pet]:
         """Fetch pets for a user."""
-        pets_data = await cls.query_by_user(session, user_id)
-        return [cls(pet_data, session) for pet_data in pets_data]
+        if pets_data := await cls.query_by_user(session, user_id):
+            return [cls(pet_data, session) for pet_data in pets_data]
+        return []
 
     @classmethod
-    async def fetch_pet_by_id(cls, session: Session, pet_id: str) -> Pet:
+    async def fetch_pet_by_id(cls, session: Session, pet_id: str) -> Pet | None:
         """Fetch a pet by id."""
-        pet_data = await cls.query_by_id(session, pet_id)
-        pet = cls(pet_data, session)
-        return pet
+        if pet_data := await cls.query_by_id(session, pet_id):
+            return cls(pet_data, session)
+        return None
 
     @staticmethod
     async def query_by_user(session: Session, user_id: str) -> list[dict]:
@@ -323,22 +324,22 @@ class Pet(Event):
                 getPetsByUser(userId: $userId ) {PET_MODEL}
             }}
         """
-        vars = {"userId": user_id}
+        variables = {"userId": user_id}
 
-        res = cast(dict, await Pet.query_graphql_api(session, query, vars))
+        res = cast(dict, await Pet.query_graphql_api(session, query, variables))
         return cast(list[dict], res.get("data", {}).get("getPetsByUser", []))
 
     @staticmethod
-    async def query_by_id(session: Session, pet_id: str) -> dict:
+    async def query_by_id(session: Session, pet_id: str) -> dict | None:
         """Query a pet by id."""
         query = f"""
             query GetPetByPetId($petId: String!) {{
                 getPetByPetId(petId: $petId ) {PET_MODEL}
             }}
         """
-        vars = {"petId": pet_id}
+        variables = {"petId": pet_id}
 
-        res = cast(dict, await Pet.query_graphql_api(session, query, vars))
+        res = cast(dict, await Pet.query_graphql_api(session, query, variables))
         return cast(dict, res.get("data", {}).get("getPetByPetId", {}))
 
     @staticmethod
@@ -359,9 +360,9 @@ class Pet(Event):
                 }
             }
             """
-        vars = {"petId": pet_id, "limit": limit}
+        variables = {"petId": pet_id, "limit": limit}
 
-        res = cast(dict, await Pet.query_graphql_api(session, query, vars))
+        res = cast(dict, await Pet.query_graphql_api(session, query, variables))
         return cast(list[dict], res.get("data", {}).get("getWeightHistoryByPetId", []))
 
     @staticmethod
