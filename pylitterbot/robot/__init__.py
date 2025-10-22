@@ -52,6 +52,10 @@ class Robot(Event):
         """Return str(self)."""
         return f"Name: {self.name}, Model: {self.model}, Serial: {self.serial}, id: {self.id}"
 
+    def to_dict(self) -> dict[str, Any]:
+        """Return the robot data dict."""
+        return self._data
+
     @property
     def id(self) -> str:  # pylint: disable=invalid-name
         """Return the id of the robot."""

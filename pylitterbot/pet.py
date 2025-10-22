@@ -146,6 +146,10 @@ class Pet(Event):
         """Return str(self)."""
         return f"Name: {self.name}, Gender: {self.gender}, Type: {self.pet_type}, Breed: {self.breeds}, id: {self.id}"
 
+    def to_dict(self) -> dict[str, Any]:
+        """Return the pet data dict."""
+        return self._data
+
     @property
     def id(self) -> str:
         """Return the id of the pet."""
