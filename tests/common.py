@@ -349,7 +349,7 @@ PET_DATA: dict[str, Any] = {
     "isActive": True,
     "isHealthy": True,
     "whiskerProducts": [],
-    "petTagId": None,
+    "petTagAssigned": None,
     "weightIdFeatureEnabled": True,
     "weightHistory": [
         {"weight": 8.68, "timestamp": "2024-04-17T12:35:42.000Z"},

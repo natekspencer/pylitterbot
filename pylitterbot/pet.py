@@ -13,7 +13,7 @@ from deepdiff import DeepDiff
 from .event import EVENT_UPDATE, Event
 from .exceptions import InvalidCommandException
 from .session import Session
-from .utils import to_timestamp
+from .utils import dig, to_timestamp
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,7 +42,11 @@ PET_MODEL = """
     isHealthy
     isActive
     whiskerProducts
-    petTagId
+    petTagAssigned {
+        petTag {
+            petTagId
+        }
+    }
     weightIdFeatureEnabled
     weightHistory {
         weight
@@ -263,7 +267,7 @@ class Pet(Event):
     @property
     def pet_tag_id(self) -> str | None:
         """Return the pet tag id, if any."""
-        return self._data.get("petTagID")
+        return cast(str | None, dig(self._data, "petTagAssigned.petTag.petTagId"))
 
     @property
     def weight_id_feature_enabled(self) -> bool:
@@ -331,7 +335,7 @@ class Pet(Event):
         variables = {"userId": user_id}
 
         res = cast(dict, await Pet.query_graphql_api(session, query, variables))
-        return cast(list[dict], res.get("data", {}).get("getPetsByUser", []))
+        return cast(list[dict], dig(res, "data.getPetsByUser") or [])
 
     @staticmethod
     async def query_by_id(session: Session, pet_id: str) -> dict | None:
@@ -344,7 +348,7 @@ class Pet(Event):
         variables = {"petId": pet_id}
 
         res = cast(dict, await Pet.query_graphql_api(session, query, variables))
-        return cast(dict, res.get("data", {}).get("getPetByPetId", {}))
+        return cast(dict | None, dig(res, "data.getPetByPetId"))
 
     @staticmethod
     async def query_weight_history(
@@ -367,7 +371,7 @@ class Pet(Event):
         variables = {"petId": pet_id, "limit": limit}
 
         res = cast(dict, await Pet.query_graphql_api(session, query, variables))
-        return cast(list[dict], res.get("data", {}).get("getWeightHistoryByPetId", []))
+        return cast(list[dict], dig(res, "data.getWeightHistoryByPetId") or [])
 
     @staticmethod
     async def query_graphql_api(

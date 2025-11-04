@@ -125,3 +125,15 @@ async def test_pet_refresh(mock_aioresponse: aioresponses) -> None:
     )
     await pet.refresh()
     assert pet.weight == 8.1
+
+
+async def test_pet_refresh_no_data(mock_aioresponse: aioresponses) -> None:
+    """Tests refreshing a pet when data returned is null."""
+    pet = await get_pet()
+
+    mock_aioresponse.post(
+        PET_PROFILE_ENDPOINT,
+        payload={"data": None},
+    )
+    await pet.refresh()
+    assert pet.weight == 8.6

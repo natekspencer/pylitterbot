@@ -140,6 +140,18 @@ def redact(data: _T) -> _T:
     return cast(_T, redacted)
 
 
+def dig(obj: Any, path: str) -> Any | None:
+    """Safely retrieve nested dictionary fields using a dot-separated path."""
+    cur = obj
+    for key in path.split("."):
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(key)
+        if cur is None:
+            return None
+    return cur
+
+
 def first_value(
     data: dict | None,
     keys: Iterable,
