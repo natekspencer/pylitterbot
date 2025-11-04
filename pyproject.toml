@@ -1,21 +1,28 @@
-[tool.poetry]
+[project]
 name = "pylitterbot"
-version = "0.0.0"
 description = "Python package for controlling Whisker automatic robots."
-authors = ["Nathan Spencer <natekspencer@gmail.com>"]
-license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/natekspencer/pylitterbot"
-repository = "https://github.com/natekspencer/pylitterbot"
+license = "MIT"
+authors = [
+    { name = "Nathan Spencer", email = "natekspencer@gmail.com" }
+]
 keywords = ["Whisker", "Litter-Robot", "Feeder-Robot", "litter box", "pet feeder", "asynchronous"]
-include = ["pylitterbot/py.typed"]
+dependencies = [
+    "aiohttp (>=3.8.1)",
+    "deepdiff (>=6.2.1)",
+    "pyjwt (>=2.7.0)",
+    "pycognito (>=2024.2.0)"
+]
+requires-python = ">=3.9.2"
+dynamic = [ "version" ]
 
-[tool.poetry.dependencies]
-python = ">=3.9.2,<4.0"
-aiohttp = "^3.8.1"
-deepdiff = ">=6.2.1,<9.0.0"
-PyJWT = "^2.7.0"
-pycognito = "^2024.2.0"
+[project.urls]
+Homepage = "https://github.com/natekspencer/pylitterbot"
+Repository = "https://github.com/natekspencer/pylitterbot"
+
+[tool.poetry]
+version = "0.0.0"
+include = ["pylitterbot/py.typed"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.3.1,<9.0.0"
