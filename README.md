@@ -142,7 +142,7 @@ I appreciate your contributions! 🚀
 
 I'm not employed by Whisker and provide this python package as-is.
 
-If you don't already own a Litter-Robot, please consider using [my referral link](https://share.litter-robot.com/x/YZ325z) to purchase your own robot and save $50!
+If you don't already own a Litter-Robot, please consider using [my referral link](https://share.litter-robot.com/x/XJAY1D) to purchase your own robot and save $50!
 
 If you already own a Litter-Robot and/or want to donate to me directly, consider buying me a coffee (or beer) instead by using the link below:
 
