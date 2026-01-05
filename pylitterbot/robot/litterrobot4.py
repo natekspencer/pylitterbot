@@ -14,7 +14,7 @@ try:
 except ImportError:  # pragma: no cover
     from backports.zoneinfo import ZoneInfo  # type: ignore
 
-from ..activity import Activity, Insight
+from ..activity import Activity, Insight, WeightHistoryEntry
 from ..enums import LitterBoxStatus, LitterRobot4Command
 from ..exceptions import InvalidCommandException, LitterRobotException
 from ..utils import encode, to_enum, to_timestamp, utcnow
@@ -709,6 +709,101 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         _LOGGER.debug("reassignPetVisit result: %s", result)
         # The mutation returns a String, we consider non-null as success
         return result is not None
+
+    async def get_weight_history(
+        self,
+        days: int = 30,
+    ) -> list[WeightHistoryEntry]:
+        """Return weight history entries from AWS Timestream.
+
+        This queries the weightHistory API which provides per-second weight readings
+        with pet associations. The timestamps from this API can be used with
+        reassign_visit() to reassign pets.
+
+        Args:
+        ----
+            days: Number of days of history to retrieve (default 30).
+
+        Returns:
+        -------
+            List of WeightHistoryEntry objects sorted by timestamp (newest first).
+
+        Note:
+        ----
+            This API requires the raw id_token WITHOUT the "Bearer " prefix,
+            unlike most other API calls.
+
+        """
+        id_token = self._account.session.id_token
+        if id_token is None:
+            return []
+
+        # Calculate start timestamp
+        start_timestamp = (utcnow() - timedelta(days=days)).strftime(
+            "%Y-%m-%dT%H:%M:%S.%fZ"
+        )
+
+        # This API requires the raw id_token (no Bearer prefix)
+        data = await self._post(
+            json={
+                "query": """
+                    query weightHistory(
+                        $serial: String!
+                        $startTimestamp: String
+                    ) {
+                        weightHistory(
+                            serial: $serial
+                            startTimestamp: $startTimestamp
+                        ) {
+                            record_field_00
+                            time
+                        }
+                    }
+                """,
+                "variables": {
+                    "serial": self.serial,
+                    "startTimestamp": start_timestamp,
+                },
+            },
+            headers={"authorization": id_token},
+        )
+
+        entries: list[WeightHistoryEntry] = []
+        weight_history = cast(dict, data).get("data", {}).get("weightHistory", [])
+
+        for record in weight_history:
+            try:
+                # record_field_00 is a composite: "{PET_UUID}_{WEIGHT}" or "None_{WEIGHT}"
+                field = record.get("record_field_00", "")
+                time_str = record.get("time", "")
+
+                # Parse the composite field
+                if "_" in field:
+                    pet_part, weight_str = field.rsplit("_", 1)
+                    pet_id = None if pet_part == "None" else pet_part
+                    weight = float(weight_str)
+                else:
+                    continue  # Skip malformed records
+
+                # Parse timestamp (format: "2025-12-29 17:56:12.000000000")
+                timestamp = datetime.strptime(
+                    time_str.split(".")[0], "%Y-%m-%d %H:%M:%S"
+                ).replace(tzinfo=timezone.utc)
+
+                entries.append(
+                    WeightHistoryEntry(
+                        timestamp=timestamp,
+                        weight=weight,
+                        pet_id=pet_id,
+                    )
+                )
+            except (ValueError, AttributeError) as ex:
+                _LOGGER.debug(
+                    "Failed to parse weight history record: %s - %s", record, ex
+                )
+                continue
+
+        return entries
 
     async def get_insight(
         self, days: int = 30, timezone_offset: int | None = None

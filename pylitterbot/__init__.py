@@ -3,6 +3,7 @@
 __version__ = "0.0.0"
 
 from .account import Account
+from .activity import WeightHistoryEntry
 from .pet import Pet
 from .robot import Robot
 from .robot.feederrobot import FeederRobot
@@ -18,4 +19,5 @@ __all__ = [
     "LitterRobot4",
     "FeederRobot",
     "Pet",
+    "WeightHistoryEntry",
 ]

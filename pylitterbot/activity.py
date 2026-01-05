@@ -37,3 +37,21 @@ class Insight:
     def __str__(self) -> str:
         """Return self(str)."""
         return f"Completed {pluralize('cycle', self.total_cycles)} averaging {self.average_cycles} cycles per day over the last {pluralize('day', self.total_days)}"
+
+
+@dataclass
+class WeightHistoryEntry:
+    """Represents a weight history entry from the weightHistory API.
+
+    These entries come from the AWS Timestream weightHistory query and contain
+    per-second weight readings with optional pet associations.
+    """
+
+    timestamp: datetime
+    """The UTC timestamp of the weight reading."""
+
+    weight: float
+    """The weight in pounds."""
+
+    pet_id: str | None
+    """The pet ID if assigned, None if unassigned."""

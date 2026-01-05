@@ -101,8 +101,11 @@ class Session(Event, ABC):
         if "headers" not in kwargs:
             kwargs["headers"] = {}
 
-        if (authorization := await self.get_bearer_authorization()) is not None:
-            kwargs["headers"]["authorization"] = authorization
+        # Only set authorization if not already provided (allows custom auth headers)
+        authorization = None
+        if "authorization" not in kwargs["headers"]:
+            if (authorization := await self.get_bearer_authorization()) is not None:
+                kwargs["headers"]["authorization"] = authorization
 
         async with self.websession.request(method, url, **kwargs) as resp:
             if resp.status == 500:

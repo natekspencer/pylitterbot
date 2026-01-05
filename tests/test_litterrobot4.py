@@ -709,3 +709,188 @@ async def test_reassign_visit_failure(
     assert result is False
 
     await robot._account.disconnect()
+
+
+async def test_get_weight_history_success(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests that get_weight_history returns parsed weight history entries."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    # Set a mock id_token since get_weight_history requires it
+    mock_account._session._LitterRobotSession__id_token = "mock_id_token"  # type: ignore[attr-defined]
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "weightHistory": [
+                    {
+                        "record_field_00": "pet-123_15.26",
+                        "time": "2025-12-29 17:56:12.000000000",
+                    },
+                    {
+                        "record_field_00": "None_8.50",
+                        "time": "2025-12-28 10:30:00.000000000",
+                    },
+                    {
+                        "record_field_00": "pet-456_12.00",
+                        "time": "2025-12-27 08:15:30.000000000",
+                    },
+                ]
+            }
+        },
+    )
+
+    entries = await robot.get_weight_history(days=7)
+
+    assert len(entries) == 3
+
+    # First entry - assigned to pet
+    assert entries[0].pet_id == "pet-123"
+    assert entries[0].weight == 15.26
+    assert entries[0].timestamp == datetime(
+        2025, 12, 29, 17, 56, 12, tzinfo=timezone.utc
+    )
+
+    # Second entry - unassigned (None)
+    assert entries[1].pet_id is None
+    assert entries[1].weight == 8.50
+    assert entries[1].timestamp == datetime(
+        2025, 12, 28, 10, 30, 0, tzinfo=timezone.utc
+    )
+
+    # Third entry - assigned to different pet
+    assert entries[2].pet_id == "pet-456"
+    assert entries[2].weight == 12.00
+
+    await robot._account.disconnect()
+
+
+async def test_get_weight_history_empty(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests that get_weight_history handles empty results."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    # Set a mock id_token since get_weight_history requires it
+    mock_account._session._LitterRobotSession__id_token = "mock_id_token"  # type: ignore[attr-defined]
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": {"weightHistory": []}},
+    )
+
+    entries = await robot.get_weight_history()
+
+    assert entries == []
+
+    await robot._account.disconnect()
+
+
+async def test_get_weight_history_malformed_records(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests that get_weight_history skips malformed record_field_00 values."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    mock_account._session._LitterRobotSession__id_token = "mock_id_token"  # type: ignore[attr-defined]
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "weightHistory": [
+                    {
+                        # Valid entry
+                        "record_field_00": "pet-123_15.26",
+                        "time": "2025-12-29 17:56:12.000000000",
+                    },
+                    {
+                        # Malformed: no underscore separator
+                        "record_field_00": "malformed",
+                        "time": "2025-12-28 10:30:00.000000000",
+                    },
+                    {
+                        # Malformed: empty string
+                        "record_field_00": "",
+                        "time": "2025-12-27 08:15:30.000000000",
+                    },
+                    {
+                        # Malformed: weight is not a number
+                        "record_field_00": "pet-456_notanumber",
+                        "time": "2025-12-26 08:00:00.000000000",
+                    },
+                    {
+                        # Valid entry after malformed ones
+                        "record_field_00": "None_8.50",
+                        "time": "2025-12-25 12:00:00.000000000",
+                    },
+                ]
+            }
+        },
+    )
+
+    entries = await robot.get_weight_history(days=7)
+
+    assert len(entries) == 2
+    assert entries[0].pet_id == "pet-123"
+    assert entries[0].weight == 15.26
+    assert entries[1].pet_id is None
+    assert entries[1].weight == 8.50
+
+    await robot._account.disconnect()
+
+
+@pytest.mark.parametrize(
+    "timestamp_input,expected_timestamp",
+    [
+        # Plain ISO string (no suffix)
+        ("2025-12-29T17:56:12", "2025-12-29T17:56:12"),
+        # Z suffix
+        ("2025-12-29T17:56:12Z", "2025-12-29T17:56:12"),
+        # +00:00 suffix
+        ("2025-12-29T17:56:12+00:00", "2025-12-29T17:56:12"),
+        # Positive timezone offset
+        ("2025-12-29T17:56:12+05:00", "2025-12-29T17:56:12"),
+        # Negative timezone offset
+        ("2025-12-29T17:56:12-05:00", "2025-12-29T17:56:12"),
+        # With microseconds
+        ("2025-12-29T17:56:12.123456", "2025-12-29T17:56:12"),
+        # With microseconds and Z
+        ("2025-12-29T17:56:12.123456Z", "2025-12-29T17:56:12"),
+    ],
+)
+async def test_reassign_visit_timestamp_formats(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+    timestamp_input: str,
+    expected_timestamp: str,
+) -> None:
+    """Tests that various timestamp string formats are correctly normalized."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": {"reassignPetVisit": "success"}},
+    )
+
+    result = await robot.reassign_visit(
+        visit_timestamp=timestamp_input,
+        from_pet_id="pet-123",
+        to_pet_id="pet-456",
+    )
+    assert result is True
+
+    json = list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json", {})
+    variables = json.get("variables", {}).get("input", {})
+    assert variables["visitTimestamp"] == expected_timestamp
+
+    await robot._account.disconnect()
