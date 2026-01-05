@@ -548,3 +548,164 @@ async def test_litter_robot_4_status(
     # update data and assert expected result
     robot._update_data(updated_data, partial=True)
     assert robot.status == status
+
+
+async def test_reassign_visit_success(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests that reassign_visit successfully reassigns a visit between pets."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": {"reassignPetVisit": "success"}},
+    )
+
+    result = await robot.reassign_visit(
+        visit_timestamp="2025-12-29T17:56:12",
+        from_pet_id="pet-123",
+        to_pet_id="pet-456",
+    )
+    assert result is True
+
+    json = list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json", {})
+    assert "reassignPetVisit" in json.get("query", "")
+    variables = json.get("variables", {}).get("input", {})
+    assert variables["robotSerial"] == "LR4C000001"
+    assert variables["visitTimestamp"] == "2025-12-29T17:56:12"
+    assert variables["fromPetId"] == "pet-123"
+    assert variables["toPetId"] == "pet-456"
+
+    await robot._account.disconnect()
+
+
+async def test_reassign_visit_from_unknown(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests reassigning from unassigned (None) to a pet."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": {"reassignPetVisit": "success"}},
+    )
+
+    result = await robot.reassign_visit(
+        visit_timestamp="2025-12-29T17:56:12",
+        from_pet_id=None,
+        to_pet_id="pet-456",
+    )
+    assert result is True
+
+    json = list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json", {})
+    variables = json.get("variables", {}).get("input", {})
+    assert variables["fromPetId"] == ""
+    assert variables["toPetId"] == "pet-456"
+
+    await robot._account.disconnect()
+
+
+async def test_reassign_visit_to_unknown(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests reassigning from a pet to unassigned (None)."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": {"reassignPetVisit": "success"}},
+    )
+
+    result = await robot.reassign_visit(
+        visit_timestamp="2025-12-29T17:56:12",
+        from_pet_id="pet-123",
+        to_pet_id=None,
+    )
+    assert result is True
+
+    json = list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json", {})
+    variables = json.get("variables", {}).get("input", {})
+    assert variables["fromPetId"] == "pet-123"
+    assert variables["toPetId"] == ""
+
+    await robot._account.disconnect()
+
+
+async def test_reassign_visit_with_datetime(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests that datetime objects are correctly converted to timestamp strings."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": {"reassignPetVisit": "success"}},
+    )
+
+    # Test with timezone-aware datetime
+    visit_time = datetime(2025, 12, 29, 17, 56, 12, tzinfo=timezone.utc)
+    result = await robot.reassign_visit(
+        visit_timestamp=visit_time,
+        from_pet_id="pet-123",
+        to_pet_id="pet-456",
+    )
+    assert result is True
+
+    json = list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json", {})
+    variables = json.get("variables", {}).get("input", {})
+    assert variables["visitTimestamp"] == "2025-12-29T17:56:12"
+
+    await robot._account.disconnect()
+
+
+async def test_reassign_visit_same_pet_raises(
+    mock_account: Account,
+) -> None:
+    """Tests that reassigning to the same pet raises an exception."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    with pytest.raises(InvalidCommandException, match="must be different"):
+        await robot.reassign_visit(
+            visit_timestamp="2025-12-29T17:56:12",
+            from_pet_id="pet-123",
+            to_pet_id="pet-123",
+        )
+
+    # Also test with None/empty string equivalence
+    with pytest.raises(InvalidCommandException, match="must be different"):
+        await robot.reassign_visit(
+            visit_timestamp="2025-12-29T17:56:12",
+            from_pet_id=None,
+            to_pet_id="",
+        )
+
+
+async def test_reassign_visit_failure(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests that reassign_visit returns False when the API returns null."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    mock_aioresponse.clear()
+    mock_aioresponse.post(
+        LR4_ENDPOINT,
+        payload={"data": {"reassignPetVisit": None}},
+    )
+
+    result = await robot.reassign_visit(
+        visit_timestamp="2025-12-29T17:56:12",
+        from_pet_id="pet-123",
+        to_pet_id="pet-456",
+    )
+    assert result is False
+
+    await robot._account.disconnect()

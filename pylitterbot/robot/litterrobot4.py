@@ -624,6 +624,92 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             if (timestamp := to_timestamp(activity["timestamp"])) is not None
         ]
 
+    async def reassign_visit(
+        self,
+        visit_timestamp: str | datetime,
+        from_pet_id: str | None = None,
+        to_pet_id: str | None = None,
+    ) -> bool:
+        """Reassign a pet visit from one pet to another.
+
+        Args:
+        ----
+            visit_timestamp: The timestamp of the visit to reassign. Can be an ISO
+                format string or a datetime object. Should come from weightHistory query.
+            from_pet_id: The pet ID to reassign the visit from. Use None or empty
+                string for "unassigned".
+            to_pet_id: The pet ID to reassign the visit to. Use None or empty string
+                for "unassigned".
+
+        Returns:
+        -------
+            True if the reassignment was successful.
+
+        Raises:
+        ------
+            InvalidCommandException: If both from_pet_id and to_pet_id are the same.
+
+        """
+        # Normalize empty strings to None for comparison
+        from_pet_id = from_pet_id or None
+        to_pet_id = to_pet_id or None
+
+        if from_pet_id == to_pet_id:
+            raise InvalidCommandException("from_pet_id and to_pet_id must be different")
+
+        # Convert datetime to ISO string if needed
+        # The API expects timestamps in UTC with NO timezone suffix (no +00:00 or Z)
+        # and accurate to the second (no microseconds)
+        # e.g., "2025-12-29T17:56:12"
+        # IMPORTANT: Use the pet's timestamp from weightHistory, not historyDownload
+        if isinstance(visit_timestamp, datetime):
+            # Convert to UTC if timezone-aware
+            if visit_timestamp.tzinfo is not None:
+                visit_timestamp = visit_timestamp.astimezone(timezone.utc)
+            # Format without timezone suffix, to second precision
+            timestamp_str = visit_timestamp.strftime("%Y-%m-%dT%H:%M:%S")
+        else:
+            # Strip timezone suffix and microseconds
+            timestamp_str = visit_timestamp
+            if timestamp_str.endswith("Z"):
+                timestamp_str = timestamp_str[:-1]
+            elif "+" in timestamp_str:
+                timestamp_str = timestamp_str.split("+")[0]
+            elif timestamp_str.count("-") > 2:
+                # Handle -00:00 style offset
+                parts = timestamp_str.rsplit("-", 1)
+                if ":" in parts[-1]:
+                    timestamp_str = parts[0]
+            # Strip microseconds if present
+            if "." in timestamp_str:
+                timestamp_str = timestamp_str.split(".")[0]
+
+        # Build input - use empty string for unassigned (not null/omitted)
+        # To unassign, pass empty strings for both fromPetId and toPetId
+        input_data: dict[str, str] = {
+            "robotSerial": self.serial,
+            "visitTimestamp": timestamp_str,
+            "fromPetId": from_pet_id or "",
+            "toPetId": to_pet_id or "",
+        }
+
+        _LOGGER.debug("reassignPetVisit input: %s", input_data)
+
+        data = await self._post(
+            json={
+                "query": """
+                    mutation ReassignPetVisit($input: reassignPetVisitInput!) {
+                        reassignPetVisit(input: $input)
+                    }
+                """,
+                "variables": {"input": input_data},
+            }
+        )
+        result = cast(dict, data).get("data", {}).get("reassignPetVisit")
+        _LOGGER.debug("reassignPetVisit result: %s", result)
+        # The mutation returns a String, we consider non-null as success
+        return result is not None
+
     async def get_insight(
         self, days: int = 30, timezone_offset: int | None = None
     ) -> Insight:
