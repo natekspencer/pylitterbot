@@ -24,6 +24,9 @@ Repository = "https://github.com/natekspencer/pylitterbot"
 version = "0.0.0"
 include = ["pylitterbot/py.typed"]
 
+[tool.poetry.scripts]
+litter-robot-debug = "pylitterbot.debug_ui:main"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "9.0.1"
 pytest-asyncio = "1.3.0"
@@ -35,6 +38,13 @@ pytest-timeout = "2.4.0"
 ruff = "0.14.7"
 pytest-freezer = "0.4.9"
 pre-commit = "4.5.0"
+
+[tool.poetry.group.debug]
+optional = true
+
+[tool.poetry.group.debug.dependencies]
+textual = {version = ">=0.47.0", python = ">=3.10,<4.0"}
+textual-dev = {version = ">=1.0.0", python = ">=3.10,<4.0"}
 
 [tool.poetry-dynamic-versioning]
 enable = true
@@ -61,6 +71,7 @@ split-on-trailing-comma = false
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**.py" = ["F401"]
+"pylitterbot/debug_ui.py" = ["E402"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
