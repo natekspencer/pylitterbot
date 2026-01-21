@@ -21,8 +21,8 @@ Homepage = "https://github.com/natekspencer/pylitterbot"
 Repository = "https://github.com/natekspencer/pylitterbot"
 
 [tool.poetry]
-version = "0.0.0"
 include = ["pylitterbot/py.typed"]
+version = "0.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "9.0.2"
