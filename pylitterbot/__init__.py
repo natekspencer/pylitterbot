@@ -9,6 +9,7 @@ from .robot.feederrobot import FeederRobot
 from .robot.litterrobot import LitterRobot
 from .robot.litterrobot3 import LitterRobot3
 from .robot.litterrobot4 import LitterRobot4
+from .robot.litterrobot5 import LitterRobot5
 
 __all__ = [
     "Account",
@@ -16,6 +17,7 @@ __all__ = [
     "LitterRobot",
     "LitterRobot3",
     "LitterRobot4",
+    "LitterRobot5",
     "FeederRobot",
     "Pet",
 ]

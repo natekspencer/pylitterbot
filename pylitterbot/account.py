@@ -22,6 +22,7 @@ from .robot import Robot
 from .robot.feederrobot import FEEDER_ENDPOINT, FEEDER_ROBOT_MODEL, FeederRobot
 from .robot.litterrobot3 import DEFAULT_ENDPOINT, DEFAULT_ENDPOINT_KEY, LitterRobot3
 from .robot.litterrobot4 import LITTER_ROBOT_4_MODEL, LR4_ENDPOINT, LitterRobot4
+from .robot.litterrobot5 import LR5_ENDPOINT, LitterRobot5
 from .session import LitterRobotSession
 from .utils import decode, urljoin
 from .ws_monitor import WebSocketMonitor
@@ -184,6 +185,7 @@ class Account:
                         "variables": {"userId": self.user_id},
                     },
                 ),
+                self.session.get(urljoin(LR5_ENDPOINT, "robots")),
                 self.session.post(
                     FEEDER_ENDPOINT,
                     json={
@@ -220,7 +222,9 @@ class Account:
                 await update_or_create_robot(LitterRobot3, robot_data)
             for robot_data in resp[1].get("data").get("getLitterRobot4ByUser") or []:  # type: ignore
                 await update_or_create_robot(LitterRobot4, robot_data)
-            for robot_data in resp[2].get("data", {}).get("feeder_unit") or []:  # type: ignore
+            for robot_data in resp[2]:
+                await update_or_create_robot(LitterRobot5, robot_data)
+            for robot_data in resp[3].get("data", {}).get("feeder_unit") or []:  # type: ignore
                 await update_or_create_robot(FeederRobot, robot_data)
 
             self._robots = robots
