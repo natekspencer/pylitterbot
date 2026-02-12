@@ -1,7 +1,11 @@
-[![pypi](https://img.shields.io/pypi/v/pylitterbot?style=for-the-badge)](https://pypi.org/project/pylitterbot)
-[![downloads](https://img.shields.io/pypi/dm/pylitterbot?style=for-the-badge)](https://pypi.org/project/pylitterbot)
+[![PyPI - Version](https://img.shields.io/pypi/v/pylitterbot?style=for-the-badge)](https://pypi.org/project/pylitterbot/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pylitterbot?style=for-the-badge)](https://pypi.org/project/pylitterbot/)
 [![Buy Me A Coffee/Beer](https://img.shields.io/badge/Buy_Me_A_☕/🍺-F16061?style=for-the-badge&logo=ko-fi&logoColor=white&labelColor=grey)](https://ko-fi.com/natekspencer)
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor_💜-6f42c1?style=for-the-badge&logo=github&logoColor=white&labelColor=grey)](https://github.com/sponsors/natekspencer)
 [![Purchase Litter-Robot](https://img.shields.io/badge/Buy_a_Litter--Robot-Save_$50-lightgrey?style=for-the-badge&labelColor=grey)](https://share.litter-robot.com/x/YZ325z)
+
+![Pepy Total Downloads](https://img.shields.io/pepy/dt/pylitterbot?style=flat-square)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/pylitterbot?style=flat-square)
 
 # pylitterbot
 
@@ -133,17 +137,22 @@ I appreciate your contributions! 🚀
 
 ## TODO
 
-- Improve support for Litter-Robot 4
-- Improve support for Feeder-Robot
+- Add support for Litter-Robot 5/EVO models
 
 ---
 
-## Support Me
+## ❤️ Support Me
 
-I'm not employed by Whisker and provide this python package as-is.
+I maintain this python project in my spare time. If you find it useful, consider supporting development:
+
+- 💜 [Sponsor me on GitHub](https://github.com/sponsors/natekspencer)
+- ☕ [Buy me a coffee / beer](https://ko-fi.com/natekspencer)
+- 💸 [PayPal (direct support)](https://www.paypal.com/paypalme/natekspencer)
+- ⭐ [Star this project](https://github.com/natekspencer/pylitterbot)
+- 📦 If you’d like to support in other ways, such as donating hardware for testing, feel free to [reach out to me](https://github.com/natekspencer)
 
 If you don't already own a Litter-Robot, please consider using [my referral link](https://share.litter-robot.com/x/XJAY1D) to purchase your own robot and save $50!
 
-If you already own a Litter-Robot and/or want to donate to me directly, consider buying me a coffee (or beer) instead by using the link below:
+## 📈 Star History
 
-<a href='https://ko-fi.com/natekspencer' target='_blank'><img height='35' style='border:0px;height:46px;' src='https://az743702.vo.msecnd.net/cdn/kofi3.png?v=0' border='0' alt='Buy Me a Coffee at ko-fi.com' />
+[![Star History Chart](https://api.star-history.com/svg?repos=natekspencer/pylitterbot)](https://www.star-history.com/#natekspencer/pylitterbot)
