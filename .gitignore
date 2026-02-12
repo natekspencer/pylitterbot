@@ -130,3 +130,7 @@ dmypy.json
 
 # VS Code Settings / Launch files
 .vscode/
+
+# Credentials for API testing (NEVER COMMIT!)
+.whisker_credentials
+lr4_schema.json
