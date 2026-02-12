@@ -388,7 +388,7 @@ async def get_robot(robot_id: str = ROBOT_ID) -> LitterRobot:
     account = await get_account(logged_in=True, load_robots=True)
     robot = next(
         filter(
-            lambda robot: (robot.id == robot_id),
+            lambda robot: robot.id == robot_id,
             [robot for robot in account.robots if isinstance(robot, LitterRobot)],
         )
     )
@@ -402,7 +402,7 @@ async def get_pet(pet_id: str = PET_ID) -> Pet:
     account = await get_account(logged_in=True, load_pets=True)
     pet = next(
         filter(
-            lambda pet: (pet.id == pet_id),
+            lambda pet: pet.id == pet_id,
             account.pets,
         )
     )
