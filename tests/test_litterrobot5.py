@@ -65,7 +65,7 @@ async def test_litter_robot_5(
     assert robot.night_light_mode_enabled
     assert robot.panel_brightness == BrightnessLevel.LOW  # from displayIntensity
     assert not robot.panel_lock_enabled
-    assert robot.pet_weight == 1104.0
+    assert robot.pet_weight == 11.04
     assert robot.power_status == "On"
     assert robot.scoops_saved_count == 80
     assert not robot.sleep_mode_enabled
