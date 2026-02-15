@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from datetime import datetime, time, timedelta
-from typing import TYPE_CHECKING, Any, Callable, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -421,7 +421,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         return None
 
     @classmethod
-    async def fetch_for_account(cls, account: Account) -> Sequence[dict[str, object]]:
+    async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:
         """Fetch robot data for account."""
         result = await account.session.post(
             FEEDER_ENDPOINT,

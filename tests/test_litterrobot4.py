@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from aioresponses import aioresponses
+from freezegun.api import FrozenDateTimeFactory
 
 from pylitterbot import Account
 from pylitterbot.enums import LitterBoxStatus
@@ -338,7 +339,7 @@ async def test_litter_robot_4(
 
 
 async def test_litter_robot_4_sleep_time(
-    freezer: pytest.fixture, mock_account: Account
+    freezer: FrozenDateTimeFactory, mock_account: Account
 ) -> None:
     """Tests that a Litter-Robot 4 parses sleep time as expected."""
     freezer.move_to("2022-07-21 12:00:00-06:00")

@@ -7,10 +7,12 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
+from aiohttp import ClientConnectionError
 from aioresponses import aioresponses
+from freezegun.api import FrozenDateTimeFactory
 
 from pylitterbot import Account
-from pylitterbot.enums import LitterBoxStatus, LitterRobot5Command
+from pylitterbot.enums import LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
 from pylitterbot.robot.litterrobot5 import (
     LITTER_LEVEL_EMPTY,
@@ -584,7 +586,7 @@ async def test_litter_robot_5_command_failure(
 
     mock_aioresponse.post(
         LR5_COMMANDS_URL,
-        exception=Exception("Connection error"),
+        exception=ClientConnectionError("Connection error"),
     )
     assert not await robot.start_cleaning()
 
@@ -772,7 +774,7 @@ async def test_litter_robot_5_drawer_full_indicator(
 
 
 async def test_litter_robot_5_sleep_mode_enabled(
-    freezer: pytest.fixture,
+    freezer: FrozenDateTimeFactory,
     mock_account: Account,
 ) -> None:
     """Tests sleep mode parsing when enabled."""

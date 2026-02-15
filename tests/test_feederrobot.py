@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from aioresponses import aioresponses
+from freezegun.api import FrozenDateTimeFactory
 
 from pylitterbot import Account
 from pylitterbot.exceptions import InvalidCommandException
@@ -146,7 +147,7 @@ async def test_feeder_robot(
     ],
 )
 async def test_feeder_robot_schedule(
-    freezer: pytest.fixture,
+    freezer: FrozenDateTimeFactory,
     mock_account: Account,
     freezer_date: str,
     expected_value: str,
