@@ -6,7 +6,7 @@ import logging
 from copy import deepcopy
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Sequence, cast
 
 try:
     from zoneinfo import ZoneInfo
@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover
 from ..activity import Activity, Insight
 from ..enums import LitterBoxStatus, LitterRobot5Command
 from ..exceptions import InvalidCommandException, LitterRobotException
-from ..utils import to_enum, to_timestamp, utcnow
+from ..utils import to_enum, to_timestamp, urljoin, utcnow
 from .litterrobot import LitterRobot
 
 if TYPE_CHECKING:
@@ -209,7 +209,6 @@ class LitterRobot5(LitterRobot):
     _litter_level = LITTER_LEVEL_EMPTY
     _litter_level_exp: datetime | None = None
 
-
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a Litter-Robot 5."""
         super().__init__(data, account)
@@ -263,9 +262,7 @@ class LitterRobot5(LitterRobot):
     @property
     def last_seen(self) -> datetime | None:
         """Return the datetime the Litter-Robot last reported, if any."""
-        return to_timestamp(
-            self._state.get("lastSeen") or self._data.get("lastSeen")
-        )
+        return to_timestamp(self._state.get("lastSeen") or self._data.get("lastSeen"))
 
     @property
     def timezone(self) -> str:
@@ -512,11 +509,12 @@ class LitterRobot5(LitterRobot):
         if brightness in list(BrightnessLevel):
             return BrightnessLevel(brightness)
         try:
-            if int(brightness) == BrightnessLevel.LOW:
+            brightness = cast(int, brightness)
+            if brightness == BrightnessLevel.LOW:
                 return BrightnessLevel.LOW
-            if int(brightness) == BrightnessLevel.MEDIUM:
+            if brightness == BrightnessLevel.MEDIUM:
                 return BrightnessLevel.MEDIUM
-            if int(brightness) == BrightnessLevel.HIGH:
+            if brightness == BrightnessLevel.HIGH:
                 return BrightnessLevel.HIGH
         except Exception:
             pass
@@ -849,7 +847,7 @@ class LitterRobot5(LitterRobot):
     async def refresh(self) -> None:
         """Refresh the Litter-Robot's data from the API."""
         data = await self._get(f"robots/{self.serial}")
-        self._update_data(data)
+        self._update_data(cast(dict, data))
 
     async def reset(self) -> bool:
         """Perform a remote reset on the Litter-Robot.
@@ -876,7 +874,9 @@ class LitterRobot5(LitterRobot):
         """Turn the night light on or off."""
         return await self._dispatch_command(
             LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
-            value={"mode": NightLightMode.ON.value if value else NightLightMode.OFF.value},
+            value={
+                "mode": NightLightMode.ON.value if value else NightLightMode.OFF.value
+            },
         )
 
     async def set_night_light_brightness(self, brightness: int) -> bool:
@@ -929,19 +929,21 @@ class LitterRobot5(LitterRobot):
 
     async def set_sleep_mode(
         self,
-        enabled: bool,
-        sleep_time: int | None = None,
+        value: bool,
+        sleep_time: int | time | None = None,
+        *,
         wake_time: int | None = None,
         day_of_week: int | None = None,
     ) -> bool:
         """Set the sleep mode schedule.
 
         Args:
-            enabled: Whether to enable or disable sleep mode.
+            value: Whether to enable or disable sleep mode.
             sleep_time: Minutes from midnight for sleep start (e.g. 1380 = 11PM).
             wake_time: Minutes from midnight for wake (e.g. 420 = 7AM).
             day_of_week: Specific day to update (0=Monday, 6=Sunday).
                 If None, updates all days.
+
         """
         schedules = deepcopy(self._data.get("sleepSchedules", []))
         if not schedules:
@@ -952,7 +954,7 @@ class LitterRobot5(LitterRobot):
         for schedule in schedules:
             if day_of_week is not None and schedule.get("dayOfWeek") != day_of_week:
                 continue
-            schedule["isEnabled"] = enabled
+            schedule["isEnabled"] = value
             if sleep_time is not None:
                 schedule["sleepTime"] = sleep_time
             if wake_time is not None:
@@ -1029,6 +1031,7 @@ class LitterRobot5(LitterRobot):
             offset: Number of activities to skip.
             activity_type: Filter by type (e.g. PET_VISIT, CYCLE_COMPLETED,
                 CAT_DETECT, OFFLINE, CYCLE_INTERRUPTED, LITTER_LOW).
+
         """
         params: dict[str, str] = {}
         if limit is not None:
@@ -1038,7 +1041,8 @@ class LitterRobot5(LitterRobot):
         if activity_type is not None:
             params["type"] = activity_type
         url = f"{LR5_ENDPOINT}/robots/{self.serial}/activities"
-        return await self._account.session.request("GET", url, params=params)
+        data = await self._account.session.request("GET", url, params=params)
+        return cast(list[dict[str, Any]], data)
 
     async def get_insight(
         self, days: int = 30, timezone_offset: int | None = None
@@ -1103,3 +1107,13 @@ class LitterRobot5(LitterRobot):
         raise NotImplementedError(
             "Firmware updates cannot be triggered via the LR5 REST API."
         )
+
+    @classmethod
+    async def fetch_for_account(cls, account: Account) -> Sequence[dict[str, object]]:
+        """Fetch robot data for account."""
+        result = await account.session.get(urljoin(LR5_ENDPOINT, "robots"))
+
+        if isinstance(result, list):
+            return [r for r in result if isinstance(r, dict)]
+
+        return []

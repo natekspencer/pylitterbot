@@ -342,7 +342,21 @@ async def test_litter_robot_5_status(
     data = deepcopy(LITTER_ROBOT_5_DATA)
     # Clear all state fields that could interfere with status resolution, then apply test data
     data["state"] = {
-        **{k: v for k, v in data["state"].items() if k not in ("state", "status", "robotStatus", "cycleState", "robotCycleState", "displayCode", "statusIndicator", "isDrawerFull")},
+        **{
+            k: v
+            for k, v in data["state"].items()
+            if k
+            not in (
+                "state",
+                "status",
+                "robotStatus",
+                "cycleState",
+                "robotCycleState",
+                "displayCode",
+                "statusIndicator",
+                "isDrawerFull",
+            )
+        },
         **updated_data.get("state", {}),
     }
     robot = LitterRobot5(data=data, account=mock_account)
@@ -418,7 +432,7 @@ async def test_litter_robot_5_set_panel_lockout(
     assert robot.panel_lock_enabled
 
     # Disable panel lock
-    mock_aioresponse.patch(LR5_GET_URL, payload={})
+    mock_aioresponse.patch(LR5_GET_URL, payload={})  # type: ignore[unreachable]
     assert await robot.set_panel_lockout(False)
     assert not robot.panel_lock_enabled
 
@@ -657,10 +671,11 @@ async def test_litter_robot_5_firmware_details(
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
 
     details = await robot.get_firmware_details()
-    assert details is not None
+    assert isinstance(details, dict)
     assert "latestFirmware" in details
-    assert details["latestFirmware"]["espFirmwareVersion"] == "v2.5.6"
-    assert details["latestFirmware"]["mcuFirmwareVersion"] == "v5.7.4 2904_106"
+    assert isinstance(latest_firmware := details["latestFirmware"], dict)
+    assert latest_firmware["espFirmwareVersion"] == "v2.5.6"
+    assert latest_firmware["mcuFirmwareVersion"] == "v5.7.4 2904_106"
 
     latest = await robot.get_latest_firmware()
     assert latest == "ESP: v2.5.6 / MCU: v5.7.4 2904_106"
@@ -1038,18 +1053,18 @@ async def test_litter_robot_5_set_sleep_mode(
 
     # Enable sleep for all days
     mock_aioresponse.patch(LR5_GET_URL, payload={})
-    assert await robot.set_sleep_mode(enabled=True, sleep_time=1380, wake_time=420)
+    assert await robot.set_sleep_mode(value=True, sleep_time=1380, wake_time=420)
     assert robot.sleep_mode_enabled
 
     # Disable sleep for all days
-    mock_aioresponse.patch(LR5_GET_URL, payload={})
-    assert await robot.set_sleep_mode(enabled=False)
+    mock_aioresponse.patch(LR5_GET_URL, payload={})  # type: ignore[unreachable]
+    assert await robot.set_sleep_mode(value=False)
     assert not robot.sleep_mode_enabled
 
     # Enable sleep for a specific day (Sunday=6)
     mock_aioresponse.patch(LR5_GET_URL, payload={})
     assert await robot.set_sleep_mode(
-        enabled=True, sleep_time=1380, wake_time=420, day_of_week=6
+        value=True, sleep_time=1380, wake_time=420, day_of_week=6
     )
     schedules = robot._data.get("sleepSchedules", [])
     sunday = next(s for s in schedules if s["dayOfWeek"] == 6)
@@ -1132,8 +1147,9 @@ async def test_litter_robot_5_firmware_details_esp_fallback(
     # Pro data has wifiVersion: None in firmwareVersions
     robot = LitterRobot5(data=data, account=mock_account)
     details = await robot.get_firmware_details()
-    assert details is not None
+    assert isinstance(details, dict)
     # Should fall back to espFirmwareVersion from state
+    assert isinstance(details["latestFirmware"], dict)
     assert details["latestFirmware"]["espFirmwareVersion"] == "v2.5.6"
 
     await robot._account.disconnect()

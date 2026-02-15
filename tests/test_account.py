@@ -6,15 +6,14 @@ import logging
 from unittest.mock import patch
 
 import pytest
-from aiohttp.client_exceptions import ClientError
 from aioresponses import aioresponses
 
-from pylitterbot import FeederRobot, LitterRobot3
-from pylitterbot.exceptions import LitterRobotException, LitterRobotLoginException
-from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
+from pylitterbot import FeederRobot, LitterRobot3, LitterRobot4, LitterRobot5
+from pylitterbot.exceptions import LitterRobotLoginException
+from pylitterbot.robot.litterrobot5 import LR5_ENDPOINT
+from pylitterbot.utils import urljoin
 
 from .common import (
-    LITTER_ROBOT_4_DATA,
     PASSWORD,
     ROBOT_ENDPOINT,
     ROBOT_FULL_ID,
@@ -22,13 +21,12 @@ from .common import (
     USER_ID,
     USERNAME,
     get_account,
-    mock_client_connector_error,
     mock_client_response_error,
 )
 
 pytestmark = pytest.mark.asyncio
 
-ROBOT_COUNT = 4
+ROBOT_COUNT = 6
 
 
 async def test_account(
@@ -48,16 +46,13 @@ async def test_account(
     assert len(account.robots) == ROBOT_COUNT
 
     assert len(account.get_robots(LitterRobot3)) == 2
+    assert len(account.get_robots(LitterRobot4)) == 1
+    assert len(account.get_robots(LitterRobot5)) == 2
     assert len(account.get_robots(FeederRobot)) == 1
 
     for robot in account.robots:
         assert len(robot._listeners) == 0  # pylint: disable=protected-access
 
-    mock_aioresponse.post(
-        LR4_ENDPOINT,
-        payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_DATA]}},
-        repeat=True,
-    )
     caplog.set_level(logging.INFO)
     await account.load_robots()
     assert (
@@ -68,6 +63,12 @@ async def test_account(
 
     mock_aioresponse.get(ROBOT_ENDPOINT % ROBOT_ID, payload={})
     mock_aioresponse.get(ROBOT_ENDPOINT % ROBOT_FULL_ID, payload={})
+    mock_aioresponse.get(
+        urljoin(LR5_ENDPOINT, "robots/LR5-00-00-00-0000-000001"), payload={}
+    )
+    mock_aioresponse.get(
+        urljoin(LR5_ENDPOINT, "robots/LR5-00-00-00-0000-000002"), payload={}
+    )
     await account.refresh_robots()
     assert len(account.robots) == ROBOT_COUNT
 

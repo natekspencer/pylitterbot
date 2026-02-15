@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import TypeVar, cast
 
 from aiohttp import (
+    ClientConnectionError,
     ClientConnectorError,
     ClientResponseError,
     ClientSession,
@@ -19,10 +20,10 @@ from .event import EVENT_UPDATE
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .pet import Pet
 from .robot import Robot
-from .robot.feederrobot import FEEDER_ENDPOINT, FEEDER_ROBOT_MODEL, FeederRobot
+from .robot.feederrobot import FeederRobot
 from .robot.litterrobot3 import DEFAULT_ENDPOINT, DEFAULT_ENDPOINT_KEY, LitterRobot3
-from .robot.litterrobot4 import LITTER_ROBOT_4_MODEL, LR4_ENDPOINT, LitterRobot4
-from .robot.litterrobot5 import LR5_ENDPOINT, LitterRobot5
+from .robot.litterrobot4 import LitterRobot4
+from .robot.litterrobot5 import LitterRobot5
 from .session import LitterRobotSession
 from .utils import decode, urljoin
 from .ws_monitor import WebSocketMonitor
@@ -169,35 +170,17 @@ class Account:
     async def load_robots(self, subscribe_for_updates: bool = False) -> None:
         """Get information about robots connected to the account."""
         robots: list[Robot] = []
+        robot_types: list[type[Robot]] = [
+            LitterRobot3,
+            LitterRobot4,
+            LitterRobot5,
+            FeederRobot,
+        ]
         try:
-            all_robots = [
-                self.session.get(
-                    urljoin(DEFAULT_ENDPOINT, f"users/{self.user_id}/robots")
-                ),
-                self.session.post(
-                    LR4_ENDPOINT,
-                    json={
-                        "query": f"""
-                            query GetLR4($userId: String!) {{
-                                getLitterRobot4ByUser(userId: $userId) {LITTER_ROBOT_4_MODEL}
-                            }}
-                        """,
-                        "variables": {"userId": self.user_id},
-                    },
-                ),
-                self.session.get(urljoin(LR5_ENDPOINT, "robots")),
-                self.session.post(
-                    FEEDER_ENDPOINT,
-                    json={
-                        "query": f"""
-                            query GetFeeders {{
-                                feeder_unit {FEEDER_ROBOT_MODEL}
-                            }}
-                        """
-                    },
-                ),
-            ]
-            resp = await asyncio.gather(*all_robots)
+            resp = await asyncio.gather(
+                *(robot_cls.fetch_for_account(self) for robot_cls in robot_types),
+                return_exceptions=True,
+            )
 
             async def update_or_create_robot(
                 robot_cls: type[Robot], data: dict
@@ -218,17 +201,21 @@ class Account:
                         await robot.subscribe()
                 robots.append(robot)
 
-            for robot_data in resp[0]:  # type: ignore
-                await update_or_create_robot(LitterRobot3, robot_data)
-            for robot_data in resp[1].get("data").get("getLitterRobot4ByUser") or []:  # type: ignore
-                await update_or_create_robot(LitterRobot4, robot_data)
-            for robot_data in resp[2]:
-                await update_or_create_robot(LitterRobot5, robot_data)
-            for robot_data in resp[3].get("data", {}).get("feeder_unit") or []:  # type: ignore
-                await update_or_create_robot(FeederRobot, robot_data)
+            for robot_cls, result in zip(robot_types, resp):
+                if isinstance(result, BaseException):
+                    _LOGGER.error("Failed to fetch %s: %s", robot_cls.__name__, result)
+                    continue
+
+                for robot_data in result:
+                    await update_or_create_robot(robot_cls, robot_data)
 
             self._robots = robots
-        except (LitterRobotException, ClientResponseError, ClientConnectorError) as ex:
+        except (
+            LitterRobotException,
+            ClientResponseError,
+            ClientConnectorError,
+            ClientConnectionError,
+        ) as ex:
             _LOGGER.error("Unable to retrieve your robots: %s", ex)
 
     async def refresh_robots(self) -> None:

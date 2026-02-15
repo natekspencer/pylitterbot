@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, time, timedelta, timezone
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Sequence, cast
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
@@ -305,3 +305,15 @@ class LitterRobot3(LitterRobot):
             return cast(dict, data["data"])
         _LOGGER.debug(data)
         return None
+
+    @classmethod
+    async def fetch_for_account(cls, account: Account) -> Sequence[dict[str, object]]:
+        """Fetch robot data for account."""
+        result = await account.session.get(
+            urljoin(DEFAULT_ENDPOINT, f"users/{account.user_id}/robots")
+        )
+
+        if isinstance(result, list):
+            return [r for r in result if isinstance(r, dict)]
+
+        return []
