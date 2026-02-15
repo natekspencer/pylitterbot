@@ -222,7 +222,12 @@ class Account:
         """Refresh known robots."""
         try:
             await asyncio.gather(*(robot.refresh() for robot in self.robots))
-        except (LitterRobotException, ClientResponseError, ClientConnectorError) as ex:
+        except (
+            LitterRobotException,
+            ClientResponseError,
+            ClientConnectorError,
+            ClientConnectionError,
+        ) as ex:
             _LOGGER.error("Unable to refresh your robots: %s", ex)
 
     async def get_bearer_authorization(self) -> str | None:

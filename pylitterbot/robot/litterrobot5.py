@@ -6,7 +6,9 @@ import logging
 from copy import deepcopy
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
-from typing import TYPE_CHECKING, Any, Sequence, cast
+from typing import TYPE_CHECKING, Any, cast
+
+from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponseError
 
 try:
     from zoneinfo import ZoneInfo
@@ -16,7 +18,7 @@ except ImportError:  # pragma: no cover
 from ..activity import Activity, Insight
 from ..enums import LitterBoxStatus, LitterRobot5Command
 from ..exceptions import InvalidCommandException, LitterRobotException
-from ..utils import to_enum, to_timestamp, urljoin, utcnow
+from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin, utcnow
 from .litterrobot import LitterRobot
 
 if TYPE_CHECKING:
@@ -436,23 +438,18 @@ class LitterRobot5(LitterRobot):
     @property
     def litter_level_calculated(self) -> float:
         """Return calculated litter level as before but using LR5 keys where present."""
+        is_cleaning = (
+            self._state.get("cycleType") or self._state.get("robotCycleState") or ""
+        ).upper().find("CLEAN") != -1
         new_level = int(
             self._state.get(
                 "globeLitterLevel", self._state.get("litterLevel", LITTER_LEVEL_EMPTY)
             )
         )
-        now = datetime.now(timezone.utc)
-        if (
-            self._state.get("cycleType") or self._state.get("robotCycleState") or ""
-        ).upper().find("CLEAN") != -1:
-            self._litter_level_exp = now + timedelta(minutes=1)
-        elif (
-            self._litter_level_exp is None
-            or self._litter_level_exp < now
-            or abs(self._litter_level - new_level) < 10
-        ):
-            self._litter_level = new_level
-        return max(round(100 - (self._litter_level - 440) / 0.6, -1), 0)
+        self._litter_level, self._litter_level_exp, percent = calculate_litter_level(
+            is_cleaning, new_level, self._litter_level, self._litter_level_exp
+        )
+        return percent
 
     @property
     def litter_level_state(self) -> LitterLevelState | None:
@@ -513,16 +510,6 @@ class LitterRobot5(LitterRobot):
         brightness = self._panel_settings.get("brightness")
         if brightness in list(BrightnessLevel):
             return BrightnessLevel(brightness)
-        try:
-            brightness = cast(int, brightness)
-            if brightness == BrightnessLevel.LOW:
-                return BrightnessLevel.LOW
-            if brightness == BrightnessLevel.MEDIUM:
-                return BrightnessLevel.MEDIUM
-            if brightness == BrightnessLevel.HIGH:
-                return BrightnessLevel.HIGH
-        except Exception:
-            pass
         return None
 
     @property
@@ -845,7 +832,7 @@ class LitterRobot5(LitterRobot):
                 json={"type": command},
             )
             return True
-        except Exception as ex:
+        except (ClientResponseError, ClientConnectorError, ClientConnectionError) as ex:
             _LOGGER.error("Command %s failed: %s", command, ex)
             return False
 
@@ -1114,7 +1101,7 @@ class LitterRobot5(LitterRobot):
         )
 
     @classmethod
-    async def fetch_for_account(cls, account: Account) -> Sequence[dict[str, object]]:
+    async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:
         """Fetch robot data for account."""
         result = await account.session.get(urljoin(LR5_ENDPOINT, "robots"))
 

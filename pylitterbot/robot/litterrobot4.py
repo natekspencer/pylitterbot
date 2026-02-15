@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timedelta
 from enum import Enum, IntEnum, unique
 from json import dumps
-from typing import TYPE_CHECKING, Any, Dict, Sequence, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Union, cast
 from uuid import uuid4
 
 try:
@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover
 from ..activity import Activity, Insight
 from ..enums import LitterBoxStatus, LitterRobot4Command
 from ..exceptions import InvalidCommandException, LitterRobotException
-from ..utils import encode, to_enum, to_timestamp, utcnow
+from ..utils import calculate_litter_level, encode, to_enum, to_timestamp, utcnow
 from .litterrobot import LitterRobot
 from .models import LITTER_ROBOT_4_MODEL
 
@@ -297,17 +297,12 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         ~ 461 low
         ~ 471 very low
         """
+        is_cleaning = self._data.get("robotStatus") == "ROBOT_CLEAN"
         new_level = int(self._data.get("litterLevel", LITTER_LEVEL_EMPTY))
-        now = datetime.now(timezone.utc)
-        if self._data.get("robotStatus") == "ROBOT_CLEAN":
-            self._litter_level_exp = now + timedelta(minutes=1)
-        elif (
-            self._litter_level_exp is None
-            or self._litter_level_exp < now
-            or abs(self._litter_level - new_level) < 10
-        ):
-            self._litter_level = new_level
-        return max(round(100 - (self._litter_level - 440) / 0.6, -1), 0)
+        self._litter_level, self._litter_level_exp, percent = calculate_litter_level(
+            is_cleaning, new_level, self._litter_level, self._litter_level_exp
+        )
+        return percent
 
     @property
     def litter_level_state(self) -> LitterLevelState | None:
@@ -879,7 +874,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return None
 
     @classmethod
-    async def fetch_for_account(cls, account: Account) -> Sequence[dict[str, object]]:
+    async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:
         """Fetch robot data for account."""
         result = await account.session.post(
             LR4_ENDPOINT,

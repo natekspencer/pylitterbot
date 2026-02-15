@@ -89,12 +89,12 @@ def mock_aioresponse() -> aioresponses:
             repeat=True,
         )
         mock.get(
-            re.compile(rf"^{re.escape(DEFAULT_ENDPOINT)}/.*/activity?.*$"),
+            re.compile(rf"^{re.escape(DEFAULT_ENDPOINT)}/.*/activity(\?.*)?$"),
             payload=ACTIVITY_RESPONSE,
             repeat=True,
         )
         mock.get(
-            re.compile(rf"^{re.escape(DEFAULT_ENDPOINT)}/.*/insights?.*$"),
+            re.compile(rf"^{re.escape(DEFAULT_ENDPOINT)}/.*/insights(\?.*)?$"),
             payload=INSIGHT_RESPONSE,
             repeat=True,
         )
