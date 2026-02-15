@@ -298,6 +298,8 @@ LITTER_ROBOT_5_DATA: dict[str, Any] = {
         "scoopsSaved": 80,
         "litterLevelPercent": 100.0,
         "globeLitterLevelIndicator": "Optimal",
+        "privacyMode": "Normal",
+        "isFirmwareUpdating": False,
     },
     "nextFilterReplacementDate": "2025-12-28T20:01:58.649000Z",
     "panelSettings": {
@@ -322,6 +324,31 @@ LITTER_ROBOT_5_DATA: dict[str, Any] = {
         {"dayOfWeek": 5, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
         {"dayOfWeek": 6, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
     ],
+    "soundSettings": {"volume": 50, "cameraAudioEnabled": False},
+}
+
+LITTER_ROBOT_5_PRO_DATA: dict[str, Any] = {
+    **LITTER_ROBOT_5_DATA,
+    "serial": "LR5-00-00-00-0000-000002",
+    "type": "LR5_PRO",
+    "name": "Litter-Robot 5 Pro",
+    "state": {
+        **LITTER_ROBOT_5_DATA["state"],
+        "serial": "LR5-00-00-00-0000-000002",
+        "type": "LR5_PRO",
+        "firmwareVersions": {
+            "mcuVersion": {"title": "Robot Firmware", "value": "v5.7.5 2904_0106"},
+            "cameraVersion": {"title": "Camera Firmware", "value": "1.2.2-1233"},
+            "wifiVersion": None,
+            "edgeVersion": {"title": "Edge Firmware", "value": "1.5.22"},
+            "aiVersion": {"title": "AI Firmware", "value": "0.0.41"},
+        },
+    },
+    "cameraMetadata": {
+        "deviceId": "68f5f44bba1544a7cc8697c2",
+        "serialNumber": "E0510076020EBFV",
+        "spaceId": "69261e737e1f43011f75b804",
+    },
 }
 
 FEEDER_ROBOT_DATA: dict[str, Any] = {

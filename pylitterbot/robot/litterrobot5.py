@@ -6,7 +6,7 @@ import logging
 from copy import deepcopy
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
-from typing import TYPE_CHECKING, Any, Dict, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 try:
     from zoneinfo import ZoneInfo
@@ -50,19 +50,6 @@ LR5_STATUS_MAP = {
     "ROBOT_POWER_DOWN": LitterBoxStatus.POWER_DOWN,
     "ROBOT_POWER_OFF": LitterBoxStatus.OFF,
     "ROBOT_POWER_UP": LitterBoxStatus.POWER_UP,
-}
-ACTIVITY_STATUS_MAP: dict[str, LitterBoxStatus | str] = {
-    "bonnetRemovedYes": LitterBoxStatus.BONNET_REMOVED,
-    "catDetectStuckLaser": LitterBoxStatus.CAT_SENSOR_FAULT,
-    "catWeight": "Pet Weight Recorded",
-    "DFIFullFlagOn": LitterBoxStatus.DRAWER_FULL,
-    "litterHopperDispensed": "Litter Dispensed",
-    "odometerCleanCycles": "Clean Cycles",
-    "powerTypeDC": "Battery Backup",
-    "robotCycleStateCatDetect": LitterBoxStatus.CAT_SENSOR_INTERRUPTED,
-    "robotCycleStatusDump": LitterBoxStatus.CLEAN_CYCLE,
-    "robotCycleStatusIdle": LitterBoxStatus.CLEAN_CYCLE_COMPLETE,
-    "robotStatusCatDetect": LitterBoxStatus.CAT_DETECTED,
 }
 # Maps for state.displayCode field (DcPascalCase from real API)
 DISPLAY_CODE_STATUS_MAP = {
@@ -198,10 +185,11 @@ class WifiModeStatus(Enum):
     ROUTER_FAULT = "ROUTER_FAULT"
 
 
-class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
+class LitterRobot5(LitterRobot):
     """Data and methods for interacting with a Litter-Robot 5 automatic, self-cleaning litter box."""
 
     _attr_model = "Litter-Robot 5"
+    _attr_model_pro = "Litter-Robot 5 Pro"
 
     VALID_WAIT_TIMES = [3, 7, 15, 25, 30]
 
@@ -221,13 +209,21 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
     _litter_level = LITTER_LEVEL_EMPTY
     _litter_level_exp: datetime | None = None
 
-    _firmware_details: dict[str, bool | dict[str, str]] | None = None
-    _firmware_details_requested: datetime | None = None
 
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a Litter-Robot 5."""
         super().__init__(data, account)
         self._path = LR5_ENDPOINT
+
+    @property
+    def is_pro(self) -> bool:
+        """Return `True` if this is a Litter-Robot 5 Pro."""
+        return self._data.get("type") == "LR5_PRO"
+
+    @property
+    def model(self) -> str:
+        """Return the robot model."""
+        return self._attr_model_pro if self.is_pro else self._attr_model
 
     def _get_data_dict(self, key: str) -> dict[str, Any]:
         """Get a dict from the underlying data object."""
@@ -257,6 +253,21 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
         return self._get_data_dict("state")
 
     @property
+    def setup_date(self) -> datetime | None:
+        """Return the datetime the robot was onboarded, if any."""
+        return to_timestamp(
+            self._state.get(self._data_setup_date)
+            or self._data.get(self._data_setup_date)
+        )
+
+    @property
+    def last_seen(self) -> datetime | None:
+        """Return the datetime the Litter-Robot last reported, if any."""
+        return to_timestamp(
+            self._state.get("lastSeen") or self._data.get("lastSeen")
+        )
+
+    @property
     def timezone(self) -> str:
         """Return the timezone."""
         return cast(str, self._data.get("timezone"))
@@ -267,9 +278,25 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
         return cast(int, self._litter_robot_settings.get("cycleDelay", 7))
 
     @property
+    def camera_metadata(self) -> dict[str, str] | None:
+        """Return the camera metadata (Pro only)."""
+        cam = self._data.get("cameraMetadata")
+        return cam if isinstance(cam, dict) else None
+
+    @property
+    def cat_detect(self) -> str:
+        """Return the cat detection sensor state."""
+        return cast(str, self._state.get("catDetect", ""))
+
+    @property
     def cycle_count(self) -> int:
         """Return the cycle count since the last time the waste drawer was reset."""
         return int(self._state.get(self._data_cycle_count, 0))
+
+    @property
+    def cycle_type(self) -> str:
+        """Return the current cycle type."""
+        return cast(str, self._state.get("cycleType", ""))
 
     @property
     def firmware(self) -> str:
@@ -285,7 +312,24 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             wifi = wifi.get("value")
         else:
             wifi = wifi or self._state.get("espFirmwareVersion")
-        return f"ESP: {wifi} / MCU: {mcu}"
+        parts = [f"ESP: {wifi}", f"MCU: {mcu}"]
+        # Pro-specific firmware versions
+        for key, label in [
+            ("cameraVersion", "CAM"),
+            ("edgeVersion", "EDGE"),
+            ("aiVersion", "AI"),
+        ]:
+            ver = fw.get(key)
+            if isinstance(ver, dict):
+                ver = ver.get("value")
+            if ver:
+                parts.append(f"{label}: {ver}")
+        return " / ".join(parts)
+
+    @property
+    def extended_scale_activity(self) -> bool:
+        """Return `True` if extended scale activity is detected."""
+        return self._state.get("extendedScaleActivity") is True
 
     @property
     def firmware_update_status(self) -> str:
@@ -303,9 +347,24 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
         return self._data.get("isFirmwareUpdateTriggered") is True
 
     @property
+    def globe_motor_retract_fault_status(self) -> str:
+        """Return the globe motor retract fault status."""
+        return cast(str, self._state.get("globeMotorRetractFaultStatus", ""))
+
+    @property
+    def hopper_fault(self) -> str | None:
+        """Return the hopper fault status, if any."""
+        return self._state.get("hopperFault")
+
+    @property
     def hopper_status(self) -> HopperStatus | None:
         """Return the hopper status."""
         return to_enum(self._state.get("hopperStatus"), HopperStatus)
+
+    @property
+    def is_bonnet_removed(self) -> bool:
+        """Return `True` if the bonnet is removed."""
+        return self._state.get("isBonnetRemoved") is True
 
     @property
     def is_drawer_full_indicator_triggered(self) -> bool:
@@ -313,14 +372,39 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
         return cast(int, self._state.get("dfiFullCounter", 0)) > 0
 
     @property
+    def is_drawer_removed(self) -> bool:
+        """Return `True` if the waste drawer is removed."""
+        return self._state.get("isDrawerRemoved") is True
+
+    @property
+    def is_firmware_updating(self) -> bool:
+        """Return `True` if a firmware update is in progress."""
+        return self._state.get("isFirmwareUpdating") is True
+
+    @property
+    def is_gas_sensor_fault_detected(self) -> bool:
+        """Return `True` if a gas sensor fault is detected."""
+        return self._state.get("isGasSensorFaultDetected") is True
+
+    @property
     def is_hopper_removed(self) -> bool | None:
         """Return `True` if the hopper is removed/disabled."""
         return self._state.get("isHopperInstalled") is False
 
     @property
+    def is_laser_dirty(self) -> bool:
+        """Return `True` if the laser sensor needs cleaning."""
+        return self._state.get("isLaserDirty") is True
+
+    @property
     def is_online(self) -> bool:
         """Return `True` if the robot is online."""
         return self._state.get("isOnline") is True
+
+    @property
+    def is_night_light_on(self) -> bool:
+        """Return `True` if the night light LED is currently on."""
+        return self._state.get("isNightLightOn") is True
 
     @property
     def is_sleeping(self) -> bool:
@@ -331,6 +415,11 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
     def is_smart_weight_enabled(self) -> bool:
         """Return `True` if smart weight is enabled."""
         return self._litter_robot_settings.get("isSmartWeightEnabled") is True
+
+    @property
+    def is_usb_fault_detected(self) -> bool:
+        """Return `True` if a USB fault is detected."""
+        return self._state.get("isUsbFaultDetected") is True
 
     @property
     def is_waste_drawer_full(self) -> bool:
@@ -367,6 +456,16 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
     def litter_level_state(self) -> LitterLevelState | None:
         """Return the litter level state."""
         return to_enum(self._state.get("globeLitterLevelIndicator"), LitterLevelState)
+
+    @property
+    def last_reset_odometer_clean_cycles(self) -> int:
+        """Return the clean cycle count at the last waste drawer reset."""
+        return int(self._state.get("lastResetOdometerCleanCycles", 0))
+
+    @property
+    def next_filter_replacement_date(self) -> datetime | None:
+        """Return the next filter replacement date."""
+        return to_timestamp(self._data.get("nextFilterReplacementDate"))
 
     @property
     def night_light_brightness(self) -> int:
@@ -441,9 +540,69 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
         return cast(str, self._state.get(self._data_power_status, "On"))
 
     @property
+    def privacy_mode(self) -> str:
+        """Return the privacy mode setting."""
+        return cast(str, self._state.get("privacyMode", "Normal"))
+
+    @property
     def scoops_saved_count(self) -> int:
         """Return the scoops saved count."""
         return cast(int, self._state.get("scoopsSaved", 0))
+
+    @property
+    def stm_update_status(self) -> str:
+        """Return the STM (MCU) firmware update status."""
+        return cast(str, self._state.get("stmUpdateStatus", "UNKNOWN"))
+
+    @property
+    def _sound_settings(self) -> dict[str, Any]:
+        """Return the sound settings dict."""
+        return self._get_data_dict("soundSettings")
+
+    @property
+    def sound_volume(self) -> int:
+        """Return the sound volume (0-100)."""
+        return int(self._sound_settings.get("volume", 0))
+
+    @property
+    def camera_audio_enabled(self) -> bool:
+        """Return `True` if camera audio is enabled (Pro only)."""
+        return self._sound_settings.get("cameraAudioEnabled") is True
+
+    @property
+    def wifi_rssi(self) -> int:
+        """Return the WiFi signal strength (RSSI)."""
+        return int(self._state.get("wifiRssi", 0))
+
+    @property
+    def odometer_empty_cycles(self) -> int:
+        """Return the total empty cycle count."""
+        return int(self._state.get("odometerEmptyCycles", 0))
+
+    @property
+    def odometer_filter_cycles(self) -> int:
+        """Return the number of cycles since last filter replacement."""
+        return int(self._state.get("odometerFilterCycles", 0))
+
+    @property
+    def odometer_power_cycles(self) -> int:
+        """Return the total power cycle count."""
+        return int(self._state.get("odometerPowerCycles", 0))
+
+    @property
+    def optimal_litter_level(self) -> int:
+        """Return the optimal litter level."""
+        return int(self._state.get("optimalLitterLevel", 0))
+
+    @property
+    def globe_motor_fault_status(self) -> str:
+        """Return the globe motor fault status."""
+        return cast(str, self._state.get("globeMotorFaultStatus", ""))
+
+    @property
+    def pinch_status(self) -> str:
+        """Return the pinch detection status."""
+        return cast(str, self._state.get("pinchStatus", ""))
 
     @property
     def sleep_mode_enabled(self) -> bool:
@@ -562,18 +721,6 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
         ):
             self._parse_sleep_info()
 
-    def _parse_activity(self, activity: dict[str, str]) -> LitterBoxStatus | str:
-        """Parse an activity value."""
-        value = activity.get("value", "")
-        action = ACTIVITY_STATUS_MAP.get(value, value)
-        if value == "catWeight":
-            action = f"{action}: {activity.get('actionValue')} lbs"
-        if value == self._data_cycle_count or value == "odometerCleanCycles":
-            action = f"{action}: {activity.get('actionValue')}"
-        if value == "litterHopperDispensed":
-            action = f"{action}: {activity.get('actionValue')}"
-        return action
-
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info."""
         start = end = None
@@ -640,12 +787,19 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
                 # sleep crosses previous day boundary (e.g., sleep at 22:00, wake at 7:00)
                 start = start_of_day - timedelta(minutes=1440 - sleep_time)
             end = start_of_day + timedelta(minutes=wake_time)
-            # If now is within this window, break and keep start/end
-            if start <= now <= end or start <= now or end >= now:
+            # If now is within this sleep window, use it
+            if start <= now <= end:
                 break
 
         self._sleep_mode_start_time = start
         self._sleep_mode_end_time = end
+
+    async def send_subscribe_request(self, send_stop: bool = False) -> None:
+        """Send a subscribe request.
+
+        LR5 uses REST polling rather than WebSocket subscriptions,
+        so this is a no-op.
+        """
 
     async def _dispatch_command(self, command: str, **kwargs: Any) -> bool:
         """Send a command to the Litter-Robot.
@@ -659,11 +813,13 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             LitterRobot5Command.POWER_ON,
             LitterRobot5Command.POWER_OFF,
             LitterRobot5Command.REMOTE_RESET,
+            LitterRobot5Command.FACTORY_RESET,
             LitterRobot5Command.RESET_WASTE_LEVEL,
             LitterRobot5Command.CHANGE_FILTER,
+            LitterRobot5Command.ONBOARD_PTAG_ON,
+            LitterRobot5Command.ONBOARD_PTAG_OFF,
             LitterRobot5Command.PRIVACY_MODE_ON,
             LitterRobot5Command.PRIVACY_MODE_OFF,
-            LitterRobot5Command.NO_OP,
         ):
             return await self._send_command(command)
         # Settings changes use PATCH
@@ -712,28 +868,8 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
 
     async def set_name(self, name: str) -> bool:
         """Set the name."""
-        data = await self._post(
-            json={
-                "query": """
-                    mutation rename(
-                        $serial: String!
-                        $name: String
-                    ) {
-                        updateLitterRobot4(
-                            input: {
-                                serial: $serial
-                                name: $name
-                            }
-                        ) {
-                            name
-                        }
-                    }
-                """,
-                "variables": {"serial": self.serial, "name": name},
-            }
-        )
-        updated_data = cast(dict, data).get("data", {}).get("updateLitterRobot4", {})
-        self._update_data(updated_data, partial=True)
+        await self._patch(f"robots/{self.serial}", json={"name": name})
+        self._update_data({"name": name}, partial=True)
         return self.name == name
 
     async def set_night_light(self, value: bool) -> bool:
@@ -782,6 +918,69 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             self._update_data(data)
         return self.panel_lock_enabled == value
 
+    async def set_privacy_mode(self, value: bool) -> bool:
+        """Turn privacy mode on or off."""
+        command = (
+            LitterRobot5Command.PRIVACY_MODE_ON
+            if value
+            else LitterRobot5Command.PRIVACY_MODE_OFF
+        )
+        return await self._dispatch_command(command)
+
+    async def set_sleep_mode(
+        self,
+        enabled: bool,
+        sleep_time: int | None = None,
+        wake_time: int | None = None,
+        day_of_week: int | None = None,
+    ) -> bool:
+        """Set the sleep mode schedule.
+
+        Args:
+            enabled: Whether to enable or disable sleep mode.
+            sleep_time: Minutes from midnight for sleep start (e.g. 1380 = 11PM).
+            wake_time: Minutes from midnight for wake (e.g. 420 = 7AM).
+            day_of_week: Specific day to update (0=Monday, 6=Sunday).
+                If None, updates all days.
+        """
+        schedules = deepcopy(self._data.get("sleepSchedules", []))
+        if not schedules:
+            schedules = [
+                {"dayOfWeek": d, "isEnabled": False, "sleepTime": 0, "wakeTime": 0}
+                for d in range(7)
+            ]
+        for schedule in schedules:
+            if day_of_week is not None and schedule.get("dayOfWeek") != day_of_week:
+                continue
+            schedule["isEnabled"] = enabled
+            if sleep_time is not None:
+                schedule["sleepTime"] = sleep_time
+            if wake_time is not None:
+                schedule["wakeTime"] = wake_time
+        try:
+            await self._patch(
+                f"robots/{self.serial}", json={"sleepSchedules": schedules}
+            )
+            self._update_data({"sleepSchedules": schedules}, partial=True)
+            return True
+        except Exception as ex:
+            _LOGGER.error("Failed to set sleep mode: %s", ex)
+            return False
+
+    async def set_volume(self, volume: int) -> bool:
+        """Set the sound volume (0-100)."""
+        return await self._dispatch_command(
+            LitterRobot5Command.SOUND_SETTINGS,
+            value={"volume": volume},
+        )
+
+    async def set_camera_audio(self, value: bool) -> bool:
+        """Enable or disable camera audio (Pro only)."""
+        return await self._dispatch_command(
+            LitterRobot5Command.SOUND_SETTINGS,
+            value={"cameraAudioEnabled": value},
+        )
+
     async def set_wait_time(self, wait_time: int) -> bool:
         """Set the wait time on the Litter-Robot."""
         if wait_time not in self.VALID_WAIT_TIMES:
@@ -805,175 +1004,102 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             raise InvalidCommandException(
                 f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
             )
-        data = await self._post(
-            json={
-                "query": """
-                    query GetLR4Activity(
-                        $serial: String!
-                        $startTimestamp: String
-                        $endTimestamp: String
-                        $limit: Int
-                        $consumer: String
-                    ) {
-                        getLitterRobot4Activity(
-                            serial: $serial
-                            startTimestamp: $startTimestamp
-                            endTimestamp: $endTimestamp
-                            limit: $limit
-                            consumer: $consumer
-                        ) {
-                            serial
-                            measure
-                            timestamp
-                            value
-                            actionValue
-                            originalHex
-                            valueString
-                            stateString
-                            consumer
-                            commandSource
-                        }
-                    }
-                """,
-                "variables": {
-                    "serial": self.serial,
-                    "limit": limit,
-                    "consumer": "app",
-                },
-            }
-        )
-        activities = cast(dict, data).get("data", {}).get("getLitterRobot4Activity", {})
+        activities = await self.get_activities(limit=limit)
         if activities is None:
             raise LitterRobotException("Activity history could not be retrieved.")
         return [
-            Activity(timestamp, self._parse_activity(activity))
+            Activity(timestamp, activity.get("type", ""))
             for activity in activities
-            if (timestamp := to_timestamp(activity["timestamp"])) is not None
+            if (timestamp := to_timestamp(activity.get("timestamp"))) is not None
         ]
+
+    async def get_activities(
+        self,
+        limit: int | None = None,
+        offset: int | None = None,
+        activity_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return activities from the REST endpoint.
+
+        Returns richer data than get_activity_history(), including PET_VISIT
+        events with waste type, pet IDs, duration, and camera event IDs.
+
+        Args:
+            limit: Maximum number of activities to return.
+            offset: Number of activities to skip.
+            activity_type: Filter by type (e.g. PET_VISIT, CYCLE_COMPLETED,
+                CAT_DETECT, OFFLINE, CYCLE_INTERRUPTED, LITTER_LOW).
+        """
+        params: dict[str, str] = {}
+        if limit is not None:
+            params["limit"] = str(limit)
+        if offset is not None:
+            params["offset"] = str(offset)
+        if activity_type is not None:
+            params["type"] = activity_type
+        url = f"{LR5_ENDPOINT}/robots/{self.serial}/activities"
+        return await self._account.session.request("GET", url, params=params)
 
     async def get_insight(
         self, days: int = 30, timezone_offset: int | None = None
     ) -> Insight:
-        """Return the insight data."""
-        data = await self._post(
-            json={
-                "query": """
-                    query GetLR4Insights(
-                        $serial: String!
-                        $startTimestamp: String
-                        $timezoneOffset: Int
-                    ) {
-                        getLitterRobot4Insights(
-                            serial: $serial
-                            startTimestamp: $startTimestamp
-                            timezoneOffset: $timezoneOffset
-                        ) {
-                            totalCycles
-                            averageCycles
-                            cycleHistory {
-                                date
-                                numberOfCycles
-                            }
-                            totalCatDetections
-                        }
-                    }
-                """,
-                "variables": {
-                    "serial": self.serial,
-                    "startTimestamp": (utcnow() - timedelta(days=days)).strftime(
-                        "%Y-%m-%dT%H:%M:%S.%fZ"
-                    ),
-                    "timezoneOffset": timezone_offset,
-                },
-            }
-        )
-        insight = cast(dict, data).get("data", {}).get("getLitterRobot4Insights", {})
-        if insight is None:
-            raise LitterRobotException("Insight data could not be retrieved.")
-        return Insight(
-            insight["totalCycles"],
-            insight["averageCycles"],
-            [
-                (
-                    datetime.strptime(cycle["date"], "%Y-%m-%d").date(),
-                    cycle["numberOfCycles"],
-                )
-                for cycle in insight["cycleHistory"]
-            ],
+        """Return the insight data.
+
+        Note: The LR5 REST API does not provide an insights endpoint.
+        Raises NotImplementedError.
+        """
+        raise NotImplementedError(
+            "Insight data is not available via the LR5 REST API. "
+            "Use get_activities() to retrieve activity history instead."
         )
 
     async def get_firmware_details(
         self, force_check: bool = False
     ) -> dict[str, bool | dict[str, str]] | None:
-        """Get the firmware details."""
-        if (
-            force_check
-            or not self._firmware_details
-            or (requested := self._firmware_details_requested) is None
-            or requested + timedelta(minutes=15) < utcnow()
-        ):
-            data = await self._post(
-                json={
-                    "query": """
-                        query getFirmwareDetails($serial: String!) {
-                            litterRobot4CompareFirmwareVersion(serial: $serial) {
-                                isEspFirmwareUpdateNeeded
-                                isPicFirmwareUpdateNeeded
-                                isLaserboardFirmwareUpdateNeeded
-                                latestFirmware {
-                                    espFirmwareVersion
-                                    picFirmwareVersion
-                                    laserBoardFirmwareVersion
-                                }
-                            }
-                        }
-                    """,
-                    "variables": {"serial": self.serial},
-                }
-            )
-            self._firmware_details = (
-                cast(Dict[str, Dict[str, Dict[str, Union[bool, Dict[str, str]]]]], data)
-                .get("data", {})
-                .get("litterRobot4CompareFirmwareVersion", {})
-            )
-            self._firmware_details_requested = utcnow()
-        return self._firmware_details
+        """Get the firmware details.
+
+        Note: The LR5 REST API does not provide a firmware comparison endpoint.
+        Returns firmware version info from the robot state instead.
+        """
+        fw = self._state.get("firmwareVersions", {})
+        result: dict[str, Any] = {"latestFirmware": {}}
+        for key, fw_key, fallback_key in [
+            ("espFirmwareVersion", "wifiVersion", "espFirmwareVersion"),
+            ("mcuFirmwareVersion", "mcuVersion", "stmFirmwareVersion"),
+        ]:
+            ver = fw.get(fw_key)
+            if isinstance(ver, dict):
+                ver = ver.get("value")
+            if ver is None:
+                ver = self._state.get(fallback_key)
+            result["latestFirmware"][key] = ver
+        return result
 
     async def get_latest_firmware(self, force_check: bool = False) -> str | None:
         """Get the latest firmware available."""
         if (firmware := await self.get_firmware_details(force_check)) is None:
             return None
 
-        latest_firmware = cast(Dict[str, str], firmware.get("latestFirmware", {}))
+        latest_firmware = cast(dict[str, str], firmware.get("latestFirmware", {}))
         return (
             f"ESP: {latest_firmware.get('espFirmwareVersion')} / "
-            f"PIC: {latest_firmware.get('picFirmwareVersion')} / "
-            f"TOF: {latest_firmware.get('laserBoardFirmwareVersion')}"
+            f"MCU: {latest_firmware.get('mcuFirmwareVersion')}"
         )
 
     async def has_firmware_update(self, force_check: bool = False) -> bool:
-        """Check if a firmware update is available."""
-        if (firmware := await self.get_firmware_details(force_check)) is None:
-            return False
-        return any(value for value in firmware.values() if isinstance(value, bool))
+        """Check if a firmware update is available.
+
+        Note: The LR5 REST API does not provide a firmware comparison endpoint.
+        Always returns False since we cannot determine update availability.
+        """
+        return False
 
     async def update_firmware(self) -> bool:
-        """Trigger a firmware update."""
-        data = await self._post(
-            json={
-                "query": """
-                    mutation updateFirmware($serial: String!) {
-                        litterRobot4TriggerFirmwareUpdate(input: {serial: $serial}) {
-                            isUpdateTriggered
-                            isEspFirmwareUpdateNeeded
-                            isPicFirmwareUpdateNeeded
-                            isLaserboardFirmwareUpdateNeeded
-                        }
-                    }
-                """,
-                "variables": {"serial": self.serial},
-            }
+        """Trigger a firmware update.
+
+        Note: The LR5 REST API does not provide a firmware update trigger endpoint.
+        Raises NotImplementedError.
+        """
+        raise NotImplementedError(
+            "Firmware updates cannot be triggered via the LR5 REST API."
         )
-        data = cast(dict, data)
-        firmware = data.get("data", {}).get("litterRobot4TriggerFirmwareUpdate", {})
-        return bool(firmware.get("isUpdateTriggered", False))

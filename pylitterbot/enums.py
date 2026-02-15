@@ -66,11 +66,17 @@ class LitterRobot5Command:
     POWER_ON = "POWER_ON"
     POWER_OFF = "POWER_OFF"
     REMOTE_RESET = "REMOTE_RESET"
+    FACTORY_RESET = "FACTORY_RESET"
     RESET_WASTE_LEVEL = "RESET_WASTE_LEVEL"
     CHANGE_FILTER = "CHANGE_FILTER"
+    ONBOARD_PTAG_ON = "ONBOARD_PTAG_ON"
+    ONBOARD_PTAG_OFF = "ONBOARD_PTAG_OFF"
     PRIVACY_MODE_ON = "PRIVACY_MODE_ON"
     PRIVACY_MODE_OFF = "PRIVACY_MODE_OFF"
-    NO_OP = "NO_OP"
+    # Discovered via API 422 response but unverified on litter robot hardware:
+    # NO_OP = "NO_OP"  # valid per API enum but returns INTERNAL_SERVER_ERROR
+    # FEED_NOW = "FEED_NOW"  # likely for Feeder-Robot or litter hopper accessory
+    # DISCARD_MEAL = "DISCARD_MEAL"  # likely for Feeder-Robot or litter hopper accessory
 
     # PATCH /robots/{serial} - settings keys
     CYCLE_DELAY = "cycleDelay"
