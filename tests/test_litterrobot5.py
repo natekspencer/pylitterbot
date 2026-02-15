@@ -22,7 +22,7 @@ from pylitterbot.robot.litterrobot5 import (
     NightLightMode,
 )
 
-from .common import LITTER_ROBOT_5_DATA
+from .common import LITTER_ROBOT_5_DATA, LITTER_ROBOT_5_PRO_DATA
 
 pytestmark = pytest.mark.asyncio
 
@@ -392,15 +392,12 @@ async def test_litter_robot_5_set_name(
     mock_aioresponse: aioresponses,
     mock_account: Account,
 ) -> None:
-    """Tests setting the name on a Litter-Robot 5."""
+    """Tests setting the name on a Litter-Robot 5 via REST PATCH."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
     assert robot.name == "Robo-shitter"
 
     new_name = "Mr. Clean"
-    mock_aioresponse.post(
-        LR5_ENDPOINT,
-        payload={"data": {"updateLitterRobot4": {"name": new_name}}},
-    )
+    mock_aioresponse.patch(LR5_GET_URL, payload={})
     assert await robot.set_name(new_name)
     assert robot.name == new_name
 
@@ -581,53 +578,35 @@ async def test_litter_robot_5_command_failure(
 
 
 async def test_litter_robot_5_activity_history(
-    mock_aioresponse: aioresponses,
     mock_account: Account,
 ) -> None:
-    """Tests getting activity history for Litter-Robot 5."""
+    """Tests getting activity history for Litter-Robot 5 via REST endpoint."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
 
-    mock_aioresponse.post(
-        LR5_ENDPOINT,
-        payload={
-            "data": {
-                "getLitterRobot4Activity": [
-                    {
-                        "timestamp": "2025-12-10 20:53:32.000000000",
-                        "value": "robotCycleStatusIdle",
-                        "actionValue": "",
-                    },
-                    {
-                        "timestamp": "2025-12-10 20:51:18.000000000",
-                        "value": "robotCycleStatusDump",
-                        "actionValue": "",
-                    },
-                    {
-                        "timestamp": "2025-12-10 20:44:18.000000000",
-                        "value": "catWeight",
-                        "actionValue": "6.35",
-                    },
-                    {
-                        "timestamp": "2025-12-10 20:40:07.000000000",
-                        "value": "odometerCleanCycles",
-                        "actionValue": "42",
-                    },
-                    {
-                        "timestamp": "2025-12-10 20:39:56.000000000",
-                        "value": "litterHopperDispensed",
-                        "actionValue": "84",
-                    },
-                ]
-            }
+    activities_data = [
+        {
+            "type": "PET_VISIT",
+            "timestamp": "2025-12-10T20:53:32Z",
+            "petWeight": 937.0,
         },
-    )
-    activities = await robot.get_activity_history(5)
-    assert len(activities) == 5
-    assert activities[0].action == LitterBoxStatus.CLEAN_CYCLE_COMPLETE
-    assert activities[1].action == LitterBoxStatus.CLEAN_CYCLE
-    assert activities[2].action == "Pet Weight Recorded: 6.35 lbs"
-    assert activities[3].action == "Clean Cycles: 42"
-    assert activities[4].action == "Litter Dispensed: 84"
+        {
+            "type": "CYCLE_COMPLETED",
+            "timestamp": "2025-12-10T20:51:18Z",
+            "subtype": "robotCycleStateIdle",
+        },
+        {
+            "type": "CAT_DETECT",
+            "timestamp": "2025-12-10T20:44:18Z",
+        },
+    ]
+    activities_url = f"{LR5_GET_URL}/activities?limit=3"
+    with aioresponses() as mock:
+        mock.get(activities_url, payload=activities_data)
+        activities = await robot.get_activity_history(3)
+    assert len(activities) == 3
+    assert activities[0].action == "PET_VISIT"
+    assert activities[1].action == "CYCLE_COMPLETED"
+    assert activities[2].action == "CAT_DETECT"
 
     await robot._account.disconnect()
 
@@ -645,183 +624,61 @@ async def test_litter_robot_5_activity_history_invalid_limit(
 
 
 async def test_litter_robot_5_activity_history_none_response(
-    mock_aioresponse: aioresponses,
     mock_account: Account,
 ) -> None:
     """Tests that activity history raises when response is None."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
 
-    mock_aioresponse.post(
-        LR5_ENDPOINT,
-        payload={"data": {"getLitterRobot4Activity": None}},
-    )
-    with pytest.raises(LitterRobotException):
-        await robot.get_activity_history(5)
+    activities_url = f"{LR5_GET_URL}/activities?limit=5"
+    with aioresponses() as mock:
+        mock.get(activities_url, payload=None)
+        with pytest.raises(LitterRobotException):
+            await robot.get_activity_history(5)
 
     await robot._account.disconnect()
 
 
 async def test_litter_robot_5_insight(
-    mock_aioresponse: aioresponses,
     mock_account: Account,
 ) -> None:
-    """Tests getting insight data for Litter-Robot 5."""
+    """Tests that get_insight raises NotImplementedError for LR5."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
 
-    mock_aioresponse.post(
-        LR5_ENDPOINT,
-        payload={
-            "data": {
-                "getLitterRobot4Insights": {
-                    "totalCycles": 35,
-                    "averageCycles": 5,
-                    "cycleHistory": [
-                        {"date": "2025-12-08", "numberOfCycles": 5},
-                        {"date": "2025-12-07", "numberOfCycles": 6},
-                        {"date": "2025-12-06", "numberOfCycles": 4},
-                    ],
-                    "totalCatDetections": 35,
-                }
-            }
-        },
-    )
-    insight = await robot.get_insight(days=7)
-    assert len(insight.cycle_history) == 3
-    assert insight.total_cycles == 35
-    assert insight.average_cycles == 5
-
-    await robot._account.disconnect()
-
-
-async def test_litter_robot_5_insight_none_response(
-    mock_aioresponse: aioresponses,
-    mock_account: Account,
-) -> None:
-    """Tests that insight raises when response is None."""
-    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
-
-    mock_aioresponse.post(
-        LR5_ENDPOINT,
-        payload={"data": {"getLitterRobot4Insights": None}},
-    )
-    with pytest.raises(LitterRobotException):
+    with pytest.raises(NotImplementedError):
         await robot.get_insight(days=7)
 
     await robot._account.disconnect()
 
 
 async def test_litter_robot_5_firmware_details(
-    mock_aioresponse: aioresponses,
     mock_account: Account,
 ) -> None:
-    """Tests getting firmware details for Litter-Robot 5."""
+    """Tests getting firmware details from robot state for LR5."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
 
-    version_info = {
-        "isEspFirmwareUpdateNeeded": True,
-        "isPicFirmwareUpdateNeeded": False,
-        "isLaserboardFirmwareUpdateNeeded": False,
-        "latestFirmware": {
-            "espFirmwareVersion": "v2.6.0",
-            "picFirmwareVersion": "v5.8.0",
-            "laserBoardFirmwareVersion": "4.0.65.4",
-        },
-    }
-    mock_aioresponse.post(
-        LR5_ENDPOINT,
-        payload={"data": {"litterRobot4CompareFirmwareVersion": version_info}},
-    )
-    assert await robot.has_firmware_update()
+    details = await robot.get_firmware_details()
+    assert details is not None
+    assert "latestFirmware" in details
+    assert details["latestFirmware"]["espFirmwareVersion"] == "v2.5.6"
+    assert details["latestFirmware"]["mcuFirmwareVersion"] == "v5.7.4 2904_106"
 
     latest = await robot.get_latest_firmware()
-    assert latest == "ESP: v2.6.0 / PIC: v5.8.0 / TOF: 4.0.65.4"
+    assert latest == "ESP: v2.5.6 / MCU: v5.7.4 2904_106"
 
-    # Second call should use cached value (no new mock needed)
-    assert await robot.has_firmware_update()
-
-    await robot._account.disconnect()
-
-
-async def test_litter_robot_5_firmware_no_update(
-    mock_aioresponse: aioresponses,
-    mock_account: Account,
-) -> None:
-    """Tests firmware check when no update is available."""
-    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
-
-    version_info = {
-        "isEspFirmwareUpdateNeeded": False,
-        "isPicFirmwareUpdateNeeded": False,
-        "isLaserboardFirmwareUpdateNeeded": False,
-        "latestFirmware": {
-            "espFirmwareVersion": "v2.5.6",
-            "picFirmwareVersion": "v5.7.4",
-            "laserBoardFirmwareVersion": "4.0.65.4",
-        },
-    }
-    mock_aioresponse.post(
-        LR5_ENDPOINT,
-        payload={"data": {"litterRobot4CompareFirmwareVersion": version_info}},
-    )
-    assert not await robot.has_firmware_update(force_check=True)
-
-    await robot._account.disconnect()
-
-
-async def test_litter_robot_5_firmware_details_none(
-    mock_aioresponse: aioresponses,
-    mock_account: Account,
-) -> None:
-    """Tests firmware details when response is None."""
-    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
-
-    mock_aioresponse.post(
-        LR5_ENDPOINT,
-        payload={"data": {"litterRobot4CompareFirmwareVersion": None}},
-        repeat=True,
-    )
-    assert not await robot.has_firmware_update(force_check=True)
-    assert not await robot.get_latest_firmware(force_check=True)
+    # has_firmware_update always returns False for LR5 (no comparison endpoint)
+    assert not await robot.has_firmware_update()
 
     await robot._account.disconnect()
 
 
 async def test_litter_robot_5_update_firmware(
-    mock_aioresponse: aioresponses,
     mock_account: Account,
 ) -> None:
-    """Tests triggering a firmware update for Litter-Robot 5."""
+    """Tests that update_firmware raises NotImplementedError for LR5."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
 
-    mock_aioresponse.post(
-        LR5_ENDPOINT,
-        payload={
-            "data": {
-                "litterRobot4TriggerFirmwareUpdate": {
-                    "isUpdateTriggered": True,
-                    "isEspFirmwareUpdateNeeded": True,
-                    "isPicFirmwareUpdateNeeded": False,
-                    "isLaserboardFirmwareUpdateNeeded": False,
-                }
-            }
-        },
-    )
-    assert await robot.update_firmware()
-
-    mock_aioresponse.post(
-        LR5_ENDPOINT,
-        payload={
-            "data": {
-                "litterRobot4TriggerFirmwareUpdate": {
-                    "isUpdateTriggered": False,
-                    "isEspFirmwareUpdateNeeded": False,
-                    "isPicFirmwareUpdateNeeded": False,
-                    "isLaserboardFirmwareUpdateNeeded": False,
-                }
-            }
-        },
-    )
-    assert not await robot.update_firmware()
+    with pytest.raises(NotImplementedError):
+        await robot.update_firmware()
 
     await robot._account.disconnect()
 
@@ -970,5 +827,313 @@ async def test_litter_robot_5_litter_level_state_values(
         data["state"]["globeLitterLevelIndicator"] = state_value
         robot = LitterRobot5(data=data, account=mock_account)
         assert robot.litter_level_state == expected
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_pro_model(
+    mock_account: Account,
+) -> None:
+    """Tests that LR5 Pro is detected and model name is correct."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+    assert robot.is_pro
+    assert robot.model == "Litter-Robot 5 Pro"
+
+    # Standard LR5 should not be Pro
+    robot_std = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    assert not robot_std.is_pro
+    assert robot_std.model == "Litter-Robot 5"
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_pro_firmware(
+    mock_account: Account,
+) -> None:
+    """Tests firmware string includes Pro-specific versions."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+    fw = robot.firmware
+    assert "MCU: v5.7.5 2904_0106" in fw
+    assert "CAM: 1.2.2-1233" in fw
+    assert "EDGE: 1.5.22" in fw
+    assert "AI: 0.0.41" in fw
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_pro_camera_metadata(
+    mock_account: Account,
+) -> None:
+    """Tests camera metadata is available for Pro."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+    assert robot.camera_metadata is not None
+    assert "deviceId" in robot.camera_metadata
+    assert "serialNumber" in robot.camera_metadata
+
+    # Standard LR5 has no camera metadata
+    robot_std = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    assert robot_std.camera_metadata is None
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_new_state_properties(
+    mock_account: Account,
+) -> None:
+    """Tests new state properties from live API data."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    assert not robot.is_bonnet_removed
+    assert not robot.is_drawer_removed
+    assert not robot.is_laser_dirty
+    assert not robot.is_firmware_updating
+    assert not robot.is_gas_sensor_fault_detected
+    assert not robot.is_usb_fault_detected
+    assert not robot.extended_scale_activity
+    assert robot.is_night_light_on
+    assert robot.privacy_mode == "Normal"
+    assert robot.wifi_rssi == 58
+    assert robot.odometer_empty_cycles == 0
+    assert robot.odometer_filter_cycles == 3
+    assert robot.odometer_power_cycles == 14
+    assert robot.globe_motor_fault_status == "MtrFaultClear"
+    assert robot.globe_motor_retract_fault_status == "MtrFaultClear"
+    assert robot.pinch_status == "Clear"
+    assert robot.cat_detect == "WeightClear"
+    assert robot.cycle_type == "StCycleIdle"
+    assert robot.stm_update_status == "UpdateSuccessful"
+    assert robot.hopper_fault is None
+    assert robot.last_reset_odometer_clean_cycles == 1
+    assert robot.optimal_litter_level == 434
+    assert robot.next_filter_replacement_date is not None
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_sound_properties(
+    mock_account: Account,
+) -> None:
+    """Tests sound settings properties."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    assert robot.sound_volume == 50
+    assert not robot.camera_audio_enabled
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_set_privacy_mode(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests privacy mode on/off commands."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    mock_aioresponse.post(LR5_COMMANDS_URL, payload=None)
+    assert await robot.set_privacy_mode(True)
+
+    mock_aioresponse.post(LR5_COMMANDS_URL, payload=None)
+    assert await robot.set_privacy_mode(False)
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_set_volume(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests setting sound volume."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    mock_aioresponse.patch(LR5_GET_URL, payload={})
+    assert await robot.set_volume(75)
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_set_camera_audio(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests toggling camera audio."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    mock_aioresponse.patch(LR5_GET_URL, payload={})
+    assert await robot.set_camera_audio(True)
+
+    mock_aioresponse.patch(LR5_GET_URL, payload={})
+    assert await robot.set_camera_audio(False)
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_get_activities(
+    mock_account: Account,
+) -> None:
+    """Tests REST activities endpoint."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    activities_data = [
+        {
+            "messageId": "msg-001",
+            "type": "PET_VISIT",
+            "timestamp": "2026-02-14T23:12:12Z",
+            "petWeight": 937.0,
+            "wasteType": "Urine",
+            "duration": 31,
+            "petIds": ["PET-123"],
+            "cameraEventIds": [],
+            "isWasteWeightValid": True,
+            "wasteWeight": 40.0,
+        },
+        {
+            "messageId": "msg-002",
+            "type": "CYCLE_COMPLETED",
+            "timestamp": "2026-02-14T23:29:21Z",
+            "subtype": "robotCycleStateIdle",
+        },
+        {
+            "messageId": "msg-003",
+            "type": "OFFLINE",
+            "timestamp": "2026-02-15T01:49:22Z",
+            "reason": "CONNECTION_LOST",
+        },
+    ]
+    activities_url = f"{LR5_GET_URL}/activities?limit=3"
+    with aioresponses() as mock:
+        mock.get(activities_url, payload=activities_data)
+        result = await robot.get_activities(limit=3)
+    assert len(result) == 3
+    assert result[0]["type"] == "PET_VISIT"
+    assert result[0]["wasteType"] == "Urine"
+    assert result[0]["petWeight"] == 937.0
+    assert result[1]["type"] == "CYCLE_COMPLETED"
+    assert result[2]["type"] == "OFFLINE"
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_bonnet_removed_state(
+    mock_account: Account,
+) -> None:
+    """Tests bonnet and drawer removed state properties."""
+    data = deepcopy(LITTER_ROBOT_5_DATA)
+    data["state"]["isBonnetRemoved"] = True
+    data["state"]["isDrawerRemoved"] = True
+    data["state"]["isLaserDirty"] = True
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.is_bonnet_removed
+    assert robot.is_drawer_removed
+    assert robot.is_laser_dirty
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_set_sleep_mode(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests setting sleep mode via REST PATCH."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    assert not robot.sleep_mode_enabled
+
+    # Enable sleep for all days
+    mock_aioresponse.patch(LR5_GET_URL, payload={})
+    assert await robot.set_sleep_mode(enabled=True, sleep_time=1380, wake_time=420)
+    assert robot.sleep_mode_enabled
+
+    # Disable sleep for all days
+    mock_aioresponse.patch(LR5_GET_URL, payload={})
+    assert await robot.set_sleep_mode(enabled=False)
+    assert not robot.sleep_mode_enabled
+
+    # Enable sleep for a specific day (Sunday=6)
+    mock_aioresponse.patch(LR5_GET_URL, payload={})
+    assert await robot.set_sleep_mode(
+        enabled=True, sleep_time=1380, wake_time=420, day_of_week=6
+    )
+    schedules = robot._data.get("sleepSchedules", [])
+    sunday = next(s for s in schedules if s["dayOfWeek"] == 6)
+    assert sunday["isEnabled"]
+    assert sunday["sleepTime"] == 1380
+    assert sunday["wakeTime"] == 420
+    # Other days should remain disabled
+    monday = next(s for s in schedules if s["dayOfWeek"] == 0)
+    assert not monday["isEnabled"]
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_fault_states(
+    mock_account: Account,
+) -> None:
+    """Tests fault detection state properties in active state."""
+    data = deepcopy(LITTER_ROBOT_5_DATA)
+    data["state"]["isUsbFaultDetected"] = True
+    data["state"]["isGasSensorFaultDetected"] = True
+    data["state"]["isFirmwareUpdating"] = True
+    data["state"]["extendedScaleActivity"] = True
+    data["state"]["isNightLightOn"] = False
+    data["state"]["hopperFault"] = "MOTOR_STALL"
+    data["state"]["globeMotorRetractFaultStatus"] = "MtrFaultSet"
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.is_usb_fault_detected
+    assert robot.is_gas_sensor_fault_detected
+    assert robot.is_firmware_updating
+    assert robot.extended_scale_activity
+    assert not robot.is_night_light_on
+    assert robot.hopper_fault == "MOTOR_STALL"
+    assert robot.globe_motor_retract_fault_status == "MtrFaultSet"
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_setup_date(
+    mock_account: Account,
+) -> None:
+    """Tests that setup_date reads from state dict for LR5."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    assert robot.setup_date is not None
+    assert robot.setup_date.year == 2025
+    assert robot.setup_date.month == 11
+    assert robot.setup_date.day == 28
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_last_seen(
+    mock_account: Account,
+) -> None:
+    """Tests that last_seen reads from state dict for LR5."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    assert robot.last_seen is not None
+    assert robot.last_seen.year == 2025
+    assert robot.last_seen.month == 12
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_send_subscribe_request(
+    mock_account: Account,
+) -> None:
+    """Tests that send_subscribe_request is a no-op for LR5."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    # Should not raise
+    await robot.send_subscribe_request()
+    await robot.send_subscribe_request(send_stop=True)
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_firmware_details_esp_fallback(
+    mock_account: Account,
+) -> None:
+    """Tests that get_firmware_details falls back to espFirmwareVersion when wifiVersion is None."""
+    data = deepcopy(LITTER_ROBOT_5_PRO_DATA)
+    # Pro data has wifiVersion: None in firmwareVersions
+    robot = LitterRobot5(data=data, account=mock_account)
+    details = await robot.get_firmware_details()
+    assert details is not None
+    # Should fall back to espFirmwareVersion from state
+    assert details["latestFirmware"]["espFirmwareVersion"] == "v2.5.6"
 
     await robot._account.disconnect()
