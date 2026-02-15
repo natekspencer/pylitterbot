@@ -70,6 +70,8 @@ DISPLAY_CODE_STATUS_MAP = {
     "DcDfiFull": LitterBoxStatus.DRAWER_FULL,
     "DcModeCycle": LitterBoxStatus.CLEAN_CYCLE,
     "DcModeIdle": LitterBoxStatus.READY,
+    "DcxLampTest": LitterBoxStatus.POWER_UP,
+    "DcxSuspend": LitterBoxStatus.POWER_DOWN,
     # Legacy UPPER_SNAKE_CASE (LR4 format)
     "DC_CAT_DETECT": LitterBoxStatus.CAT_DETECTED,
 }
@@ -81,6 +83,8 @@ STATUS_INDICATOR_MAP = {
     "LITTER_LOW": LitterBoxStatus.READY,
     "CAT_DETECTED": LitterBoxStatus.CAT_DETECTED,
     "BONNET_REMOVED": LitterBoxStatus.BONNET_REMOVED,
+    "OFF": LitterBoxStatus.OFF,
+    "OFFLINE": LitterBoxStatus.OFFLINE,
 }
 # Maps for state.cycleState field
 CYCLE_STATE_STATUS_MAP = {

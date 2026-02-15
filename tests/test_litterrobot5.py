@@ -262,6 +262,15 @@ async def test_litter_robot_5_night_light_modes(
             {"state": {"isOnline": True, "displayCode": "DcModeIdle"}},
             LitterBoxStatus.READY,
         ),
+        # Power display codes (observed from live hardware power cycle)
+        (
+            {"state": {"isOnline": True, "displayCode": "DcxSuspend"}},
+            LitterBoxStatus.POWER_DOWN,
+        ),
+        (
+            {"state": {"isOnline": True, "displayCode": "DcxLampTest"}},
+            LitterBoxStatus.POWER_UP,
+        ),
         # Legacy display code format (LR4-style)
         (
             {"state": {"isOnline": True, "displayCode": "DC_CAT_DETECT"}},
@@ -283,6 +292,11 @@ async def test_litter_robot_5_night_light_modes(
         (
             {"state": {"isOnline": True, "statusIndicator": {"type": "LITTER_LOW"}}},
             LitterBoxStatus.READY,
+        ),
+        # statusIndicator power states (observed from live power cycle)
+        (
+            {"state": {"isOnline": True, "statusIndicator": {"type": "OFF"}}},
+            LitterBoxStatus.OFF,
         ),
         # Legacy status string
         (
