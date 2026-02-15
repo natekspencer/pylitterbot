@@ -521,8 +521,12 @@ class LitterRobot5(LitterRobot):
 
     @property
     def pet_weight(self) -> float:
-        """Return the last recorded pet weight in pounds (lbs)."""
-        return cast(float, self._state.get("weightSensor", 0.0))
+        """Return the last recorded pet weight in pounds (lbs).
+
+        The API reports weight as pounds * 100 (integer format).
+        This property converts the raw value to pounds.
+        """
+        return cast(float, self._state.get("weightSensor", 0.0) / 100)
 
     @property
     def power_status(self) -> str:
