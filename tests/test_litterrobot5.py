@@ -28,6 +28,7 @@ pytestmark = pytest.mark.asyncio
 
 
 LR5_GET_URL = f"{LR5_ENDPOINT}/robots/{LITTER_ROBOT_5_DATA['serial']}"
+LR5_COMMANDS_URL = f"{LR5_GET_URL}/commands"
 
 
 async def test_litter_robot_5(
@@ -460,6 +461,121 @@ async def test_litter_robot_5_dispatch_command_failure(
         exception=InvalidCommandException("Test error"),
     )
     assert not await robot._dispatch_command("testCommand")
+
+    await robot._account.disconnect()
+
+
+@pytest.mark.parametrize(
+    "method,command_type",
+    [
+        ("start_cleaning", "CLEAN_CYCLE"),
+        ("reset", "REMOTE_RESET"),
+        ("reset_waste_drawer", "RESET_WASTE_LEVEL"),
+        ("change_filter", "CHANGE_FILTER"),
+    ],
+)
+async def test_litter_robot_5_commands(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+    method: str,
+    command_type: str,
+) -> None:
+    """Tests LR5 operational commands via POST /robots/{serial}/commands."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    mock_aioresponse.post(LR5_COMMANDS_URL, payload=None)
+    assert await getattr(robot, method)()
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_power_on_off(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests power on/off commands."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    # Power off
+    mock_aioresponse.post(LR5_COMMANDS_URL, payload=None)
+    assert await robot.set_power_status(False)
+
+    # Power on
+    mock_aioresponse.post(LR5_COMMANDS_URL, payload=None)
+    assert await robot.set_power_status(True)
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_set_night_light(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests night light on/off toggle."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    mock_aioresponse.patch(LR5_GET_URL, payload={})
+    assert await robot.set_night_light(True)
+
+    mock_aioresponse.patch(LR5_GET_URL, payload={})
+    assert await robot.set_night_light(False)
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_set_night_light_brightness(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests setting night light brightness."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    mock_aioresponse.patch(LR5_GET_URL, payload={})
+    assert await robot.set_night_light_brightness(50)
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_set_night_light_mode(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests setting night light mode."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    for mode in NightLightMode:
+        mock_aioresponse.patch(LR5_GET_URL, payload={})
+        assert await robot.set_night_light_mode(mode)
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_set_panel_brightness(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests setting panel brightness."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    for level in BrightnessLevel:
+        mock_aioresponse.patch(LR5_GET_URL, payload={})
+        assert await robot.set_panel_brightness(level)
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_command_failure(
+    mock_aioresponse: aioresponses,
+    mock_account: Account,
+) -> None:
+    """Tests that _send_command handles errors gracefully."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+
+    mock_aioresponse.post(
+        LR5_COMMANDS_URL,
+        exception=Exception("Connection error"),
+    )
+    assert not await robot.start_cleaning()
 
     await robot._account.disconnect()
 
