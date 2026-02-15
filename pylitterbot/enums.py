@@ -61,24 +61,24 @@ class LitterRobot4Command:
 class LitterRobot5Command:
     """Known commands that can be sent to trigger an action or setting for a Litter-Robot 5."""
 
-    # CLEAN_CYCLE = "cleanCycle"
+    # POST /robots/{serial}/commands - operational commands
+    CLEAN_CYCLE = "CLEAN_CYCLE"
+    POWER_ON = "POWER_ON"
+    POWER_OFF = "POWER_OFF"
+    REMOTE_RESET = "REMOTE_RESET"
+    RESET_WASTE_LEVEL = "RESET_WASTE_LEVEL"
+    CHANGE_FILTER = "CHANGE_FILTER"
+    PRIVACY_MODE_ON = "PRIVACY_MODE_ON"
+    PRIVACY_MODE_OFF = "PRIVACY_MODE_OFF"
+    NO_OP = "NO_OP"
+
+    # PATCH /robots/{serial} - settings keys
     CYCLE_DELAY = "cycleDelay"
     KEYPAD_LOCKED = "isKeypadLocked"
     LITTER_ROBOT_SETTINGS = "litterRobotSettings"
+    NIGHT_LIGHT_SETTINGS = "nightLightSettings"
     PANEL_SETTINGS = "panelSettings"
-    # KEY_PAD_LOCK_OUT_ON = "keyPadLockOutOn"
-    # NIGHT_LIGHT_MODE_AUTO = "nightLightModeAuto"
-    # NIGHT_LIGHT_MODE_OFF = "nightLightModeOff"
-    # NIGHT_LIGHT_MODE_ON = "nightLightModeOn"
-    # PANEL_BRIGHTNESS_LOW = "panelBrightnessLow"
-    # PANEL_BRIGHTNESS_MEDIUM = "panelBrightnessMed"
-    # PANEL_BRIGHTNESS_HIGH = "panelBrightnessHigh"
-    # POWER_OFF = "powerOff"
-    # POWER_ON = "powerOn"
-    # REQUEST_STATE = "requestState"
-    # SET_CLUMP_TIME = "setClumpTime"
-    # SET_NIGHT_LIGHT_VALUE = "setNightLightValue"
-    # SHORT_RESET_PRESS = "shortResetPress"
+    SOUND_SETTINGS = "soundSettings"
 
 
 class LitterBoxStatusMixIn:

@@ -214,13 +214,9 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
     _data_serial = "serial"
     _data_setup_date = "setupDateTime"
 
-    # _command_clean = LitterRobot4Command.CLEAN_CYCLE
-    # _command_night_light_off = LitterRobot4Command.NIGHT_LIGHT_MODE_OFF
-    # _command_night_light_on = LitterRobot4Command.NIGHT_LIGHT_MODE_AUTO
-    # _command_panel_lock_off = LitterRobot4Command.KEY_PAD_LOCK_OUT_OFF
-    # _command_panel_lock_on = LitterRobot4Command.KEY_PAD_LOCK_OUT_ON
-    # _command_power_off = LitterRobot4Command.POWER_OFF
-    # _command_power_on = LitterRobot4Command.POWER_ON
+    _command_clean = LitterRobot5Command.CLEAN_CYCLE
+    _command_power_off = LitterRobot5Command.POWER_OFF
+    _command_power_on = LitterRobot5Command.POWER_ON
 
     _litter_level = LITTER_LEVEL_EMPTY
     _litter_level_exp: datetime | None = None
@@ -652,7 +648,25 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
         self._sleep_mode_end_time = end
 
     async def _dispatch_command(self, command: str, **kwargs: Any) -> bool:
-        """Send a command to the Litter-Robot."""
+        """Send a command to the Litter-Robot.
+
+        For LR5, operational commands (clean, power, reset) use POST
+        /robots/{serial}/commands. Settings changes use PATCH /robots/{serial}.
+        """
+        # Operational commands go via POST /commands endpoint
+        if command in (
+            LitterRobot5Command.CLEAN_CYCLE,
+            LitterRobot5Command.POWER_ON,
+            LitterRobot5Command.POWER_OFF,
+            LitterRobot5Command.REMOTE_RESET,
+            LitterRobot5Command.RESET_WASTE_LEVEL,
+            LitterRobot5Command.CHANGE_FILTER,
+            LitterRobot5Command.PRIVACY_MODE_ON,
+            LitterRobot5Command.PRIVACY_MODE_OFF,
+            LitterRobot5Command.NO_OP,
+        ):
+            return await self._send_command(command)
+        # Settings changes use PATCH
         try:
             await self._patch(
                 f"robots/{self.serial}",
@@ -663,18 +677,38 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             _LOGGER.error(ex)
             return False
 
+    async def _send_command(self, command: str) -> bool:
+        """Send an operational command via POST /robots/{serial}/commands."""
+        try:
+            await self._account.session.request(
+                "POST",
+                f"{LR5_ENDPOINT}/robots/{self.serial}/commands",
+                json={"type": command},
+            )
+            return True
+        except Exception as ex:
+            _LOGGER.error("Command %s failed: %s", command, ex)
+            return False
+
     async def refresh(self) -> None:
         """Refresh the Litter-Robot's data from the API."""
         data = await self._get(f"robots/{self.serial}")
-        # data = cast(dict, data)
         self._update_data(data)
 
-    # async def reset(self) -> bool:
-    #     """Perform a reset on the Litter-Robot.
+    async def reset(self) -> bool:
+        """Perform a remote reset on the Litter-Robot.
 
-    #     Clears errors and may trigger a cycle. Make sure the globe is clear before proceeding.
-    #     """
-    #     return await self._dispatch_command(LitterRobot4Command.SHORT_RESET_PRESS)
+        Clears errors and may trigger a cycle.
+        """
+        return await self._dispatch_command(LitterRobot5Command.REMOTE_RESET)
+
+    async def reset_waste_drawer(self) -> bool:
+        """Reset the waste drawer level indicator."""
+        return await self._dispatch_command(LitterRobot5Command.RESET_WASTE_LEVEL)
+
+    async def change_filter(self) -> bool:
+        """Reset the filter replacement counter."""
+        return await self._dispatch_command(LitterRobot5Command.CHANGE_FILTER)
 
     async def set_name(self, name: str) -> bool:
         """Set the name."""
@@ -702,37 +736,38 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
         self._update_data(updated_data, partial=True)
         return self.name == name
 
-    # async def set_night_light_brightness(
-    #     self, brightness: int | BrightnessLevel
-    # ) -> bool:
-    #     """Set the night light brightness on the robot."""
-    #     if brightness not in list(BrightnessLevel):
-    #         raise InvalidCommandException(
-    #             f"Attempt to send an invalid night light level to Litter-Robot. "
-    #             f"Brightness must be one of: {list(BrightnessLevel)}, but received {brightness}"
-    #         )
-    #     return await self._dispatch_command(
-    #         LitterRobot4Command.SET_NIGHT_LIGHT_VALUE,
-    #         value=dumps({"nightLightPower": int(brightness)}),
-    #     )
+    async def set_night_light(self, value: bool) -> bool:
+        """Turn the night light on or off."""
+        return await self._dispatch_command(
+            LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
+            value={"mode": NightLightMode.ON.value if value else NightLightMode.OFF.value},
+        )
 
-    # async def set_night_light_mode(self, mode: NightLightMode) -> bool:
-    #     """Set the night light mode on the robot."""
-    #     mode_to_command = {
-    #         NightLightMode.ON: LitterRobot4Command.NIGHT_LIGHT_MODE_ON,
-    #         NightLightMode.OFF: LitterRobot4Command.NIGHT_LIGHT_MODE_OFF,
-    #         NightLightMode.AUTO: LitterRobot4Command.NIGHT_LIGHT_MODE_AUTO,
-    #     }
-    #     return await self._dispatch_command(mode_to_command[mode])
+    async def set_night_light_brightness(self, brightness: int) -> bool:
+        """Set the night light brightness (0-100)."""
+        return await self._dispatch_command(
+            LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
+            value={"brightness": brightness},
+        )
 
-    # async def set_panel_brightness(self, brightness: BrightnessLevel) -> bool:
-    #     """Set the panel brightness."""
-    #     level_to_command = {
-    #         BrightnessLevel.LOW: LitterRobot4Command.PANEL_BRIGHTNESS_LOW,
-    #         BrightnessLevel.MEDIUM: LitterRobot4Command.PANEL_BRIGHTNESS_MEDIUM,
-    #         BrightnessLevel.HIGH: LitterRobot4Command.PANEL_BRIGHTNESS_HIGH,
-    #     }
-    #     return await self._dispatch_command(level_to_command[brightness])
+    async def set_night_light_mode(self, mode: NightLightMode) -> bool:
+        """Set the night light mode (On, Off, Auto/Ambient)."""
+        return await self._dispatch_command(
+            LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
+            value={"mode": mode.value},
+        )
+
+    async def set_panel_brightness(self, brightness: BrightnessLevel) -> bool:
+        """Set the panel brightness."""
+        level_to_intensity = {
+            BrightnessLevel.LOW: "Low",
+            BrightnessLevel.MEDIUM: "Medium",
+            BrightnessLevel.HIGH: "High",
+        }
+        return await self._dispatch_command(
+            LitterRobot5Command.PANEL_SETTINGS,
+            value={"displayIntensity": level_to_intensity[brightness]},
+        )
 
     async def set_panel_lockout(self, value: bool) -> bool:
         """Turn the panel lock on or off."""
