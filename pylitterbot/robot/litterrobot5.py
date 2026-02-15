@@ -25,6 +25,20 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 LR5_ENDPOINT = "https://ub.prod.iothings.site"
+# Maps for state.state field (StPascalCase format from real API)
+LR5_STATE_MAP = {
+    "StRobotBonnet": LitterBoxStatus.BONNET_REMOVED,
+    "StRobotCatDetect": LitterBoxStatus.CAT_DETECTED,
+    "StRobotCatDetectDelay": LitterBoxStatus.CAT_SENSOR_TIMING,
+    "StRobotClean": LitterBoxStatus.CLEAN_CYCLE,
+    "StRobotEmpty": LitterBoxStatus.EMPTY_CYCLE,
+    "StRobotFindDump": LitterBoxStatus.CLEAN_CYCLE,
+    "StRobotIdle": LitterBoxStatus.READY,
+    "StRobotPowerDown": LitterBoxStatus.POWER_DOWN,
+    "StRobotPowerOff": LitterBoxStatus.OFF,
+    "StRobotPowerUp": LitterBoxStatus.POWER_UP,
+}
+# Legacy UPPER_SNAKE_CASE format (LR4-style, kept for backwards compatibility)
 LR5_STATUS_MAP = {
     "ROBOT_BONNET": LitterBoxStatus.BONNET_REMOVED,
     "ROBOT_CAT_DETECT": LitterBoxStatus.CAT_DETECTED,
@@ -50,11 +64,33 @@ ACTIVITY_STATUS_MAP: dict[str, LitterBoxStatus | str] = {
     "robotCycleStatusIdle": LitterBoxStatus.CLEAN_CYCLE_COMPLETE,
     "robotStatusCatDetect": LitterBoxStatus.CAT_DETECTED,
 }
+# Maps for state.displayCode field (DcPascalCase from real API)
+DISPLAY_CODE_STATUS_MAP = {
+    "DcCatDetect": LitterBoxStatus.CAT_DETECTED,
+    "DcDfiFull": LitterBoxStatus.DRAWER_FULL,
+    "DcModeCycle": LitterBoxStatus.CLEAN_CYCLE,
+    "DcModeIdle": LitterBoxStatus.READY,
+    # Legacy UPPER_SNAKE_CASE (LR4 format)
+    "DC_CAT_DETECT": LitterBoxStatus.CAT_DETECTED,
+}
+# Maps for statusIndicator.type field (most reliable status source)
+STATUS_INDICATOR_MAP = {
+    "READY": LitterBoxStatus.READY,
+    "DRAWER_FULL": LitterBoxStatus.DRAWER_FULL,
+    "CYCLING": LitterBoxStatus.CLEAN_CYCLE,
+    "LITTER_LOW": LitterBoxStatus.READY,
+    "CAT_DETECTED": LitterBoxStatus.CAT_DETECTED,
+    "BONNET_REMOVED": LitterBoxStatus.BONNET_REMOVED,
+}
+# Maps for state.cycleState field
 CYCLE_STATE_STATUS_MAP = {
+    # LR5 format (StPascalCase)
+    "StCatDetect": LitterBoxStatus.CAT_SENSOR_INTERRUPTED,
+    "StPause": LitterBoxStatus.PAUSED,
+    # Legacy UPPER_SNAKE_CASE (LR4 format)
     "CYCLE_STATE_CAT_DETECT": LitterBoxStatus.CAT_SENSOR_INTERRUPTED,
     "CYCLE_STATE_PAUSE": LitterBoxStatus.PAUSED,
 }
-DISPLAY_CODE_STATUS_MAP = {"DC_CAT_DETECT": LitterBoxStatus.CAT_DETECTED}
 
 LITTER_LEVEL_EMPTY = 500
 
@@ -231,6 +267,11 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
         return cast(int, self._litter_robot_settings.get("cycleDelay", 7))
 
     @property
+    def cycle_count(self) -> int:
+        """Return the cycle count since the last time the waste drawer was reset."""
+        return int(self._state.get(self._data_cycle_count, 0))
+
+    @property
     def firmware(self) -> str:
         """Return the firmware version."""
         fw = self._state.get("firmwareVersions", {})
@@ -357,10 +398,20 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
     @property
     def panel_brightness(self) -> BrightnessLevel | None:
         """Return the panel brightness."""
+        # LR5 API uses displayIntensity strings ("Low", "Medium", "High")
+        display_intensity = self._panel_settings.get("displayIntensity")
+        if isinstance(display_intensity, str):
+            intensity_map = {
+                "low": BrightnessLevel.LOW,
+                "medium": BrightnessLevel.MEDIUM,
+                "high": BrightnessLevel.HIGH,
+            }
+            if (level := intensity_map.get(display_intensity.lower())) is not None:
+                return level
+        # Fall back to numeric brightness for backwards compatibility
         brightness = self._panel_settings.get("brightness")
         if brightness in list(BrightnessLevel):
             return BrightnessLevel(brightness)
-        # brightness is numeric (0-100) — map to enum if equals exact values
         try:
             if int(brightness) == BrightnessLevel.LOW:
                 return BrightnessLevel.LOW
@@ -414,47 +465,74 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def status(self) -> LitterBoxStatus:
-        """Return the status of the Litter-Robot).
+        """Return the status of the Litter-Robot.
 
         Priority:
-         - offline check
-         - cycleState / cycleType
-         - displayCode
-         - status (string like 'Ready')
-         - fall back to UNKNOWN
+         1. offline check
+         2. cycleState (pause/cat detect interrupts)
+         3. state field (StRobotIdle, StRobotClean, etc.)
+         4. displayCode (DcModeIdle, DcModeCycle, DcDfiFull, etc.)
+         5. statusIndicator.type (READY, DRAWER_FULL, CYCLING, etc.)
+         6. status string (legacy "Ready" format)
+         7. fall back to UNKNOWN
         """
         if not self.is_online:
             return LitterBoxStatus.OFFLINE
 
-        # cycle state checks (sample uses 'cycleState' and 'cycleType')
+        # 1. Cycle state interrupts (cat detect, pause) take priority
         cycle_state = self._state.get("cycleState") or self._state.get(
             "robotCycleState"
         )
         if cycle_state and (mapped := CYCLE_STATE_STATUS_MAP.get(cycle_state)):
             return mapped
 
-        # displayCode (sample: 'displayCode': 'DcModeIdle')
-        display_code = self._state.get("displayCode")
-        if display_code and (mapped := DISPLAY_CODE_STATUS_MAP.get(display_code)):
+        # 2. Robot state field (StPascalCase from real API)
+        robot_state = self._state.get("state")
+        if robot_state and (mapped := LR5_STATE_MAP.get(robot_state)):
+            if mapped == LitterBoxStatus.READY and self.is_waste_drawer_full:
+                return LitterBoxStatus.DRAWER_FULL
             return mapped
 
-        # status (sample uses 'status': 'Ready')
+        # 3. Display code (DcPascalCase from real API)
+        display_code = self._state.get("displayCode")
+        if display_code and (mapped := DISPLAY_CODE_STATUS_MAP.get(display_code)):
+            if mapped == LitterBoxStatus.READY and self.is_waste_drawer_full:
+                return LitterBoxStatus.DRAWER_FULL
+            return mapped
+
+        # 4. Status indicator (most readable but used as fallback)
+        indicator = self._state.get("statusIndicator")
+        if isinstance(indicator, dict):
+            indicator_type = indicator.get("type")
+            if indicator_type and (mapped := STATUS_INDICATOR_MAP.get(indicator_type)):
+                if mapped == LitterBoxStatus.READY and self.is_waste_drawer_full:
+                    return LitterBoxStatus.DRAWER_FULL
+                return mapped
+
+        # 5. Legacy status string (e.g., "Ready", "ROBOT_IDLE")
         raw_status = self._state.get("status") or self._state.get("robotStatus")
         if isinstance(raw_status, str):
+            # Try legacy LR5/LR4 maps
+            if mapped := LR5_STATUS_MAP.get(raw_status):
+                if mapped == LitterBoxStatus.READY and self.is_waste_drawer_full:
+                    return LitterBoxStatus.DRAWER_FULL
+                return mapped
+            # Normalize and try common patterns
             normalized = raw_status.strip().upper()
-            # Simple LR5 mapping: common string -> LitterBoxStatus
-            if normalized in ("READY", "STROBOTIDLE", "IDLE", "STCYCLEIDLE"):
+            if normalized in ("READY", "IDLE"):
                 status = LitterBoxStatus.READY
             elif "CLEAN" in normalized or "DUMP" in normalized:
                 status = LitterBoxStatus.CLEAN_CYCLE
+            elif "CAT" in normalized:
+                status = LitterBoxStatus.CAT_DETECTED
+            elif "POWER" in normalized and "UP" in normalized:
+                status = LitterBoxStatus.POWER_UP
             elif "POWER" in normalized:
                 status = LitterBoxStatus.POWER_DOWN
             elif "OFF" in normalized:
                 status = LitterBoxStatus.OFF
             else:
-                # try LR5 map for backwards compatibility
-                status = LR5_STATUS_MAP.get(raw_status, LitterBoxStatus.UNKNOWN)
-            # check drawer full
+                return LitterBoxStatus.UNKNOWN
             if status == LitterBoxStatus.READY and self.is_waste_drawer_full:
                 return LitterBoxStatus.DRAWER_FULL
             return status
