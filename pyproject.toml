@@ -1,45 +1,57 @@
 [project]
 name = "pylitterbot"
 description = "Python package for controlling Whisker automatic robots."
+authors = [{ name = "Nathan Spencer", email = "natekspencer@gmail.com" }]
+requires-python = ">=3.10"
 readme = "README.md"
 license = "MIT"
-authors = [
-    { name = "Nathan Spencer", email = "natekspencer@gmail.com" }
+keywords = [
+    "Whisker",
+    "Litter-Robot",
+    "Feeder-Robot",
+    "litter box",
+    "pet feeder",
+    "asynchronous",
 ]
-keywords = ["Whisker", "Litter-Robot", "Feeder-Robot", "litter box", "pet feeder", "asynchronous"]
 dependencies = [
-    "aiohttp (>=3.8.1)",
-    "deepdiff (>=6.2.1)",
-    "pyjwt (>=2.7.0)",
-    "pycognito (>=2024.2.0)"
+    "aiohttp>=3.8.1",
+    "deepdiff>=6.2.1",
+    "pyjwt>=2.7.0",
+    "pycognito>=2024.2.0",
 ]
-requires-python = ">=3.10"
-dynamic = [ "version" ]
+dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/natekspencer/pylitterbot"
 Repository = "https://github.com/natekspencer/pylitterbot"
 
-[tool.poetry]
-version = "0.0.0"
-include = ["pylitterbot/py.typed"]
+[dependency-groups]
+dev = [
+    "pytest==9.0.2",
+    "pytest-asyncio==1.3.0",
+    "pytest-cov==7.0.0",
+    "aioresponses==0.7.8",
+    "mypy==1.19.1",
+    "tox==4.32.0",
+    "pytest-timeout==2.4.0",
+    "ruff==0.15.0",
+    "pytest-freezer==0.4.9",
+    "pre-commit==4.5.1",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "9.0.2"
-pytest-asyncio = "1.3.0"
-pytest-cov = "7.0.0"
-aioresponses = "0.7.8"
-mypy = "1.19.1"
-tox = "4.32.0"
-pytest-timeout = "2.4.0"
-ruff = "0.15.0"
-pytest-freezer = "0.4.9"
-pre-commit = "4.5.1"
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
 
-[tool.poetry-dynamic-versioning]
-enable = true
-vcs = "git"
-style = "semver"
+[tool.hatch.build.hooks.version]
+path = "pylitterbot/__init__.py"
+pattern = true
+
+[tool.hatch.build.targets.sdist]
+include = ["pylitterbot"]
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
 
 [tool.ruff.lint]
 select = [
@@ -62,6 +74,8 @@ split-on-trailing-comma = false
 [tool.ruff.lint.per-file-ignores]
 "tests/**.py" = ["F401"]
 
-[build-system]
-requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
-build-backend = "poetry_dynamic_versioning.backend"
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true }}]
+
+[tool.uv-dynamic-versioning]
+pattern = "default-unprefixed"

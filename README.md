@@ -1,13 +1,14 @@
+# pylitterbot
+
 [![PyPI - Version](https://img.shields.io/pypi/v/pylitterbot?style=for-the-badge)](https://pypi.org/project/pylitterbot/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pylitterbot?style=for-the-badge)](https://pypi.org/project/pylitterbot/)
 [![Buy Me A Coffee/Beer](https://img.shields.io/badge/Buy_Me_A_☕/🍺-F16061?style=for-the-badge&logo=ko-fi&logoColor=white&labelColor=grey)](https://ko-fi.com/natekspencer)
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor_💜-6f42c1?style=for-the-badge&logo=github&logoColor=white&labelColor=grey)](https://github.com/sponsors/natekspencer)
 [![Purchase Litter-Robot](https://img.shields.io/badge/Buy_a_Litter--Robot-Save_$50-lightgrey?style=for-the-badge&labelColor=grey)](https://share.litter-robot.com/x/YZ325z)
 
+[![GitHub License](https://img.shields.io/github/license/natekspencer/pylitterbot?style=flat-square)](LICENSE)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pylitterbot?style=flat-square)](https://pypi.org/project/pylitterbot/)
 ![Pepy Total Downloads](https://img.shields.io/pepy/dt/pylitterbot?style=flat-square)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/pylitterbot?style=flat-square)
-
-# pylitterbot
 
 Python package for controlling Whisker connected self-cleaning litter boxes and feeders.
 
@@ -28,7 +29,7 @@ pip install pylitterbot
 Alternatively, clone the repository and run
 
 ```bash
-poetry install
+uv sync
 ```
 
 ## Usage
@@ -105,7 +106,7 @@ Thank you for your interest in contributing! Follow these steps to set up your e
    ```
 2. Install dependencies and pre-commit hooks:
    ```bash
-   poetry install
+   uv sync
    pre-commit install
    ```
 
