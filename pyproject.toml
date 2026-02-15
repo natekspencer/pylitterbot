@@ -34,7 +34,7 @@ dev = [
     "mypy==1.19.1",
     "tox==4.32.0",
     "pytest-timeout==2.4.0",
-    "ruff==0.15.0",
+    "ruff==0.15.1",
     "pytest-freezer==0.4.9",
     "pre-commit==4.5.1",
 ]
