@@ -597,7 +597,7 @@ class LitterRobot5(LitterRobot):
     @property
     def sleep_mode_enabled(self) -> bool:
         """Return True if sleep mode is enabled for any day."""
-        schedules = self._data.get("sleepSchedules") or {}
+        schedules = self._data.get("sleepSchedules") or []
         return any(day.get("isEnabled", False) for day in schedules)
 
     @property
@@ -904,7 +904,7 @@ class LitterRobot5(LitterRobot):
             value={LitterRobot5Command.KEYPAD_LOCKED: value},
         ):
             data = deepcopy(self._data)
-            data[LitterRobot5Command.PANEL_SETTINGS][
+            data.setdefault(LitterRobot5Command.PANEL_SETTINGS, {})[
                 LitterRobot5Command.KEYPAD_LOCKED
             ] = value
             self._update_data(data)
@@ -948,7 +948,11 @@ class LitterRobot5(LitterRobot):
                 continue
             schedule["isEnabled"] = value
             if sleep_time is not None:
-                schedule["sleepTime"] = sleep_time
+                schedule["sleepTime"] = (
+                    sleep_time.hour * 60 + sleep_time.minute
+                    if isinstance(sleep_time, time)
+                    else sleep_time
+                )
             if wake_time is not None:
                 schedule["wakeTime"] = wake_time
         try:
@@ -986,7 +990,7 @@ class LitterRobot5(LitterRobot):
             value={LitterRobot5Command.CYCLE_DELAY: wait_time},
         ):
             data = deepcopy(self._data)
-            data[LitterRobot5Command.LITTER_ROBOT_SETTINGS][
+            data.setdefault(LitterRobot5Command.LITTER_ROBOT_SETTINGS, {})[
                 LitterRobot5Command.CYCLE_DELAY
             ] = wait_time
             self._update_data(data)

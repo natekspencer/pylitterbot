@@ -594,6 +594,7 @@ async def test_litter_robot_5_command_failure(
 
 
 async def test_litter_robot_5_activity_history(
+    mock_aioresponse: aioresponses,
     mock_account: Account,
 ) -> None:
     """Tests getting activity history for Litter-Robot 5 via REST endpoint."""
@@ -616,9 +617,8 @@ async def test_litter_robot_5_activity_history(
         },
     ]
     activities_url = f"{LR5_GET_URL}/activities?limit=3"
-    with aioresponses() as mock:
-        mock.get(activities_url, payload=activities_data)
-        activities = await robot.get_activity_history(3)
+    mock_aioresponse.get(activities_url, payload=activities_data)
+    activities = await robot.get_activity_history(3)
     assert len(activities) == 3
     assert activities[0].action == "PET_VISIT"
     assert activities[1].action == "CYCLE_COMPLETED"
@@ -640,16 +640,16 @@ async def test_litter_robot_5_activity_history_invalid_limit(
 
 
 async def test_litter_robot_5_activity_history_none_response(
+    mock_aioresponse: aioresponses,
     mock_account: Account,
 ) -> None:
     """Tests that activity history raises when response is None."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
 
     activities_url = f"{LR5_GET_URL}/activities?limit=5"
-    with aioresponses() as mock:
-        mock.get(activities_url, payload=None)
-        with pytest.raises(LitterRobotException):
-            await robot.get_activity_history(5)
+    mock_aioresponse.get(activities_url, payload=None)
+    with pytest.raises(LitterRobotException):
+        await robot.get_activity_history(5)
 
     await robot._account.disconnect()
 
@@ -984,6 +984,7 @@ async def test_litter_robot_5_set_camera_audio(
 
 
 async def test_litter_robot_5_get_activities(
+    mock_aioresponse: aioresponses,
     mock_account: Account,
 ) -> None:
     """Tests REST activities endpoint."""
@@ -1016,9 +1017,8 @@ async def test_litter_robot_5_get_activities(
         },
     ]
     activities_url = f"{LR5_GET_URL}/activities?limit=3"
-    with aioresponses() as mock:
-        mock.get(activities_url, payload=activities_data)
-        result = await robot.get_activities(limit=3)
+    mock_aioresponse.get(activities_url, payload=activities_data)
+    result = await robot.get_activities(limit=3)
     assert len(result) == 3
     assert result[0]["type"] == "PET_VISIT"
     assert result[0]["wasteType"] == "Urine"

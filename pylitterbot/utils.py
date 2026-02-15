@@ -213,7 +213,7 @@ def calculate_litter_level(
         Tuple:
             - Updated current_level
             - Updated expiration
-            - Litter level percentage (0-100, rounded to nearest 10)
+            - Litter level percentage (rounded to nearest 10)
 
     """
     now = datetime.now(timezone.utc)
