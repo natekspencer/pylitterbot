@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum, IntEnum, unique
 from json import dumps
-from typing import TYPE_CHECKING, Any, Dict, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Sequence, Union, cast
 from uuid import uuid4
 
 try:
@@ -850,3 +850,31 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         elif data_type not in ("start_ack", "ka", "complete"):
             _LOGGER.debug(data)
         return None
+
+    @classmethod
+    async def fetch_for_account(cls, account: Account) -> Sequence[dict[str, object]]:
+        """Fetch robot data for account."""
+        result = await account.session.post(
+            LR4_ENDPOINT,
+            json={
+                "query": f"""
+                    query GetLR4($userId: String!) {{
+                        getLitterRobot4ByUser(userId: $userId) {LITTER_ROBOT_4_MODEL}
+                    }}
+                """,
+                "variables": {"userId": account.user_id},
+            },
+        )
+
+        if not isinstance(result, dict):
+            return []
+
+        data = result.get("data")
+        if not isinstance(data, dict):
+            return []
+
+        robots = data.get("getLitterRobot4ByUser")
+        if isinstance(robots, list):
+            return [r for r in robots if isinstance(r, dict)]
+
+        return []

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from datetime import datetime, time, timedelta
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Sequence, TypeVar, cast
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -419,3 +419,30 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         elif data_type not in ("connection_ack", "ka", "complete"):
             _LOGGER.debug(data)
         return None
+
+    @classmethod
+    async def fetch_for_account(cls, account: Account) -> Sequence[dict[str, object]]:
+        """Fetch robot data for account."""
+        result = await account.session.post(
+            FEEDER_ENDPOINT,
+            json={
+                "query": f"""
+                    query GetFeeders {{
+                        feeder_unit {FEEDER_ROBOT_MODEL}
+                    }}
+                """
+            },
+        )
+
+        if not isinstance(result, dict):
+            return []
+
+        data = result.get("data")
+        if not isinstance(data, dict):
+            return []
+
+        robots = data.get("feeder_unit")
+        if isinstance(robots, list):
+            return [r for r in robots if isinstance(r, dict)]
+
+        return []

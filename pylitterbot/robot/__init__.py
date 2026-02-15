@@ -6,7 +6,7 @@ import logging
 from abc import abstractmethod
 from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Sequence, cast
 
 from aiohttp import ClientWebSocketResponse
 from deepdiff import DeepDiff
@@ -200,4 +200,9 @@ class Robot(Event):
     @staticmethod
     def parse_websocket_message(data: dict) -> dict | None:
         """Parse a wesocket message."""
+        raise NotImplementedError()
+
+    @classmethod
+    async def fetch_for_account(cls, account: Account) -> Sequence[dict[str, object]]:
+        """Fetch robot data for account."""
         raise NotImplementedError()
