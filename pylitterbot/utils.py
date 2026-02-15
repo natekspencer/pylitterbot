@@ -174,6 +174,12 @@ def to_enum(value: Any, typ: Type[_E], log_warning: bool = True) -> _E | None:
     try:
         return typ(value)
     except ValueError:
+        # Try case-insensitive match for string values
+        if isinstance(value, str):
+            upper = value.upper()
+            for member in typ:
+                if isinstance(member.value, str) and member.value.upper() == upper:
+                    return member
         if log_warning:
             logging.warning("Value '%s' not found in enum %s", value, typ.__name__)
     except (AttributeError, TypeError):
