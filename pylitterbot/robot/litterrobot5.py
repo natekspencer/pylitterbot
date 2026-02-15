@@ -85,6 +85,13 @@ CYCLE_STATE_STATUS_MAP = {
 
 LITTER_LEVEL_EMPTY = 500
 
+MODEL_TYPE_STANDARD = "LR5"
+MODEL_TYPE_PRO = "LR5_PRO"
+MODEL_TYPE_MAP = {
+    MODEL_TYPE_STANDARD: "Litter-Robot 5",
+    MODEL_TYPE_PRO: "Litter-Robot 5 Pro",
+}
+
 
 @unique
 class BrightnessLevel(IntEnum):
@@ -188,9 +195,6 @@ class WifiModeStatus(Enum):
 class LitterRobot5(LitterRobot):
     """Data and methods for interacting with a Litter-Robot 5 automatic, self-cleaning litter box."""
 
-    _attr_model = "Litter-Robot 5"
-    _attr_model_pro = "Litter-Robot 5 Pro"
-
     VALID_WAIT_TIMES = [3, 7, 15, 25, 30]
 
     _data_cycle_capacity = "DFINumberOfCycles"
@@ -217,12 +221,13 @@ class LitterRobot5(LitterRobot):
     @property
     def is_pro(self) -> bool:
         """Return `True` if this is a Litter-Robot 5 Pro."""
-        return self._data.get("type") == "LR5_PRO"
+        return self._data.get("type") == MODEL_TYPE_PRO
 
     @property
     def model(self) -> str:
         """Return the robot model."""
-        return self._attr_model_pro if self.is_pro else self._attr_model
+        model_type = self._data.get("type") or "Unknown"
+        return MODEL_TYPE_MAP.get(model_type, model_type)
 
     def _get_data_dict(self, key: str) -> dict[str, Any]:
         """Get a dict from the underlying data object."""
