@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
+from enum import Enum, unique
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
@@ -166,3 +166,12 @@ class LitterBoxStatus(LitterBoxStatusMixIn, Enum):
             )
             + ([cls.DRAWER_FULL_1, cls.DRAWER_FULL_2] if almost_full else [])
         ]
+
+
+@unique
+class NightLightMode(Enum):
+    """Night light mode of a Robot."""
+
+    OFF = "OFF"
+    ON = "ON"
+    AUTO = "AUTO"

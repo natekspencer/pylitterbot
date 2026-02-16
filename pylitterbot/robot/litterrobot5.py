@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover
     from backports.zoneinfo import ZoneInfo  # type: ignore
 
 from ..activity import Activity, Insight
-from ..enums import LitterBoxStatus, LitterRobot5Command
+from ..enums import LitterBoxStatus, LitterRobot5Command, NightLightMode
 from ..exceptions import InvalidCommandException, LitterRobotException
 from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin, utcnow
 from .litterrobot import LitterRobot
@@ -148,15 +148,6 @@ class LitterLevelState(Enum):
     REFILL = "REFILL"
     LOW = "LOW"
     EMPTY = "EMPTY"
-
-
-@unique
-class NightLightMode(Enum):
-    """Night light mode of a Litter-Robot 5 unit."""
-
-    OFF = "off"
-    ON = "on"
-    AUTO = "auto"
 
 
 @unique
@@ -485,8 +476,7 @@ class LitterRobot5(LitterRobot):
     @property
     def night_light_mode(self) -> NightLightMode | None:
         """Return the night light mode setting."""
-        mode = str(self._night_light_settings.get("mode", "")).lower()
-        return to_enum(mode, NightLightMode)
+        return to_enum(self._night_light_settings.get("mode"), NightLightMode)
 
     @property
     def night_light_mode_enabled(self) -> bool:
@@ -868,11 +858,10 @@ class LitterRobot5(LitterRobot):
 
     async def set_night_light(self, value: bool) -> bool:
         """Turn the night light on or off."""
+        mode = (NightLightMode.ON if value else NightLightMode.OFF).value.capitalize()
         return await self._dispatch_command(
             LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
-            value={
-                "mode": NightLightMode.ON.value if value else NightLightMode.OFF.value
-            },
+            value={"mode": mode},
         )
 
     async def set_night_light_brightness(self, brightness: int) -> bool:
@@ -886,7 +875,7 @@ class LitterRobot5(LitterRobot):
         """Set the night light mode (On, Off, Auto/Ambient)."""
         return await self._dispatch_command(
             LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
-            value={"mode": mode.value},
+            value={"mode": mode.value.capitalize()},
         )
 
     async def set_panel_brightness(self, brightness: BrightnessLevel) -> bool:
