@@ -15,7 +15,7 @@ except ImportError:  # pragma: no cover
     from backports.zoneinfo import ZoneInfo  # type: ignore
 
 from ..activity import Activity, Insight
-from ..enums import LitterBoxStatus, LitterRobot4Command
+from ..enums import LitterBoxStatus, LitterRobot4Command, NightLightMode
 from ..exceptions import InvalidCommandException, LitterRobotException
 from ..utils import calculate_litter_level, encode, to_enum, to_timestamp, utcnow
 from .litterrobot import LitterRobot
@@ -134,15 +134,6 @@ class LitterLevelState(Enum):
     REFILL = "REFILL"
     LOW = "LOW"
     EMPTY = "EMPTY"
-
-
-@unique
-class NightLightMode(Enum):
-    """Night light mode of a Litter-Robot 4 unit."""
-
-    OFF = "OFF"
-    ON = "ON"
-    AUTO = "AUTO"
 
 
 @unique
