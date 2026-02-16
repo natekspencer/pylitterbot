@@ -17,6 +17,7 @@ from pylitterbot.robot.litterrobot4 import (
     LITTER_LEVEL_EMPTY,
     LR4_ENDPOINT,
     BrightnessLevel,
+    GlobeMotorFaultStatus,
     HopperStatus,
     LitterRobot4,
     LitterRobot4Command,
@@ -50,6 +51,8 @@ async def test_litter_robot_4(
     assert not robot.firmware_update_triggered
     assert robot.litter_level == 40.0
     assert not robot.is_drawer_full_indicator_triggered
+    assert robot.globe_motor_fault_status == GlobeMotorFaultStatus.FAULT_CLEAR
+    assert robot.globe_motor_retract_fault_status == GlobeMotorFaultStatus.FAULT_CLEAR
     assert robot.is_onboarded
     assert robot.is_online
     assert not robot.is_sleeping

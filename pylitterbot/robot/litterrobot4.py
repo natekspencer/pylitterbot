@@ -110,6 +110,22 @@ class HopperStatus(Enum):
 
 
 @unique
+class GlobeMotorFaultStatus(Enum):
+    """Globe motor fault status."""
+
+    NONE = "NONE"
+    FAULT_CLEAR = "FAULT_CLEAR"
+    FAULT_TIMEOUT = "FAULT_TIMEOUT"
+    FAULT_DISCONNECT = "FAULT_DISCONNECT"
+    FAULT_UNDERVOLTAGE = "FAULT_UNDERVOLTAGE"
+    FAULT_OVERTORQUE_AMP = "FAULT_OVERTORQUE_AMP"
+    FAULT_OVERTORQUE_SLOPE = "FAULT_OVERTORQUE_SLOPE"
+    FAULT_PINCH = "FAULT_PINCH"
+    FAULT_ALL_SENSORS = "FAULT_ALL_SENSORS"
+    FAULT_UNKNOWN = "FAULT_UNKNOWN"
+
+
+@unique
 class LitterLevelState(Enum):
     """Litter level state."""
 
@@ -222,6 +238,17 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     def firmware_update_triggered(self) -> bool:
         """Return `True` if a firmware update has been triggered."""
         return self._data.get("isFirmwareUpdateTriggered") is True
+
+    @property
+    def globe_motor_fault_status(self) -> GlobeMotorFaultStatus | None:
+        """Return the globe motor fault status."""
+        return to_enum(self._data.get("globeMotorFaultStatus"), GlobeMotorFaultStatus)
+
+    @property
+    def globe_motor_retract_fault_status(self) -> GlobeMotorFaultStatus | None:
+        """Return the globe motor retract fault status."""
+        value = self._data.get("globeMotorRetractFaultStatus")
+        return to_enum(value, GlobeMotorFaultStatus)
 
     @property
     def hopper_status(self) -> HopperStatus | None:
