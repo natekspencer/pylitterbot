@@ -1534,7 +1534,7 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             data = await self._account.session.get(
                 url, headers=self._camera_settings_headers()
             )
-        except ClientResponseError:
+        except (ClientResponseError, InvalidCommandException):
             return None
         return cast(dict[str, Any], data) if isinstance(data, dict) else None
 
@@ -1550,7 +1550,7 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             data = await self._account.session.get(
                 url, headers=self._camera_settings_headers()
             )
-        except ClientResponseError:
+        except (ClientResponseError, InvalidCommandException):
             return None
         return cast(dict[str, Any], data) if isinstance(data, dict) else None
 
@@ -1567,7 +1567,7 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             data = await self._account.session.get(
                 url, headers=self._camera_settings_headers(), params=params
             )
-        except ClientResponseError:
+        except (ClientResponseError, InvalidCommandException):
             return None
         if not isinstance(data, list):
             return None
@@ -1586,7 +1586,7 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             data = await self._account.session.get(
                 url, headers=self._camera_settings_headers(), params=params
             )
-        except ClientResponseError:
+        except (ClientResponseError, InvalidCommandException):
             return None
         if not isinstance(data, list):
             return None
@@ -1634,7 +1634,7 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             await self._account.session.patch(
                 url, json=payload, headers=self._camera_settings_headers()
             )
-        except ClientResponseError:
+        except (ClientResponseError, InvalidCommandException):
             return False
 
         if not wait_for_reported:

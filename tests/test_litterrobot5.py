@@ -531,6 +531,44 @@ async def test_litter_robot_5_camera_inventory_videos_events(
     assert events[0]["id"] == 10
 
 
+async def test_litter_robot_5_camera_endpoints_handle_422(
+    mock_aioresponse: Any, mock_account: Any
+) -> None:
+    """Ensure camera endpoints return None/False on validation failures (422)."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    assert robot.camera_device_id
+
+    reported_url = (
+        f"{LR5_CAMERA_SETTINGS_ENDPOINT}/{robot.camera_device_id}"
+        "/reported-settings/videoSettings"
+    )
+    desired_url = (
+        f"{LR5_CAMERA_SETTINGS_ENDPOINT}/{robot.camera_device_id}"
+        "/desired-settings/videoSettings"
+    )
+    inv_url = f"{LR5_CAMERA_INVENTORY_ENDPOINT}/{robot.camera_device_id}"
+    vids_url = f"{LR5_CAMERA_INVENTORY_ENDPOINT}/{robot.camera_device_id}/videos"
+    events_url = f"{LR5_CAMERA_INVENTORY_ENDPOINT}/{robot.camera_device_id}/events"
+
+    error_payload = {"type": "InvalidCommandException", "developerMessage": "invalid"}
+    mock_aioresponse.get(reported_url, status=422, payload=error_payload)
+    mock_aioresponse.get(inv_url, status=422, payload=error_payload)
+    mock_aioresponse.get(vids_url, status=422, payload=error_payload)
+    mock_aioresponse.get(events_url, status=422, payload=error_payload)
+    mock_aioresponse.patch(desired_url, status=422, payload=error_payload)
+
+    assert await robot.get_camera_live_canvas() is None
+    assert await robot.get_camera_inventory() is None
+    assert await robot.get_camera_videos() is None
+    assert await robot.get_camera_events() is None
+    assert (
+        await robot.set_camera_live_canvas(
+            LR5_CAMERA_CANVAS_GLOBE, wait_for_reported=False
+        )
+        is False
+    )
+
+
 async def test_litter_robot_5_insight_computed_from_activities(
     freezer: pytest.fixture, mock_aioresponse: Any, mock_account: Any
 ) -> None:
