@@ -9,7 +9,7 @@ import pytest
 from aiohttp.client_exceptions import ClientError
 from aioresponses import aioresponses
 
-from pylitterbot import FeederRobot, LitterRobot3
+from pylitterbot import FeederRobot, LitterRobot3, LitterRobot5
 from pylitterbot.exceptions import LitterRobotException, LitterRobotLoginException
 from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
 
@@ -28,7 +28,7 @@ from .common import (
 
 pytestmark = pytest.mark.asyncio
 
-ROBOT_COUNT = 4
+ROBOT_COUNT = 5
 
 
 async def test_account(
@@ -48,6 +48,7 @@ async def test_account(
     assert len(account.robots) == ROBOT_COUNT
 
     assert len(account.get_robots(LitterRobot3)) == 2
+    assert len(account.get_robots(LitterRobot5)) == 1
     assert len(account.get_robots(FeederRobot)) == 1
 
     for robot in account.robots:

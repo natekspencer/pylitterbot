@@ -55,3 +55,13 @@ async def test_not_authorized(mock_aioresponse: aioresponses) -> None:
     async with LitterRobotSession(token=EXPIRED_ACCESS_TOKEN) as session:
         with pytest.raises(ClientResponseError):
             await session.patch("localhost")
+
+
+async def test_empty_body_responses_return_none(mock_aioresponse: aioresponses) -> None:
+    """Ensure empty-body success responses don't raise JSON errors."""
+    mock_aioresponse.patch("https://localhost/no-content", status=204, body="")
+    mock_aioresponse.get("https://localhost/empty-ok", status=200, body="")
+
+    async with LitterRobotSession() as session:
+        assert await session.patch("https://localhost/no-content") is None
+        assert await session.get("https://localhost/empty-ok") is None

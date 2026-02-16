@@ -58,6 +58,29 @@ class LitterRobot4Command:
     SHORT_RESET_PRESS = "shortResetPress"
 
 
+class LitterRobot5Command:
+    """Known commands that can be sent to trigger an action or setting for a Litter-Robot 5."""
+
+    # CLEAN_CYCLE = "cleanCycle"
+    CYCLE_DELAY = "cycleDelay"
+    KEYPAD_LOCKED = "isKeypadLocked"
+    LITTER_ROBOT_SETTINGS = "litterRobotSettings"
+    PANEL_SETTINGS = "panelSettings"
+    # KEY_PAD_LOCK_OUT_ON = "keyPadLockOutOn"
+    # NIGHT_LIGHT_MODE_AUTO = "nightLightModeAuto"
+    # NIGHT_LIGHT_MODE_OFF = "nightLightModeOff"
+    # NIGHT_LIGHT_MODE_ON = "nightLightModeOn"
+    # PANEL_BRIGHTNESS_LOW = "panelBrightnessLow"
+    # PANEL_BRIGHTNESS_MEDIUM = "panelBrightnessMed"
+    # PANEL_BRIGHTNESS_HIGH = "panelBrightnessHigh"
+    # POWER_OFF = "powerOff"
+    # POWER_ON = "powerOn"
+    # REQUEST_STATE = "requestState"
+    # SET_CLUMP_TIME = "setClumpTime"
+    # SET_NIGHT_LIGHT_VALUE = "setNightLightValue"
+    # SHORT_RESET_PRESS = "shortResetPress"
+
+
 class LitterBoxStatusMixIn:
     """Litter box status mixin."""
 

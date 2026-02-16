@@ -130,3 +130,9 @@ dmypy.json
 
 # VS Code Settings / Launch files
 .vscode/
+
+# Local scratch / work plans
+tmp/
+
+# macOS
+.DS_Store

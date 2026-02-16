@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -14,7 +15,9 @@ from pycognito import TokenVerificationException
 from pylitterbot import Account
 from pylitterbot.pet import PET_PROFILE_ENDPOINT
 from pylitterbot.robot.feederrobot import FEEDER_ENDPOINT
+from pylitterbot.robot.litterrobot3 import DEFAULT_ENDPOINT
 from pylitterbot.robot.litterrobot4 import LR4_ENDPOINT
+from pylitterbot.robot.litterrobot5 import LR5_ENDPOINT
 from pylitterbot.session import LitterRobotSession
 
 from .common import (
@@ -22,11 +25,13 @@ from .common import (
     FEEDER_ROBOT_DATA,
     INSIGHT_RESPONSE,
     LITTER_ROBOT_4_DATA,
+    LITTER_ROBOT_5_DATA,
     PET_DATA,
     ROBOT_DATA,
     ROBOT_DELETED_DATA,
     ROBOT_FULL_DATA,
     USER_RESPONSE,
+    disconnect_open_accounts,
     get_account,
 )
 
@@ -69,9 +74,20 @@ def no_cognito(monkeypatch):  # type: ignore
 
 
 @pytest_asyncio.fixture
-async def mock_account() -> Account:
+async def mock_account() -> AsyncGenerator[Account, None]:
     """Mock an account."""
-    return await get_account()
+    account = await get_account()
+    try:
+        yield account
+    finally:
+        await account.disconnect()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def close_open_accounts() -> AsyncGenerator[None, None]:
+    """Ensure any accounts created by helper functions get cleaned up."""
+    yield
+    await disconnect_open_accounts()
 
 
 @pytest.fixture
@@ -80,12 +96,31 @@ def mock_aioresponse() -> aioresponses:
     with aioresponses() as mock:
         mock.get(re.compile(".*/users$"), payload=USER_RESPONSE)
         mock.get(
-            re.compile(".*/robots$"),
+            re.compile(rf"^{re.escape(DEFAULT_ENDPOINT)}/users/.*/robots$"),
             payload=[ROBOT_DATA, ROBOT_DELETED_DATA, ROBOT_FULL_DATA],
             repeat=True,
         )
-        mock.get(re.compile(".*/activity?.*$"), payload=ACTIVITY_RESPONSE, repeat=True)
-        mock.get(re.compile(".*/insights?.*$"), payload=INSIGHT_RESPONSE, repeat=True)
+        mock.get(
+            re.compile(rf"^{re.escape(LR5_ENDPOINT)}/robots$"),
+            payload=[LITTER_ROBOT_5_DATA],
+            repeat=True,
+        )
+        # LR3 endpoints: scope to DEFAULT_ENDPOINT so this doesn't accidentally
+        # intercept LR5 `/activities` calls (LR5 returns a list, LR3 returns a dict).
+        mock.get(
+            re.compile(
+                rf"^{re.escape(DEFAULT_ENDPOINT)}/users/.*/robots/.*/activity.*$"
+            ),
+            payload=ACTIVITY_RESPONSE,
+            repeat=True,
+        )
+        mock.get(
+            re.compile(
+                rf"^{re.escape(DEFAULT_ENDPOINT)}/users/.*/robots/.*/insights.*$"
+            ),
+            payload=INSIGHT_RESPONSE,
+            repeat=True,
+        )
         mock.post(
             LR4_ENDPOINT,
             payload={"data": {"getLitterRobot4ByUser": [LITTER_ROBOT_4_DATA]}},

@@ -11,6 +11,20 @@ from aiohttp import ClientConnectorError, ClientResponseError, ClientWebSocketRe
 from pylitterbot import Account, LitterRobot, Pet
 from pylitterbot.robot.litterrobot3 import DEFAULT_ENDPOINT
 
+_OPEN_ACCOUNTS: list[Account] = []
+
+
+async def disconnect_open_accounts() -> None:
+    """Disconnect any Accounts created via helpers in this module."""
+    while _OPEN_ACCOUNTS:
+        account = _OPEN_ACCOUNTS.pop()
+        try:
+            await account.disconnect()
+        except Exception:
+            # Best-effort cleanup for tests; ignore teardown failures.
+            pass
+
+
 USERNAME = "username@username.com"
 PASSWORD = "password"
 
@@ -231,6 +245,92 @@ LITTER_ROBOT_4_DATA: dict[str, Any] = {
     "litterLevelState": "OPTIMAL",
 }
 
+LITTER_ROBOT_5_DATA: dict[str, Any] = {
+    "serial": "LR5-00-00-00-0000-000000",
+    "userId": "000000",
+    "type": "LR5_PRO",
+    "name": "Litter-Robot 5",
+    "isOnboarded": True,
+    "updatedAt": "2026-01-19T13:41:57.483000Z",
+    "timezone": "America/Los_Angeles",
+    "language": "en",
+    "state": {
+        "powerStatus": "On",
+        "isOnline": True,
+        "state": "StRobotIdle",
+        "type": "LR5_PRO",
+        "isSleeping": False,
+        "isNightLightOn": True,
+        "wifiRssi": 0,
+        "dfiLevelPercent": 34,
+        "setupDateTime": "2026-01-27T23:00:36.347000Z",
+        "lastSeen": "2026-02-08T07:26:58.390000Z",
+        "statusIndicator": {"title": "Ready", "type": "READY"},
+        "firmwareVersions": {
+            "mcuVersion": {"title": "Robot Firmware", "value": "v5.7.5 2904_0106"},
+            "cameraVersion": {"title": "Camera Firmware", "value": "1.2.2-1233"},
+            "wifiVersion": None,
+            "edgeVersion": {"title": "Edge Firmware", "value": "1.5.22"},
+            "aiVersion": {"title": "AI Firmware", "value": "0.0.43"},
+        },
+        "weightSensor": 1110.0,
+        "globeLitterLevel": 444,
+        "optimalLitterLevel": 434,
+        "lastResetOdometerCleanCycles": 1,
+        "hopperStatus": "Disabled",
+        "hopperFault": None,
+        "isHopperInstalled": False,
+        "dfiFullCounter": 0,
+        "odometerCleanCycles": 183,
+        "isLaserDirty": False,
+        "cycleState": "StWaitOn",
+        "cycleType": "StCycleIdle",
+        "catDetect": "WeightClear",
+        "isBonnetRemoved": False,
+        "isDrawerRemoved": False,
+        "isDrawerFull": False,
+        "extendedScaleActivity": False,
+        "globeMotorFaultStatus": "MtrFaultClear",
+        "globeMotorRetractFaultStatus": "MtrFaultClear",
+        "pinchStatus": "Clear",
+        "isUsbFaultDetected": False,
+        "isGasSensorFaultDetected": False,
+        "odometerEmptyCycles": 0,
+        "odometerFilterCycles": 0,
+        "odometerPowerCycles": 5,
+        "espUpdateStatus": None,
+        "stmUpdateStatus": None,
+        "displayCode": "DcModeIdle",
+        "scoopsSaved": 182,
+        "litterLevelPercent": 76.74,
+        "globeLitterLevelIndicator": "Optimal",
+        "privacyMode": "Normal",
+    },
+    "panelSettings": {"displayIntensity": "Medium", "isKeypadLocked": False},
+    "nightLightSettings": {"mode": "Auto", "brightness": 69, "color": "#FFF5"},
+    "nextFilterReplacementDate": "2026-02-26T23:00:36.347000Z",
+    "litterRobotSettings": {
+        "isSmartWeightEnabled": False,
+        "optimalLitterLevel": 434,
+        "cycleDelay": 7,
+    },
+    "sleepSchedules": [
+        {"dayOfWeek": 0, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+        {"dayOfWeek": 1, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+        {"dayOfWeek": 2, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+        {"dayOfWeek": 3, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+        {"dayOfWeek": 4, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+        {"dayOfWeek": 5, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+        {"dayOfWeek": 6, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+    ],
+    "soundSettings": {"volume": 0, "cameraAudioEnabled": False},
+    "cameraMetadata": {
+        "deviceId": "aabbccdd11223344aabbcc00",
+        "serialNumber": "E0000000000000A",
+        "spaceId": "aabbccdd11223344aabbcc01",
+    },
+}
+
 FEEDER_ROBOT_DATA: dict[str, Any] = {
     "id": 1,
     "name": "Feeder-Robot",
@@ -373,6 +473,7 @@ async def get_account(
         ),
     ):
         account = Account(token_update_callback=token_update_callback)
+        _OPEN_ACCOUNTS.append(account)
         if logged_in:
             await account.connect(
                 username=USERNAME,

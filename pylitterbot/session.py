@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from abc import ABC, abstractmethod
 from asyncio import Lock
@@ -49,8 +50,8 @@ class Session(Event, ABC):
 
     async def close(self) -> None:
         """Close the session."""
-        if not self._websession_provided and self.websession is not None:
-            await self.websession.close()
+        if not self._websession_provided and self._websession is not None:
+            await self._websession.close()
 
     async def get(self, path: str, **kwargs: Any) -> dict | list[dict] | None:
         """Send a GET request to the specified path."""
@@ -105,10 +106,29 @@ class Session(Event, ABC):
             kwargs["headers"]["authorization"] = authorization
 
         async with self.websession.request(method, url, **kwargs) as resp:
+            body_bytes = await resp.read()
+            body_text = (
+                body_bytes.decode("utf-8", errors="replace") if body_bytes else ""
+            )
+            data: Any | None = None
+            if body_text:
+                try:
+                    data = json.loads(body_text)
+                except json.JSONDecodeError:
+                    data = None
+
             if resp.status == 500:
-                if (data := await resp.json()).get("type") == "InvalidCommandException":
+                if (
+                    isinstance(data, dict)
+                    and data.get("type") == "InvalidCommandException"
+                ):
                     raise InvalidCommandException(data.get("developerMessage", data))
                 raise InvalidCommandException(data)
+            if resp.status == 422:
+                # LR5 command bus (and some AWS-backed endpoints) return 422 with a JSON
+                # body describing validation failures. Surface it as an InvalidCommandException
+                # so callers don't lose the response details.
+                raise InvalidCommandException(data or body_text)
             if resp.status == 401:
                 if authorization is not None:
                     _LOGGER.error(
@@ -125,11 +145,20 @@ class Session(Event, ABC):
                 _LOGGER.error("Unauthorized")
 
             resp.raise_for_status()
-            data = await resp.json()
+            if not body_text:
+                _LOGGER.debug("Received %s response from %s: <empty>", resp.status, url)
+                return None
+
+            if not isinstance(data, (dict, list)):
+                _LOGGER.debug(
+                    "Received %s response from %s: <non-json>", resp.status, url
+                )
+                return None
+
             _LOGGER.debug(
                 "Received %s response from %s: %s", resp.status, url, redact(data)
             )
-            return data  # type: ignore
+            return data
 
     async def __aenter__(self: T) -> T:
         """Async enter."""
