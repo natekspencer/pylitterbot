@@ -258,9 +258,10 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
         return self._get_data_dict("state")
 
     @property
-    def timezone(self) -> str:
+    def timezone(self) -> str | None:
         """Return the timezone."""
-        return cast(str, self._data.get("timezone"))
+        value = self._data.get("timezone")
+        return value if isinstance(value, str) else None
 
     @property
     def robot_variant(self) -> str | None:
@@ -526,7 +527,7 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             or abs(self._litter_level - new_level) < 10
         ):
             self._litter_level = new_level
-        return max(round(100 - (self._litter_level - 440) / 0.6, -1), 0)
+        return min(max(round(100 - (self._litter_level - 440) / 0.6, -1), 0), 100)
 
     @property
     def litter_level_state(self) -> LitterLevelState | None:
@@ -733,7 +734,7 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def status(self) -> LitterBoxStatus:
-        """Return the status of the Litter-Robot).
+        """Return the status of the Litter-Robot.
 
         Priority:
          - offline check
@@ -1045,31 +1046,10 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
                     f"Invalid sleep_time {sleep_time!r}, expected within 00:00-23:59"
                 )
 
-        existing = self.sleep_schedules
-        by_dow: dict[int, dict[str, Any]] = {}
-        for item in existing:
-            raw_dow = item.get("dayOfWeek")
-            if raw_dow is None:
-                continue
-            try:
-                dow = int(raw_dow)
-            except (TypeError, ValueError):
-                continue
-            if 0 <= dow <= 6 and dow not in by_dow:
-                by_dow[dow] = dict(item)
-
-        schedules: list[dict[str, Any]] = []
-        for dow in range(7):
-            entry = by_dow.get(dow) or {
-                "dayOfWeek": dow,
-                "isEnabled": False,
-                "sleepTime": 0,
-                "wakeTime": 0,
-            }
-            entry = {**entry, "dayOfWeek": dow, "isEnabled": bool(value)}
-            if sleep_minutes is not None:
-                entry["sleepTime"] = sleep_minutes
-            schedules.append(entry)
+        schedules = self._build_sleep_schedules(
+            enable_all=bool(value),
+            sleep_minutes=sleep_minutes,
+        )
 
         await self._patch(
             f"robots/{self.serial}",
@@ -1273,36 +1253,15 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
                     f"Invalid {name} {value}, expected 0-1439 minutes from midnight"
                 )
 
-        existing = self.sleep_schedules
-        by_dow: dict[int, dict[str, Any]] = {}
-        for item in existing:
-            raw_dow = item.get("dayOfWeek")
-            if raw_dow is None:
-                continue
-            try:
-                dow = int(raw_dow)
-            except (TypeError, ValueError):
-                continue
-            if 0 <= dow <= 6 and dow not in by_dow:
-                by_dow[dow] = dict(item)
-
-        schedules: list[dict[str, Any]] = []
-        for dow in range(7):
-            entry = by_dow.get(dow) or {
-                "dayOfWeek": dow,
-                "isEnabled": False,
-                "sleepTime": 0,
-                "wakeTime": 0,
-            }
-            if dow == day_of_week:
-                entry = {
-                    **entry,
-                    "dayOfWeek": dow,
+        schedules = self._build_sleep_schedules(
+            overrides={
+                day_of_week: {
                     "isEnabled": bool(is_enabled),
                     "sleepTime": int(sleep_time),
                     "wakeTime": int(wake_time),
                 }
-            schedules.append(entry)
+            }
+        )
 
         await self._patch(
             f"robots/{self.serial}",
@@ -1330,6 +1289,46 @@ class LitterRobot5(LitterRobot):  # pylint: disable=abstract-method
             )
         except (TypeError, ValueError):
             return False
+
+    def _build_sleep_schedules(
+        self,
+        *,
+        enable_all: bool | None = None,
+        sleep_minutes: int | None = None,
+        overrides: dict[int, dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Build a complete 7-day sleep schedule list, applying optional overrides."""
+        existing = self.sleep_schedules
+        by_dow: dict[int, dict[str, Any]] = {}
+        for item in existing:
+            raw_dow = item.get("dayOfWeek")
+            if raw_dow is None:
+                continue
+            try:
+                dow = int(raw_dow)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= dow <= 6 and dow not in by_dow:
+                by_dow[dow] = dict(item)
+
+        schedules: list[dict[str, Any]] = []
+        for dow in range(7):
+            entry = by_dow.get(dow) or {
+                "dayOfWeek": dow,
+                "isEnabled": False,
+                "sleepTime": 0,
+                "wakeTime": 0,
+            }
+            entry = {**entry, "dayOfWeek": dow}
+            if enable_all is not None:
+                entry["isEnabled"] = bool(enable_all)
+            if sleep_minutes is not None:
+                entry["sleepTime"] = int(sleep_minutes)
+            if overrides and dow in overrides:
+                entry = {**entry, **overrides[dow], "dayOfWeek": dow}
+            schedules.append(entry)
+
+        return schedules
 
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
         """Return the activity history."""

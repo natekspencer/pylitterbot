@@ -123,7 +123,7 @@ class Session(Event, ABC):
                     and data.get("type") == "InvalidCommandException"
                 ):
                     raise InvalidCommandException(data.get("developerMessage", data))
-                raise InvalidCommandException(data)
+                raise InvalidCommandException(data or body_text)
             if resp.status == 422:
                 # LR5 command bus (and some AWS-backed endpoints) return 422 with a JSON
                 # body describing validation failures. Surface it as an InvalidCommandException

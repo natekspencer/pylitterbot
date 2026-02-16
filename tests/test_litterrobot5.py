@@ -32,6 +32,15 @@ from .common import LITTER_ROBOT_5_DATA, get_account
 pytestmark = pytest.mark.asyncio
 
 
+def last_request_json(mock_aioresponse: Any) -> Any:
+    """Return the JSON body of the most recent mocked request."""
+    if not mock_aioresponse.requests:
+        raise AssertionError("No requests captured")
+
+    last_key = next(reversed(mock_aioresponse.requests))
+    return mock_aioresponse.requests[last_key][-1].kwargs.get("json")
+
+
 async def test_litter_robot_5_properties(mock_account: Any) -> None:
     """Tests that a Litter-Robot 5 setup is successful and parses as expected."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
@@ -143,16 +152,14 @@ async def test_litter_robot_5_write_endpoints(
     assert robot.name != new_name
     assert await robot.set_name(new_name)
     assert robot.name == new_name
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
-        "name": new_name
-    }
+    assert last_request_json(mock_aioresponse) == {"name": new_name}
 
     # Night light toggle uses PATCH /robots/{serial} with nightLightSettings.mode.
     mock_aioresponse.patch(url, status=204, body="")
     assert await robot.set_night_light(False)
     is_enabled = robot.night_light_mode_enabled
     assert is_enabled is False
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
+    assert last_request_json(mock_aioresponse) == {
         "nightLightSettings": {"mode": "Off"}
     }
 
@@ -160,7 +167,7 @@ async def test_litter_robot_5_write_endpoints(
     assert await robot.set_night_light(True)
     is_enabled = robot.night_light_mode_enabled
     assert is_enabled is True
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
+    assert last_request_json(mock_aioresponse) == {
         "nightLightSettings": {"mode": "Auto"}
     }
 
@@ -168,7 +175,7 @@ async def test_litter_robot_5_write_endpoints(
     mock_aioresponse.patch(url, status=204, body="")
     assert await robot.set_panel_lockout(True)
     assert robot.panel_lock_enabled is True
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
+    assert last_request_json(mock_aioresponse) == {
         "panelSettings": {"isKeypadLocked": True}
     }
 
@@ -176,7 +183,7 @@ async def test_litter_robot_5_write_endpoints(
     mock_aioresponse.patch(url, status=204, body="")
     assert await robot.set_wait_time(15)
     assert robot.clean_cycle_wait_time_minutes == 15
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
+    assert last_request_json(mock_aioresponse) == {
         "litterRobotSettings": {"cycleDelay": 15}
     }
 
@@ -184,7 +191,7 @@ async def test_litter_robot_5_write_endpoints(
     mock_aioresponse.patch(url, status=204, body="")
     assert await robot.set_panel_brightness(BrightnessLevel.HIGH)
     assert robot.panel_brightness == BrightnessLevel.HIGH
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
+    assert last_request_json(mock_aioresponse) == {
         "panelSettings": {"displayIntensity": "High"}
     }
 
@@ -192,7 +199,7 @@ async def test_litter_robot_5_write_endpoints(
     mock_aioresponse.patch(url, status=204, body="")
     assert await robot.set_night_light_brightness(42)
     assert robot.night_light_brightness == 42
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
+    assert last_request_json(mock_aioresponse) == {
         "nightLightSettings": {"brightness": 42}
     }
 
@@ -200,7 +207,7 @@ async def test_litter_robot_5_write_endpoints(
     mock_aioresponse.patch(url, status=204, body="")
     assert await robot.set_night_light_color("#FFF5")
     assert robot.night_light_color == "#FFF5"
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
+    assert last_request_json(mock_aioresponse) == {
         "nightLightSettings": {"mode": "Auto", "brightness": 42, "color": "#FFF5"}
     }
 
@@ -209,7 +216,7 @@ async def test_litter_robot_5_write_endpoints(
     assert await robot.set_night_light_mode(NightLightMode.OFF)
     mode = robot.night_light_mode
     assert mode == NightLightMode.OFF
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
+    assert last_request_json(mock_aioresponse) == {
         "nightLightSettings": {"mode": "Off"}
     }
 
@@ -217,22 +224,18 @@ async def test_litter_robot_5_write_endpoints(
     assert await robot.set_night_light_mode(NightLightMode.ON)
     mode = robot.night_light_mode
     assert mode == NightLightMode.ON
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
-        "nightLightSettings": {"mode": "On"}
-    }
+    assert last_request_json(mock_aioresponse) == {"nightLightSettings": {"mode": "On"}}
 
     # Sound settings use PATCH /robots/{serial} with soundSettings nested keys.
     mock_aioresponse.patch(url, status=204, body="")
     assert await robot.set_sound_volume(5)
     assert robot.sound_volume == 5
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
-        "soundSettings": {"volume": 5}
-    }
+    assert last_request_json(mock_aioresponse) == {"soundSettings": {"volume": 5}}
 
     mock_aioresponse.patch(url, status=204, body="")
     assert await robot.set_camera_audio_enabled(True)
     assert robot.camera_audio_enabled is True
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
+    assert last_request_json(mock_aioresponse) == {
         "soundSettings": {"cameraAudioEnabled": True}
     }
 
@@ -254,23 +257,17 @@ async def test_litter_robot_5_write_endpoints(
         {"dayOfWeek": 5, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
         {"dayOfWeek": 6, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
     ]
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
-        "sleepSchedules": expected_schedules
-    }
+    assert last_request_json(mock_aioresponse) == {"sleepSchedules": expected_schedules}
 
     # Power + clean use the command bus endpoint.
     cmd_url = f"{LR5_ENDPOINT}/robots/{robot.serial}/commands"
     mock_aioresponse.post(cmd_url, status=200, body="")
     assert await robot.set_power_status(True)
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
-        "type": "POWER_ON"
-    }
+    assert last_request_json(mock_aioresponse) == {"type": "POWER_ON"}
 
     mock_aioresponse.post(cmd_url, status=200, body="")
     assert await robot.start_cleaning()
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
-        "type": "CLEAN_CYCLE"
-    }
+    assert last_request_json(mock_aioresponse) == {"type": "CLEAN_CYCLE"}
 
 
 async def test_litter_robot_5_firmware_details_from_state(mock_account: Any) -> None:
@@ -309,11 +306,7 @@ async def test_litter_robot_5_firmware_latest_from_otaupdate(
             }
         },
     )
-
-    try:
-        assert await robot.get_latest_firmware(force_check=True) == "v1.0.1"
-    finally:
-        await mock_account.disconnect()
+    assert await robot.get_latest_firmware(force_check=True) == "v1.0.1"
 
 
 async def test_litter_robot_5_firmware_update_availability_from_otaupdate(
@@ -336,11 +329,7 @@ async def test_litter_robot_5_firmware_update_availability_from_otaupdate(
             }
         },
     )
-
-    try:
-        assert await robot.has_firmware_update(force_check=True) is False
-    finally:
-        await mock_account.disconnect()
+    assert await robot.has_firmware_update(force_check=True) is False
 
 
 async def test_litter_robot_5_update_firmware_triggers_otaupdate_mutation(
@@ -360,14 +349,10 @@ async def test_litter_robot_5_update_firmware_triggers_otaupdate_mutation(
             }
         },
     )
-
-    try:
-        assert await robot.update_firmware() is True
-        assert (
-            list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json", {})
-        ).get("variables") == {"serialNumber": robot.serial}
-    finally:
-        await mock_account.disconnect()
+    assert await robot.update_firmware() is True
+    assert (last_request_json(mock_aioresponse) or {}).get("variables") == {
+        "serialNumber": robot.serial
+    }
 
 
 async def test_litter_robot_5_firmware_latest_falls_back_to_user_query(
@@ -410,10 +395,7 @@ async def test_litter_robot_5_firmware_latest_falls_back_to_user_query(
         raise AssertionError(f"Unexpected OTA update query: {query}")
 
     mock_aioresponse.post(LR5_OTAUPDATE_ENDPOINT, callback=ota_callback, repeat=True)
-    try:
-        assert await robot.get_latest_firmware(force_check=True) == "v1.0.1"
-    finally:
-        await account.disconnect()
+    assert await robot.get_latest_firmware(force_check=True) == "v1.0.1"
 
 
 async def test_litter_robot_5_camera_session_bootstrap(
@@ -550,9 +532,10 @@ async def test_litter_robot_5_camera_inventory_videos_events(
 
 
 async def test_litter_robot_5_insight_computed_from_activities(
-    mock_aioresponse: Any, mock_account: Any
+    freezer: pytest.fixture, mock_aioresponse: Any, mock_account: Any
 ) -> None:
     """Compute insights from activities when no insights endpoint exists."""
+    freezer.move_to("2026-02-16 12:00:00+00:00")
     now = utcnow().replace(microsecond=0)
     today_1 = now.replace(hour=10, minute=0, second=0)
     today_2 = now.replace(hour=12, minute=0, second=0)

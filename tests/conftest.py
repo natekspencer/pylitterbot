@@ -76,11 +76,7 @@ def no_cognito(monkeypatch):  # type: ignore
 @pytest_asyncio.fixture
 async def mock_account() -> AsyncGenerator[Account, None]:
     """Mock an account."""
-    account = await get_account()
-    try:
-        yield account
-    finally:
-        await account.disconnect()
+    yield await get_account()
 
 
 @pytest_asyncio.fixture(autouse=True)
