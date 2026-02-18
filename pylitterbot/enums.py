@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum, unique
+from enum import Enum, IntEnum, unique
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
@@ -166,6 +166,38 @@ class LitterBoxStatus(LitterBoxStatusMixIn, Enum):
             )
             + ([cls.DRAWER_FULL_1, cls.DRAWER_FULL_2] if almost_full else [])
         ]
+
+
+@unique
+class BrightnessLevel(IntEnum):
+    """Brightness level of a Robot supporting brightness."""
+
+    LOW = 25
+    MEDIUM = 50
+    HIGH = 100
+
+
+@unique
+class HopperStatus(Enum):
+    """Hopper status."""
+
+    ENABLED = "ENABLED"
+    DISABLED = "DISABLED"
+    MOTOR_FAULT_SHORT = "MOTOR_FAULT_SHORT"
+    MOTOR_OT_AMPS = "MOTOR_OT_AMPS"
+    MOTOR_DISCONNECTED = "MOTOR_DISCONNECTED"
+    EMPTY = "EMPTY"
+
+
+@unique
+class LitterLevelState(Enum):
+    """Litter level state."""
+
+    OVERFILL = "OVERFILL"
+    OPTIMAL = "OPTIMAL"
+    REFILL = "REFILL"
+    LOW = "LOW"
+    EMPTY = "EMPTY"
 
 
 @unique

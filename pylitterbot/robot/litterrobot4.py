@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, time, timedelta
-from enum import Enum, IntEnum, unique
+from enum import Enum, unique
 from json import dumps
 from typing import TYPE_CHECKING, Any, Dict, Union, cast
 from uuid import uuid4
@@ -15,7 +15,14 @@ except ImportError:  # pragma: no cover
     from backports.zoneinfo import ZoneInfo  # type: ignore
 
 from ..activity import Activity, Insight
-from ..enums import LitterBoxStatus, LitterRobot4Command, NightLightMode
+from ..enums import (
+    BrightnessLevel,
+    HopperStatus,
+    LitterBoxStatus,
+    LitterLevelState,
+    LitterRobot4Command,
+    NightLightMode,
+)
 from ..exceptions import InvalidCommandException, LitterRobotException
 from ..utils import calculate_litter_level, encode, to_enum, to_timestamp, utcnow
 from .litterrobot import LitterRobot
@@ -61,15 +68,6 @@ DISPLAY_CODE_STATUS_MAP = {"DC_CAT_DETECT": LitterBoxStatus.CAT_DETECTED}
 LITTER_LEVEL_EMPTY = 500
 
 
-@unique
-class BrightnessLevel(IntEnum):
-    """Brightness level of a Litter-Robot 4 unit."""
-
-    LOW = 25
-    MEDIUM = 50
-    HIGH = 100
-
-
 # Deprecated. Use BrightnessLevel.
 NightLightLevel = BrightnessLevel
 
@@ -98,18 +96,6 @@ class FirmwareUpdateStatus(Enum):
 
 
 @unique
-class HopperStatus(Enum):
-    """Hopper status."""
-
-    ENABLED = "ENABLED"
-    DISABLED = "DISABLED"
-    MOTOR_FAULT_SHORT = "MOTOR_FAULT_SHORT"
-    MOTOR_OT_AMPS = "MOTOR_OT_AMPS"
-    MOTOR_DISCONNECTED = "MOTOR_DISCONNECTED"
-    EMPTY = "EMPTY"
-
-
-@unique
 class GlobeMotorFaultStatus(Enum):
     """Globe motor fault status."""
 
@@ -123,17 +109,6 @@ class GlobeMotorFaultStatus(Enum):
     FAULT_PINCH = "FAULT_PINCH"
     FAULT_ALL_SENSORS = "FAULT_ALL_SENSORS"
     FAULT_UNKNOWN = "FAULT_UNKNOWN"
-
-
-@unique
-class LitterLevelState(Enum):
-    """Litter level state."""
-
-    OVERFILL = "OVERFILL"
-    OPTIMAL = "OPTIMAL"
-    REFILL = "REFILL"
-    LOW = "LOW"
-    EMPTY = "EMPTY"
 
 
 @unique

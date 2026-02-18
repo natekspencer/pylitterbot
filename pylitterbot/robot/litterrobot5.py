@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from datetime import datetime, time, timedelta, timezone
-from enum import Enum, IntEnum, unique
 from typing import TYPE_CHECKING, Any, cast
 
 from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponseError
@@ -16,7 +15,14 @@ except ImportError:  # pragma: no cover
     from backports.zoneinfo import ZoneInfo  # type: ignore
 
 from ..activity import Activity, Insight
-from ..enums import LitterBoxStatus, LitterRobot5Command, NightLightMode
+from ..enums import (
+    BrightnessLevel,
+    HopperStatus,
+    LitterBoxStatus,
+    LitterLevelState,
+    LitterRobot5Command,
+    NightLightMode,
+)
 from ..exceptions import InvalidCommandException, LitterRobotException
 from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin, utcnow
 from .litterrobot import LitterRobot
@@ -93,96 +99,6 @@ MODEL_TYPE_MAP = {
     MODEL_TYPE_STANDARD: "Litter-Robot 5",
     MODEL_TYPE_PRO: "Litter-Robot 5 Pro",
 }
-
-
-@unique
-class BrightnessLevel(IntEnum):
-    """Brightness level of a Litter-Robot 5 unit."""
-
-    LOW = 25
-    MEDIUM = 50
-    HIGH = 100
-
-
-@unique
-class FirmwareUpdateStatus(Enum):
-    """Firmware update status."""
-
-    NONE = "NONE"
-    TRIGGERED = "TRIGGERED"
-    PICTRIGGERED = "PICTRIGGERED"
-    LASERBOARDTRIGGERED = "LASERBOARDTRIGGERED"
-    ESPTRIGGERED = "ESPTRIGGERED"
-    STARTED = "STARTED"
-    IN_PROGRESS = "IN_PROGRESS"
-    SUCCEEDED = "SUCCEEDED"
-    FAILED = "FAILED"
-    CANCELED = "CANCELED"
-    DELETED = "DELETED"
-    REJECTED = "REJECTED"
-    TIMED_OUT = "TIMED_OUT"
-    REMOVED = "REMOVED"
-    COMPLETED = "COMPLETED"
-    CANCELLATION_IN_PROGRESS = "CANCELLATION_IN_PROGRESS"
-    DELETION_IN_PROGRESS = "DELETION_IN_PROGRESS"
-
-
-@unique
-class HopperStatus(Enum):
-    """Hopper status."""
-
-    ENABLED = "ENABLED"
-    DISABLED = "DISABLED"
-    MOTOR_FAULT_SHORT = "MOTOR_FAULT_SHORT"
-    MOTOR_OT_AMPS = "MOTOR_OT_AMPS"
-    MOTOR_DISCONNECTED = "MOTOR_DISCONNECTED"
-    EMPTY = "EMPTY"
-
-
-@unique
-class LitterLevelState(Enum):
-    """Litter level state."""
-
-    OVERFILL = "OVERFILL"
-    OPTIMAL = "OPTIMAL"
-    REFILL = "REFILL"
-    LOW = "LOW"
-    EMPTY = "EMPTY"
-
-
-@unique
-class SurfaceType(Enum):
-    """Surface type."""
-
-    TILE = "TILE"
-    CARPET = "CARPET"
-    UNKNOWN = "UNKNOWN"
-
-
-@unique
-class UsbFaultStatus(Enum):
-    """USB fault status."""
-
-    NONE = "NONE"
-    CLEAR = "CLEAR"
-    SET = "SET"
-
-
-@unique
-class WifiModeStatus(Enum):
-    """Wi-Fi mode status."""
-
-    NONE = "NONE"
-    OFF = "OFF"
-    OFF_WAITING = "OFF_WAITING"
-    OFF_CONNECTED = "OFF_CONNECTED"
-    OFF_FAULT = "OFF_FAULT"
-    HOTSPOT_WAITING = "HOTSPOT_WAITING"
-    HOTSPOT_CONNECTED = "HOTSPOT_CONNECTED"
-    HOTSPOT_FAULT = "HOTSPOT_FAULT"
-    ROUTER_WAITING = "ROUTER_WAITING"
-    ROUTER_CONNECTED = "ROUTER_CONNECTED"
-    ROUTER_FAULT = "ROUTER_FAULT"
 
 
 class LitterRobot5(LitterRobot):
