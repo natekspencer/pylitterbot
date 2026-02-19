@@ -854,6 +854,9 @@ class LitterRobot5(LitterRobot):
 
         """
         schedules = deepcopy(self._data.get("sleepSchedules", []))
+        # Normalize dict format (legacy: {dayName: {...}}) to list format
+        if isinstance(schedules, dict):
+            schedules = list(schedules.values())
         if not schedules:
             schedules = [
                 {"dayOfWeek": d, "isEnabled": False, "sleepTime": 0, "wakeTime": 0}
