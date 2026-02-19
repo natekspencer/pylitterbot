@@ -224,7 +224,11 @@ class LitterRobot5(LitterRobot):
             wifi = wifi.get("value")
         else:
             wifi = wifi or self._state.get("espFirmwareVersion")
-        parts = [f"ESP: {wifi}", f"MCU: {mcu}"]
+        parts = []
+        if wifi is not None:
+            parts.append(f"ESP: {wifi}")
+        if mcu is not None:
+            parts.append(f"MCU: {mcu}")
         # Pro-specific firmware versions
         for key, label in [
             ("cameraVersion", "CAM"),
@@ -306,7 +310,7 @@ class LitterRobot5(LitterRobot):
         return self._state.get("isGasSensorFaultDetected") is True
 
     @property
-    def is_hopper_removed(self) -> bool | None:
+    def is_hopper_removed(self) -> bool:
         """Return `True` if the hopper is removed/disabled."""
         return self._state.get("isHopperInstalled") is False
 
@@ -879,6 +883,8 @@ class LitterRobot5(LitterRobot):
 
     async def set_volume(self, volume: int) -> bool:
         """Set the sound volume (0-100)."""
+        if not 0 <= volume <= 100:
+            raise InvalidCommandException(f"Invalid volume {volume!r}: must be 0-100.")
         return await self._dispatch_command(
             LitterRobot5Command.SOUND_SETTINGS,
             value={"volume": volume},
@@ -914,8 +920,13 @@ class LitterRobot5(LitterRobot):
             raise InvalidCommandException(
                 f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
             )
-        activities = await self.get_activities(limit=limit)
-        if activities is None:
+        try:
+            activities = await self.get_activities(limit=limit)
+        except Exception as ex:
+            raise LitterRobotException(
+                "Activity history could not be retrieved."
+            ) from ex
+        if not isinstance(activities, list):
             raise LitterRobotException("Activity history could not be retrieved.")
         return [
             Activity(timestamp, activity.get("type", ""))
@@ -993,10 +1004,12 @@ class LitterRobot5(LitterRobot):
             return None
 
         latest_firmware = cast(dict[str, str], firmware.get("latestFirmware", {}))
-        return (
-            f"ESP: {latest_firmware.get('espFirmwareVersion')} / "
-            f"MCU: {latest_firmware.get('mcuFirmwareVersion')}"
-        )
+        parts = []
+        if esp := latest_firmware.get("espFirmwareVersion"):
+            parts.append(f"ESP: {esp}")
+        if mcu := latest_firmware.get("mcuFirmwareVersion"):
+            parts.append(f"MCU: {mcu}")
+        return " / ".join(parts) if parts else None
 
     async def has_firmware_update(self, force_check: bool = False) -> bool:
         """Check if a firmware update is available.

@@ -104,10 +104,8 @@ def mock_aioresponse() -> aioresponses:
             repeat=True,
         )
         mock.get(
-            re.compile(f"^{LR4_ENDPOINT}/realtime?.*$"),
-            # payload={},
+            re.compile(rf"^{re.escape(LR4_ENDPOINT)}/realtime(\?.*)?$"),
             repeat=True,
-            # callback=ws_callback,
         )
         mock.get(
             urljoin(LR5_ENDPOINT, "/robots"),

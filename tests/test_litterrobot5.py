@@ -102,7 +102,7 @@ async def test_litter_robot_5_firmware_no_versions(
     del data["state"]["espFirmwareVersion"]
     del data["state"]["stmFirmwareVersion"]
     robot = LitterRobot5(data=data, account=mock_account)
-    assert robot.firmware == "ESP: None / MCU: None"
+    assert robot.firmware == ""
 
     await robot._account.disconnect()
 

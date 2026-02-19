@@ -207,7 +207,10 @@ class Account:
                     continue
 
                 for robot_data in result:
-                    await update_or_create_robot(robot_cls, robot_data)
+                    try:
+                        await update_or_create_robot(robot_cls, robot_data)
+                    except Exception:
+                        _LOGGER.exception("Failed to load %s robot", robot_cls.__name__)
 
             self._robots = robots
         except (

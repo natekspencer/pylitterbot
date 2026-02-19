@@ -212,7 +212,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return self._data.get("isDFIFull") is True
 
     @property
-    def is_hopper_removed(self) -> bool | None:
+    def is_hopper_removed(self) -> bool:
         """Return `True` if the hopper is removed/disabled."""
         return self._data.get("isHopperRemoved") is True
 
