@@ -806,6 +806,10 @@ class LitterRobot5(LitterRobot):
             BrightnessLevel.MEDIUM: "Medium",
             BrightnessLevel.HIGH: "High",
         }
+        if brightness not in level_to_intensity:
+            raise InvalidCommandException(
+                f"Invalid brightness level: {brightness!r}. Must be one of: {list(level_to_intensity)}"
+            )
         return await self._dispatch_command(
             LitterRobot5Command.PANEL_SETTINGS,
             value={"displayIntensity": level_to_intensity[brightness]},
