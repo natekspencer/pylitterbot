@@ -204,6 +204,10 @@ class Account:
             for robot_cls, result in zip(robot_types, resp):
                 if isinstance(result, BaseException):
                     _LOGGER.error("Failed to fetch %s: %s", robot_cls.__name__, result)
+                    # Preserve previously-known robots of this type rather than dropping them
+                    for existing in self._robots:
+                        if type(existing) is robot_cls:
+                            robots.append(existing)
                     continue
 
                 for robot_data in result:

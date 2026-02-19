@@ -6,13 +6,9 @@ import logging
 from copy import deepcopy
 from datetime import datetime, time, timedelta, timezone
 from typing import TYPE_CHECKING, Any, cast
+from zoneinfo import ZoneInfo
 
 from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponseError
-
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:  # pragma: no cover
-    from backports.zoneinfo import ZoneInfo  # type: ignore
 
 from ..activity import Activity, Insight
 from ..enums import (
@@ -756,7 +752,8 @@ class LitterRobot5(LitterRobot):
     async def refresh(self) -> None:
         """Refresh the Litter-Robot's data from the API."""
         data = await self._get(f"robots/{self.serial}")
-        self._update_data(cast(dict, data))
+        if isinstance(data, dict):
+            self._update_data(data)
 
     async def reset(self) -> bool:
         """Perform a remote reset on the Litter-Robot.
@@ -964,7 +961,7 @@ class LitterRobot5(LitterRobot):
             params["type"] = activity_type
         url = f"{LR5_ENDPOINT}/robots/{self.serial}/activities"
         data = await self._account.session.request("GET", url, params=params)
-        return cast(list[dict[str, Any]], data)
+        return cast(list[dict[str, Any]], data) if isinstance(data, list) else []
 
     async def get_insight(
         self, days: int = 30, timezone_offset: int | None = None

@@ -8,11 +8,7 @@ from enum import Enum, unique
 from json import dumps
 from typing import TYPE_CHECKING, Any, Dict, Union, cast
 from uuid import uuid4
-
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:  # pragma: no cover
-    from backports.zoneinfo import ZoneInfo  # type: ignore
+from zoneinfo import ZoneInfo
 
 from ..activity import Activity, Insight
 from ..enums import (

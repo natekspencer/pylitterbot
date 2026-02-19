@@ -1,4 +1,4 @@
-"""Test litterrobot4 module."""
+"""Test LitterRobot property type consistency across models."""
 
 # pylint: disable=protected-access
 from __future__ import annotations
