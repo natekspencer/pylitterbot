@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from aiohttp import ClientConnectionError
+from aiohttp.typedefs import URL
 from aioresponses import aioresponses
 from freezegun.api import FrozenDateTimeFactory
 
@@ -646,8 +647,11 @@ async def test_litter_robot_5_activity_history_none_response(
     """Tests that activity history raises when response is None."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
 
+    def _raise_for_request(url: URL, **kwargs: Any) -> None:
+        raise RuntimeError(url)
+
     activities_url = f"{LR5_GET_URL}/activities?limit=5"
-    mock_aioresponse.get(activities_url, payload=None)
+    mock_aioresponse.get(activities_url, payload=None, callback=_raise_for_request)
     with pytest.raises(LitterRobotException):
         await robot.get_activity_history(5)
 
