@@ -214,7 +214,10 @@ class GlobeMotorFaultStatus(Enum):
         if not value.startswith("FAULT_") and value != "NONE":
             value = f"FAULT_{value}"
 
-        return cls._value2member_map_.get(value, cls.FAULT_UNKNOWN)
+        try:
+            return cls(value)
+        except ValueError:
+            return cls.FAULT_UNKNOWN
 
 
 @unique
