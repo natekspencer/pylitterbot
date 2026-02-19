@@ -405,7 +405,8 @@ class LitterRobot5(LitterRobot):
     @property
     def night_light_mode_enabled(self) -> bool:
         """Return `True` if night light mode is enabled."""
-        return str(self._night_light_settings.get("mode", "")).lower() != "off"
+        mode = self._night_light_settings.get("mode")
+        return str(mode).lower() != "off" if mode else False
 
     @property
     def panel_brightness(self) -> BrightnessLevel | None:
@@ -440,7 +441,7 @@ class LitterRobot5(LitterRobot):
         The API reports weight as pounds * 100 (integer format).
         This property converts the raw value to pounds.
         """
-        return cast(float, self._state.get("weightSensor", 0.0) / 100)
+        return (self._state.get("weightSensor") or 0.0) / 100
 
     @property
     def power_status(self) -> str:

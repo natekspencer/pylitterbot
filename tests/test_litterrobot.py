@@ -3,6 +3,7 @@
 # pylint: disable=protected-access
 from __future__ import annotations
 
+import functools
 import inspect
 from itertools import combinations
 from typing import get_type_hints
@@ -29,6 +30,7 @@ def get_properties_with_types(cls: type) -> dict[str, object]:
     return properties
 
 
+@functools.lru_cache
 @pytest.mark.parametrize("cls_a, cls_b", combinations(CLASSES, 2))
 @pytest.mark.parametrize(
     "prop_name",
