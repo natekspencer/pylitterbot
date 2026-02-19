@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover
 from ..activity import Activity, Insight
 from ..enums import (
     BrightnessLevel,
+    GlobeMotorFaultStatus,
     HopperStatus,
     LitterBoxStatus,
     LitterLevelState,
@@ -258,9 +259,16 @@ class LitterRobot5(LitterRobot):
         return self._data.get("isFirmwareUpdateTriggered") is True
 
     @property
-    def globe_motor_retract_fault_status(self) -> str:
+    def globe_motor_fault_status(self) -> GlobeMotorFaultStatus:
+        """Return the globe motor fault status."""
+        value = self._state.get("globeMotorFaultStatus")
+        return GlobeMotorFaultStatus.from_raw(value)
+
+    @property
+    def globe_motor_retract_fault_status(self) -> GlobeMotorFaultStatus:
         """Return the globe motor retract fault status."""
-        return cast(str, self._state.get("globeMotorRetractFaultStatus", ""))
+        value = self._state.get("globeMotorRetractFaultStatus")
+        return GlobeMotorFaultStatus.from_raw(value)
 
     @property
     def hopper_fault(self) -> str | None:
@@ -493,11 +501,6 @@ class LitterRobot5(LitterRobot):
     def optimal_litter_level(self) -> int:
         """Return the optimal litter level."""
         return int(self._state.get("optimalLitterLevel", 0))
-
-    @property
-    def globe_motor_fault_status(self) -> str:
-        """Return the globe motor fault status."""
-        return cast(str, self._state.get("globeMotorFaultStatus", ""))
 
     @property
     def pinch_status(self) -> str:

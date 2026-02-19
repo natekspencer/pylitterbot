@@ -12,7 +12,7 @@ from aioresponses import aioresponses
 from freezegun.api import FrozenDateTimeFactory
 
 from pylitterbot import Account
-from pylitterbot.enums import LitterBoxStatus
+from pylitterbot.enums import GlobeMotorFaultStatus, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
 from pylitterbot.robot.litterrobot5 import (
     LITTER_LEVEL_EMPTY,
@@ -913,8 +913,8 @@ async def test_litter_robot_5_new_state_properties(
     assert robot.odometer_empty_cycles == 0
     assert robot.odometer_filter_cycles == 3
     assert robot.odometer_power_cycles == 14
-    assert robot.globe_motor_fault_status == "MtrFaultClear"
-    assert robot.globe_motor_retract_fault_status == "MtrFaultClear"
+    assert robot.globe_motor_fault_status == GlobeMotorFaultStatus.FAULT_CLEAR
+    assert robot.globe_motor_retract_fault_status == GlobeMotorFaultStatus.FAULT_CLEAR
     assert robot.pinch_status == "Clear"
     assert robot.cat_detect == "WeightClear"
     assert robot.cycle_type == "StCycleIdle"
@@ -1091,7 +1091,7 @@ async def test_litter_robot_5_fault_states(
     data["state"]["extendedScaleActivity"] = True
     data["state"]["isNightLightOn"] = False
     data["state"]["hopperFault"] = "MOTOR_STALL"
-    data["state"]["globeMotorRetractFaultStatus"] = "MtrFaultSet"
+    data["state"]["globeMotorRetractFaultStatus"] = "MtrFaultPinch"
     robot = LitterRobot5(data=data, account=mock_account)
     assert robot.is_usb_fault_detected
     assert robot.is_gas_sensor_fault_detected
@@ -1099,7 +1099,7 @@ async def test_litter_robot_5_fault_states(
     assert robot.extended_scale_activity
     assert not robot.is_night_light_on
     assert robot.hopper_fault == "MOTOR_STALL"
-    assert robot.globe_motor_retract_fault_status == "MtrFaultSet"
+    assert robot.globe_motor_retract_fault_status == GlobeMotorFaultStatus.FAULT_PINCH
 
     await robot._account.disconnect()
 

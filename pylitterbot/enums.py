@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from enum import Enum, IntEnum, unique
 from typing import Any
 
@@ -175,6 +176,45 @@ class BrightnessLevel(IntEnum):
     LOW = 25
     MEDIUM = 50
     HIGH = 100
+
+
+@unique
+class GlobeMotorFaultStatus(Enum):
+    """Globe motor fault status."""
+
+    NONE = "NONE"
+    FAULT_CLEAR = "FAULT_CLEAR"
+    FAULT_TIMEOUT = "FAULT_TIMEOUT"
+    FAULT_DISCONNECT = "FAULT_DISCONNECT"
+    FAULT_UNDERVOLTAGE = "FAULT_UNDERVOLTAGE"
+    FAULT_OVERTORQUE_AMP = "FAULT_OVERTORQUE_AMP"
+    FAULT_OVERTORQUE_SLOPE = "FAULT_OVERTORQUE_SLOPE"
+    FAULT_PINCH = "FAULT_PINCH"
+    FAULT_ALL_SENSORS = "FAULT_ALL_SENSORS"
+    FAULT_UNKNOWN = "FAULT_UNKNOWN"
+
+    @classmethod
+    def from_raw(cls, raw: str | None) -> GlobeMotorFaultStatus:
+        """Convert from a raw string."""
+        if raw is None or (value := raw.strip()) == "":
+            return cls.NONE
+
+        # LR4 already matches exactly
+        if value in cls._value2member_map_:
+            return cls(value)
+
+        # Convert PascalCase to SNAKE_CASE
+        value = re.sub(r"(?<!^)(?=[A-Z])", "_", value).upper()
+
+        # Strip common LR5 prefixes
+        value = value.replace("MTR_", "")
+        value = value.replace("MOTOR_", "")
+
+        # Ensure FAULT_ prefix
+        if not value.startswith("FAULT_") and value != "NONE":
+            value = f"FAULT_{value}"
+
+        return cls._value2member_map_.get(value, cls.FAULT_UNKNOWN)
 
 
 @unique

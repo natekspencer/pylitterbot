@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover
 from ..activity import Activity, Insight
 from ..enums import (
     BrightnessLevel,
+    GlobeMotorFaultStatus,
     HopperStatus,
     LitterBoxStatus,
     LitterLevelState,
@@ -93,22 +94,6 @@ class FirmwareUpdateStatus(Enum):
     COMPLETED = "COMPLETED"
     CANCELLATION_IN_PROGRESS = "CANCELLATION_IN_PROGRESS"
     DELETION_IN_PROGRESS = "DELETION_IN_PROGRESS"
-
-
-@unique
-class GlobeMotorFaultStatus(Enum):
-    """Globe motor fault status."""
-
-    NONE = "NONE"
-    FAULT_CLEAR = "FAULT_CLEAR"
-    FAULT_TIMEOUT = "FAULT_TIMEOUT"
-    FAULT_DISCONNECT = "FAULT_DISCONNECT"
-    FAULT_UNDERVOLTAGE = "FAULT_UNDERVOLTAGE"
-    FAULT_OVERTORQUE_AMP = "FAULT_OVERTORQUE_AMP"
-    FAULT_OVERTORQUE_SLOPE = "FAULT_OVERTORQUE_SLOPE"
-    FAULT_PINCH = "FAULT_PINCH"
-    FAULT_ALL_SENSORS = "FAULT_ALL_SENSORS"
-    FAULT_UNKNOWN = "FAULT_UNKNOWN"
 
 
 @unique
@@ -206,15 +191,15 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return self._data.get("isFirmwareUpdateTriggered") is True
 
     @property
-    def globe_motor_fault_status(self) -> GlobeMotorFaultStatus | None:
+    def globe_motor_fault_status(self) -> GlobeMotorFaultStatus:
         """Return the globe motor fault status."""
-        return to_enum(self._data.get("globeMotorFaultStatus"), GlobeMotorFaultStatus)
+        return GlobeMotorFaultStatus.from_raw(self._data.get("globeMotorFaultStatus"))
 
     @property
-    def globe_motor_retract_fault_status(self) -> GlobeMotorFaultStatus | None:
+    def globe_motor_retract_fault_status(self) -> GlobeMotorFaultStatus:
         """Return the globe motor retract fault status."""
         value = self._data.get("globeMotorRetractFaultStatus")
-        return to_enum(value, GlobeMotorFaultStatus)
+        return GlobeMotorFaultStatus.from_raw(value)
 
     @property
     def hopper_status(self) -> HopperStatus | None:
