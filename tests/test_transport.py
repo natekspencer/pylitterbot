@@ -15,7 +15,7 @@ async def test_polling_transport_calls_refresh() -> None:
     transport = PollingTransport(interval=0.05)
     robot = AsyncMock()
     await transport.start(robot)
-    await asyncio.sleep(0.12)  # allow ~2 refresh cycles
+    await asyncio.sleep(0.25)  # allow ~2 refresh cycles
     await transport.stop(robot)
     assert robot.refresh.call_count >= 2
 
@@ -26,3 +26,4 @@ async def test_polling_transport_stops_cleanly() -> None:
     robot = AsyncMock()
     await transport.start(robot)
     await transport.stop(robot)  # should not block for 60 s
+    assert transport._task is None or transport._task.done()

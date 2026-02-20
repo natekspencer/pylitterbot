@@ -8,7 +8,6 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
-from aiohttp import ClientWebSocketResponse
 from deepdiff import DeepDiff
 
 from ..event import EVENT_UPDATE, Event
@@ -42,9 +41,6 @@ class Robot(Event):
         self._account = account
 
         self._is_loaded = False
-
-        self._ws: ClientWebSocketResponse | None = None
-        self._ws_subscription_id: str | None = None
 
         if data:
             if data.get(self._data_serial) is None:
@@ -124,15 +120,6 @@ class Robot(Event):
     @abstractmethod
     async def set_panel_lockout(self, value: bool) -> bool:
         """Turn the panel lock on or off."""
-
-    @abstractmethod
-    async def send_subscribe_request(self, send_stop: bool = False) -> None:
-        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
-
-    async def send_unsubscribe_request(self) -> None:
-        """Send an unsubscribe request."""
-        if self._ws and self._ws_subscription_id:
-            await self._ws.send_json({"id": self._ws_subscription_id, "type": "stop"})
 
     def _update_data(
         self,

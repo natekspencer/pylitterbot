@@ -160,6 +160,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     _firmware_details: dict[str, bool | dict[str, str]] | None = None
     _firmware_details_requested: datetime | None = None
 
+    _ws_subscription_id: str | None = None
+
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a Litter-Robot 4."""
         super().__init__(data, account)
@@ -761,39 +763,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             )
         return is_success
 
-    async def send_subscribe_request(self, send_stop: bool = False) -> None:
-        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
-        if not self._ws:
-            return
-        if send_stop:
-            await self.send_unsubscribe_request()
-        self._ws_subscription_id = str(uuid4())
-
-        await self._ws.send_json(
-            {
-                "id": self._ws_subscription_id,
-                "payload": {
-                    "data": dumps(
-                        {
-                            "query": f"""
-                                subscription GetLR4($serial: String!) {{
-                                    litterRobot4StateSubscriptionBySerial(serial: $serial) {LITTER_ROBOT_4_MODEL}
-                                }}
-                            """,
-                            "variables": {"serial": self.serial},
-                        }
-                    ),
-                    "extensions": {
-                        "authorization": {
-                            "Authorization": await self._account.get_bearer_authorization(),
-                            "host": "lr4.iothings.site",
-                        }
-                    },
-                },
-                "type": "start",
-            }
-        )
-
     @staticmethod
     async def get_websocket_config(account: Account) -> dict[str, Any]:
         """Get wesocket config."""
@@ -863,14 +832,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             "headers": {"sec-websocket-protocol": "graphql-ws"},
         }
 
-    def _ws_message_handler(self, data: dict) -> None:
-        """Handle a message from the WebSocket."""
-        parsed = self.parse_websocket_message(data)
-        if isinstance(parsed, dict) and str(parsed.get(self._data_id)) == self.id:
-            self._update_data(parsed)
-
     async def _ws_subscribe(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         """Subscribe to the WebSocket for updates."""
+        await self._ws_unsubscribe(ws)
+
         self._ws_subscription_id = str(uuid4())
         auth = await self._account.get_bearer_authorization()
         await ws.send_json(
@@ -903,11 +868,17 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         if self._ws_subscription_id:
             await ws.send_json({"id": self._ws_subscription_id, "type": "stop"})
 
+    def _ws_message_handler(self, data: dict) -> None:
+        """Handle a message from the WebSocket."""
+        parsed = self.parse_websocket_message(data)
+        if isinstance(parsed, dict) and str(parsed.get(self._data_id)) == self.id:
+            self._update_data(parsed)
+
     _WS_PROTOCOL: ClassVar[WebSocketProtocol] = WebSocketProtocol(
         ws_config_factory=_ws_config_factory,
         subscribe_factory=_ws_subscribe,
-        message_handler=_ws_message_handler,
         unsubscribe_factory=_ws_unsubscribe,
+        message_handler=_ws_message_handler,
     )
 
     def _build_transport(self) -> WebSocketMonitor:

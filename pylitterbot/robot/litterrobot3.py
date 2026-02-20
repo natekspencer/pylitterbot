@@ -282,16 +282,6 @@ class LitterRobot3(LitterRobot):
             ],
         )
 
-    async def send_subscribe_request(self, send_stop: bool = False) -> None:
-        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
-        if not self._ws:
-            return
-        await self._ws.send_json({"action": "ping"})
-
-    async def send_unsubscribe_request(self) -> None:
-        """Send an unsubscribe request."""
-        # Litter-Robot 3 does not have a subscription id, so this just does nothing
-
     @staticmethod
     async def get_websocket_config(account: Account) -> dict[str, Any]:
         """Get wesocket config."""
@@ -329,15 +319,15 @@ class LitterRobot3(LitterRobot):
             "headers": {"authorization": auth},
         }
 
+    async def _ws_subscribe(self, ws: aiohttp.ClientWebSocketResponse) -> None:
+        """Subscribe to the WebSocket for updates."""
+        await ws.send_json({"action": "ping"})
+
     def _ws_message_handler(self, data: dict) -> None:
         """Handle a message from the WebSocket."""
         parsed = self.parse_websocket_message(data)
         if isinstance(parsed, dict) and str(parsed.get(self._data_id)) == self.id:
             self._update_data(parsed)
-
-    async def _ws_subscribe(self, ws: aiohttp.ClientWebSocketResponse) -> None:
-        """Subscribe to the WebSocket for updates."""
-        await ws.send_json({"action": "ping"})
 
     _WS_PROTOCOL: ClassVar[WebSocketProtocol] = WebSocketProtocol(
         ws_config_factory=_ws_config_factory,

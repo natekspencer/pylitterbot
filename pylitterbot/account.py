@@ -142,7 +142,6 @@ class Account:
     async def disconnect(self) -> None:
         """Close the underlying session."""
         await asyncio.gather(*(robot.unsubscribe() for robot in self.robots))
-        # await asyncio.gather(*(monitor.stop() for monitor in self._monitors.values()))
         await self.session.close()
 
     async def refresh_user(self) -> None:

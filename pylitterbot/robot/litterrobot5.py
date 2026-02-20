@@ -701,13 +701,6 @@ class LitterRobot5(LitterRobot):
         self._sleep_mode_start_time = start
         self._sleep_mode_end_time = end
 
-    async def send_subscribe_request(self, send_stop: bool = False) -> None:
-        """Send a subscribe request.
-
-        LR5 uses REST polling rather than WebSocket subscriptions,
-        so this is a no-op.
-        """
-
     async def _dispatch_command(self, command: str, **kwargs: Any) -> bool:
         """Send a command to the Litter-Robot.
 

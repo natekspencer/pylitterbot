@@ -14,7 +14,6 @@ from aiohttp import ClientError, ClientWebSocketResponse, WSMsgType
 from .utils import utcnow
 
 if TYPE_CHECKING:
-    from .account import Account
     from .robot import Robot
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,7 +28,9 @@ class WebSocketProtocol(Generic[_RobotT]):
     subscribe_factory: (
         Callable[[_RobotT, ClientWebSocketResponse], Awaitable[None]] | None
     ) = None
-    unsubscribe_factory: Callable[[_RobotT, Account], Awaitable[None]] | None = None
+    unsubscribe_factory: (
+        Callable[[_RobotT, ClientWebSocketResponse], Awaitable[None]] | None
+    ) = None
     message_handler: Callable[[_RobotT, dict], None] | None = None
 
 
@@ -130,13 +131,19 @@ class WebSocketMonitor(Transport):
 
     async def _connect(self) -> None:
         """Open one WebSocket session and dispatch messages."""
+        if not self._listeners:
+            return
+
         robot = next(iter(self._listeners.values()))
         config = await self._protocol.ws_config_factory(robot)
+        connection_init = config.pop("connection_init", None)
 
         session = robot._account.session.websession
         async with session.ws_connect(**config) as ws:
             _LOGGER.debug("WebSocket connected: %s", ws._response.url.with_query(None))
             self._ws = ws
+            if connection_init:
+                await ws.send_json(connection_init)
 
             if self._protocol.subscribe_factory:
                 for robot in list(self._listeners.values()):
@@ -171,7 +178,7 @@ class PollingTransport(Transport):
     """
 
     def __init__(self, interval: float = 30.0) -> None:
-        """Initialize a WebSocket monitor."""
+        """Initialize a polling transport."""
         self._interval = interval
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
@@ -185,7 +192,10 @@ class PollingTransport(Transport):
         """Stop polling *robot*."""
         self._stop_event.set()
         if self._task:
-            await asyncio.shield(self._task)
+            try:
+                await asyncio.wait_for(asyncio.shield(self._task), timeout=5.0)
+            except asyncio.TimeoutError:
+                self._task.cancel()
 
     async def _run(self, robot: Robot) -> None:
         while not self._stop_event.is_set():

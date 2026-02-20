@@ -1133,18 +1133,6 @@ async def test_litter_robot_5_last_seen(
     await robot._account.disconnect()
 
 
-async def test_litter_robot_5_send_subscribe_request(
-    mock_account: Account,
-) -> None:
-    """Tests that send_subscribe_request is a no-op for LR5."""
-    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
-    # Should not raise
-    await robot.send_subscribe_request()
-    await robot.send_subscribe_request(send_stop=True)
-
-    await robot._account.disconnect()
-
-
 async def test_litter_robot_5_firmware_details_esp_fallback(
     mock_account: Account,
 ) -> None:
