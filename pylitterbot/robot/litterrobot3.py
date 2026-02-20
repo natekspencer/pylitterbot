@@ -283,15 +283,6 @@ class LitterRobot3(LitterRobot):
         )
 
     @staticmethod
-    async def get_websocket_config(account: Account) -> dict[str, Any]:
-        """Get wesocket config."""
-        return {
-            "url": WEBSOCKET_ENDPOINT,
-            "params": None,
-            "headers": {"authorization": await account.get_bearer_authorization()},
-        }
-
-    @staticmethod
     def parse_websocket_message(data: dict) -> dict | None:
         """Parse a wesocket message."""
         if data["type"] == "MODIFY" and data["name"] == "LitterRobot":

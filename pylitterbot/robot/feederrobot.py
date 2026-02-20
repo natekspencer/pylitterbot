@@ -373,15 +373,6 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         return self.panel_lock_enabled == value
 
     @staticmethod
-    async def get_websocket_config(account: Account) -> dict[str, Any]:
-        """Get wesocket config."""
-        return {
-            "url": FEEDER_ENDPOINT,
-            "params": None,
-            "headers": {"sec-websocket-protocol": "graphql-ws"},
-        }
-
-    @staticmethod
     def parse_websocket_message(data: dict) -> dict | None:
         """Parse a wesocket message."""
         if (data_type := data["type"]) == "data":

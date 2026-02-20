@@ -764,23 +764,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return is_success
 
     @staticmethod
-    async def get_websocket_config(account: Account) -> dict[str, Any]:
-        """Get wesocket config."""
-        return {
-            "url": f"{LR4_ENDPOINT}/realtime",
-            "params": {
-                "header": encode(
-                    {
-                        "Authorization": await account.get_bearer_authorization(),
-                        "host": "lr4.iothings.site",
-                    }
-                ),
-                "payload": encode({}),
-            },
-            "headers": {"sec-websocket-protocol": "graphql-ws"},
-        }
-
-    @staticmethod
     def parse_websocket_message(data: dict) -> dict | None:
         """Parse a wesocket message."""
         if (data_type := data["type"]) == "data":

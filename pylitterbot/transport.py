@@ -61,7 +61,7 @@ class WebSocketMonitor(Transport):
         self,
         protocol: WebSocketProtocol,
         reconnect_base: float = 1.0,
-        reconnect_max: float = 60.0,
+        reconnect_max: float = 300.0,
     ) -> None:
         """Initialize a WebSocket monitor."""
         self._protocol = protocol
