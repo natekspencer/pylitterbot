@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 from aiohttp import ClientConnectionError
-from aiohttp.typedefs import URL
 from aioresponses import aioresponses
 from freezegun.api import FrozenDateTimeFactory
+from yarl import URL
 
 from pylitterbot import Account
 from pylitterbot.enums import GlobeMotorFaultStatus, LitterBoxStatus

@@ -141,7 +141,11 @@ class Account:
 
     async def disconnect(self) -> None:
         """Close the underlying session."""
-        await asyncio.gather(*(robot.unsubscribe() for robot in self.robots))
+        unsubscribes = (robot.unsubscribe() for robot in self.robots)
+        results = await asyncio.gather(*unsubscribes, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                _LOGGER.warning("Error during unsubscribe: %s", result)
         await self.session.close()
 
     async def refresh_user(self) -> None:

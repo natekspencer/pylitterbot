@@ -11,8 +11,8 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from aiohttp.typedefs import URL
 from aioresponses import CallbackResult, aioresponses
+from yarl import URL
 
 from pylitterbot import Account
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
