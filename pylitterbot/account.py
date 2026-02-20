@@ -144,7 +144,7 @@ class Account:
         unsubscribes = (robot.unsubscribe() for robot in self.robots)
         results = await asyncio.gather(*unsubscribes, return_exceptions=True)
         for result in results:
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 _LOGGER.warning("Error during unsubscribe: %s", result)
         await self.session.close()
 

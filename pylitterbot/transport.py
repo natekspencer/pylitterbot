@@ -125,7 +125,10 @@ class WebSocketMonitor(Transport):
                 _LOGGER.warning(
                     "WebSocket error (%s); reconnecting in %.1fs", exc, delay
                 )
-                await asyncio.sleep(delay)
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=delay)
+                except asyncio.TimeoutError:
+                    pass  # normal: keep looping
                 delay = min(delay * 2, BACKOFF_SECONDS_MAX)
             except asyncio.CancelledError:
                 break
