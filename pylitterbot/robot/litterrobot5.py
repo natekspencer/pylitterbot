@@ -21,6 +21,7 @@ from ..enums import (
     NightLightMode,
 )
 from ..exceptions import InvalidCommandException, LitterRobotException
+from ..transport import PollingTransport
 from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin, utcnow
 from .litterrobot import LitterRobot
 
@@ -96,6 +97,8 @@ MODEL_TYPE_MAP = {
     MODEL_TYPE_STANDARD: "Litter-Robot 5",
     MODEL_TYPE_PRO: "Litter-Robot 5 Pro",
 }
+
+DEFAULT_POLLING_INTERVAL = 30.0
 
 
 class LitterRobot5(LitterRobot):
@@ -1043,3 +1046,7 @@ class LitterRobot5(LitterRobot):
             return [r for r in result if isinstance(r, dict)]
 
         return []
+
+    def _build_transport(self) -> PollingTransport:
+        """Build the transport."""
+        return PollingTransport(interval=DEFAULT_POLLING_INTERVAL)

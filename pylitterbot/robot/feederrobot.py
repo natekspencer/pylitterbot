@@ -5,12 +5,15 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from datetime import datetime, time, timedelta
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, TypeVar, cast
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+import aiohttp
+
 from ..enums import FeederRobotCommand
 from ..exceptions import InvalidCommandException
+from ..transport import WebSocketMonitor, WebSocketProtocol
 from ..utils import decode, to_timestamp, utcnow
 from . import Robot
 from .models import FEEDER_ROBOT_MODEL
@@ -446,3 +449,57 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
             return [r for r in robots if isinstance(r, dict)]
 
         return []
+
+    async def _ws_config_factory(self) -> dict[str, Any]:
+        """Return the WebSocket configuration."""
+        return {
+            "url": FEEDER_ENDPOINT,
+            "headers": {"sec-websocket-protocol": "graphql-ws"},
+        }
+
+    def _ws_message_handler(self, data: dict) -> None:
+        """Handle a message from the WebSocket."""
+        parsed = self.parse_websocket_message(data)
+        if isinstance(parsed, dict) and str(parsed.get(self._data_id)) == self.id:
+            self._update_data(parsed)
+
+    async def _ws_subscribe(self, ws: aiohttp.ClientWebSocketResponse) -> None:
+        """Subscribe to the WebSocket for updates."""
+        self._ws_subscription_id = str(uuid4())
+        auth = await self._account.get_bearer_authorization()
+        await ws.send_json(
+            {
+                "type": "connection_init",
+                "payload": {"headers": {"Authorization": auth}},
+            }
+        )
+        await ws.send_json(
+            {
+                "type": "start",
+                "id": self._ws_subscription_id,
+                "payload": {
+                    "query": f"""
+                    subscription GetFeeder($id: Int!) {{
+                        feeder_unit_by_pk(id: $id) {FEEDER_ROBOT_MODEL}
+                    }}
+                """,
+                    "variables": {"id": self.id},
+                },
+            }
+        )
+
+    async def _ws_unsubscribe(self, ws: aiohttp.ClientWebSocketResponse) -> None:
+        """Unsubscribe from WebSocket updates."""
+        if self._ws_subscription_id:
+            await ws.send_json({"id": self._ws_subscription_id, "type": "stop"})
+
+    _WS_PROTOCOL: ClassVar[WebSocketProtocol] = WebSocketProtocol(
+        ws_config_factory=_ws_config_factory,
+        subscribe_factory=_ws_subscribe,
+        message_handler=_ws_message_handler,
+        unsubscribe_factory=_ws_unsubscribe,
+    )
+
+    def _build_transport(self) -> WebSocketMonitor:
+        """Build the transport."""
+        return self._account.get_monitor_for(type(self), self._WS_PROTOCOL)

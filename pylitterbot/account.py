@@ -12,7 +12,6 @@ from aiohttp import (
     ClientConnectorError,
     ClientResponseError,
     ClientSession,
-    ClientWebSocketResponse,
 )
 from botocore.exceptions import ClientError
 
@@ -25,8 +24,8 @@ from .robot.litterrobot3 import DEFAULT_ENDPOINT, DEFAULT_ENDPOINT_KEY, LitterRo
 from .robot.litterrobot4 import LitterRobot4
 from .robot.litterrobot5 import LitterRobot5
 from .session import LitterRobotSession
+from .transport import WebSocketMonitor, WebSocketProtocol
 from .utils import decode, urljoin
-from .ws_monitor import WebSocketMonitor
 
 _LOGGER = logging.getLogger(__name__)
 _RobotT = TypeVar("_RobotT", bound=Robot)
@@ -143,7 +142,7 @@ class Account:
     async def disconnect(self) -> None:
         """Close the underlying session."""
         await asyncio.gather(*(robot.unsubscribe() for robot in self.robots))
-        await asyncio.gather(*(monitor.close() for monitor in self._monitors.values()))
+        # await asyncio.gather(*(monitor.stop() for monitor in self._monitors.values()))
         await self.session.close()
 
     async def refresh_user(self) -> None:
@@ -243,14 +242,10 @@ class Account:
             await self.session.refresh_tokens()
         return await self.session.get_bearer_authorization()
 
-    async def ws_connect(self, robot: Robot) -> ClientWebSocketResponse:
-        """Initiate a websocket connection for a robot."""
-        robot_class = type(robot)
-        ws_monitor = self._monitors.setdefault(
-            robot_class, WebSocketMonitor(self, robot_class)
-        )
-        if ws_monitor.websocket is None or ws_monitor.websocket.closed:
-            await ws_monitor.new_connection(True)
-        if ws_monitor.monitor is None or ws_monitor.monitor.done():
-            await ws_monitor.start_monitor()
-        return ws_monitor.websocket
+    def get_monitor_for(
+        self, robot_cls: type, protocol: WebSocketProtocol
+    ) -> WebSocketMonitor:
+        """Return (creating if needed) the WebSocket monitor for this account + robot type."""
+        if robot_cls not in self._monitors:
+            self._monitors[robot_cls] = WebSocketMonitor(protocol=protocol)
+        return self._monitors[robot_cls]
