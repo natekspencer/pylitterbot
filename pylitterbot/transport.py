@@ -200,6 +200,10 @@ class PollingTransport(Transport):
                 await asyncio.wait_for(asyncio.shield(self._task), timeout=5.0)
             except asyncio.TimeoutError:
                 self._task.cancel()
+                try:
+                    await self._task
+                except asyncio.CancelledError:
+                    pass
 
     async def _run(self, robot: Robot) -> None:
         """Run the polling transport."""

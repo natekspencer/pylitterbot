@@ -248,7 +248,11 @@ class Account:
     def get_monitor_for(
         self, robot_cls: type[Robot], protocol: WebSocketProtocol
     ) -> WebSocketMonitor:
-        """Return (creating if needed) the WebSocket monitor for this account + robot type."""
+        """Return (creating if needed) the WebSocket monitor for this account + robot type.
+
+        ``protocol`` is used only on first creation; subsequent calls for the same
+        ``robot_cls`` return the cached monitor regardless of the supplied protocol.
+        """
         if robot_cls not in self._monitors:
             self._monitors[robot_cls] = WebSocketMonitor(protocol=protocol)
         return self._monitors[robot_cls]
