@@ -7,7 +7,7 @@ import logging
 import re
 from base64 import b64decode, b64encode
 from collections.abc import Iterable, Mapping
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from enum import Enum
 from typing import Any, Type, TypeVar, cast, overload
 from urllib.parse import urljoin as _urljoin
@@ -174,8 +174,55 @@ def to_enum(value: Any, typ: Type[_E], log_warning: bool = True) -> _E | None:
     try:
         return typ(value)
     except ValueError:
+        # Try case-insensitive match for string values
+        if isinstance(value, str):
+            upper = value.upper()
+            for member in typ:
+                if isinstance(member.value, str) and member.value.upper() == upper:
+                    return member
         if log_warning:
             logging.warning("Value '%s' not found in enum %s", value, typ.__name__)
     except (AttributeError, TypeError):
         logging.error("Provided class %s is not a valid Enum", typ)
     return None
+
+
+def calculate_litter_level(
+    is_cleaning: bool,
+    new_level: int,
+    old_level: int,
+    expiration: datetime | None,
+) -> tuple[int, datetime | None, float]:
+    """Calculate the robot's litter level percentage.
+
+    The litterLevel field from the API is a millimeter distance to the
+    top center time of flight (ToF) sensor and is interpreted as:
+
+    ~ 441 full
+    ~ 451 nominal
+    ~ 461 low
+    ~ 471 very low
+
+    Args:
+        is_cleaning: True if robot is currently in a cleaning cycle.
+        new_level: Current raw litter measurement (millimeters).
+        old_level: Previous stored litter level.
+        expiration: Previous expiration datetime for stored level.
+
+    Returns:
+        Tuple:
+            - Updated current_level
+            - Updated expiration
+            - Litter level percentage (rounded to nearest 10)
+
+    """
+    now = datetime.now(timezone.utc)
+    level = old_level
+
+    if is_cleaning:
+        expiration = now + timedelta(minutes=1)
+    elif expiration is None or expiration < now or abs(old_level - new_level) < 10:
+        level = new_level
+
+    percent = max(round(100 - (level - 440) / 0.6, -1), 0)
+    return level, expiration, percent

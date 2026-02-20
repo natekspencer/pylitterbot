@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
+import re
+from enum import Enum, IntEnum, unique
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
@@ -56,6 +57,35 @@ class LitterRobot4Command:
     SET_CLUMP_TIME = "setClumpTime"
     SET_NIGHT_LIGHT_VALUE = "setNightLightValue"
     SHORT_RESET_PRESS = "shortResetPress"
+
+
+class LitterRobot5Command:
+    """Known commands that can be sent to trigger an action or setting for a Litter-Robot 5."""
+
+    # POST /robots/{serial}/commands - operational commands
+    CLEAN_CYCLE = "CLEAN_CYCLE"
+    POWER_ON = "POWER_ON"
+    POWER_OFF = "POWER_OFF"
+    REMOTE_RESET = "REMOTE_RESET"
+    FACTORY_RESET = "FACTORY_RESET"
+    RESET_WASTE_LEVEL = "RESET_WASTE_LEVEL"
+    CHANGE_FILTER = "CHANGE_FILTER"
+    ONBOARD_PTAG_ON = "ONBOARD_PTAG_ON"
+    ONBOARD_PTAG_OFF = "ONBOARD_PTAG_OFF"
+    PRIVACY_MODE_ON = "PRIVACY_MODE_ON"
+    PRIVACY_MODE_OFF = "PRIVACY_MODE_OFF"
+    # Discovered via API 422 response but unverified on litter robot hardware:
+    # NO_OP = "NO_OP"  # valid per API enum but returns INTERNAL_SERVER_ERROR
+    # FEED_NOW = "FEED_NOW"  # likely for Feeder-Robot or litter hopper accessory
+    # DISCARD_MEAL = "DISCARD_MEAL"  # likely for Feeder-Robot or litter hopper accessory
+
+    # PATCH /robots/{serial} - settings keys
+    CYCLE_DELAY = "cycleDelay"
+    KEYPAD_LOCKED = "isKeypadLocked"
+    LITTER_ROBOT_SETTINGS = "litterRobotSettings"
+    NIGHT_LIGHT_SETTINGS = "nightLightSettings"
+    PANEL_SETTINGS = "panelSettings"
+    SOUND_SETTINGS = "soundSettings"
 
 
 class LitterBoxStatusMixIn:
@@ -137,3 +167,86 @@ class LitterBoxStatus(LitterBoxStatusMixIn, Enum):
             )
             + ([cls.DRAWER_FULL_1, cls.DRAWER_FULL_2] if almost_full else [])
         ]
+
+
+@unique
+class BrightnessLevel(IntEnum):
+    """Brightness level of a Robot supporting brightness."""
+
+    LOW = 25
+    MEDIUM = 50
+    HIGH = 100
+
+
+@unique
+class GlobeMotorFaultStatus(Enum):
+    """Globe motor fault status."""
+
+    NONE = "NONE"
+    FAULT_CLEAR = "FAULT_CLEAR"
+    FAULT_TIMEOUT = "FAULT_TIMEOUT"
+    FAULT_DISCONNECT = "FAULT_DISCONNECT"
+    FAULT_UNDERVOLTAGE = "FAULT_UNDERVOLTAGE"
+    FAULT_OVERTORQUE_AMP = "FAULT_OVERTORQUE_AMP"
+    FAULT_OVERTORQUE_SLOPE = "FAULT_OVERTORQUE_SLOPE"
+    FAULT_PINCH = "FAULT_PINCH"
+    FAULT_ALL_SENSORS = "FAULT_ALL_SENSORS"
+    FAULT_UNKNOWN = "FAULT_UNKNOWN"
+
+    @classmethod
+    def from_raw(cls, raw: str | None) -> GlobeMotorFaultStatus:
+        """Convert from a raw string."""
+        if raw is None or (value := raw.strip()) == "":
+            return cls.NONE
+
+        # LR4 already matches exactly
+        if value in cls._value2member_map_:
+            return cls(value)
+
+        # Convert PascalCase to SNAKE_CASE
+        value = re.sub(r"(?<!^)(?=[A-Z])", "_", value).upper()
+
+        # Strip common LR5 prefixes
+        value = value.replace("MTR_", "")
+        value = value.replace("MOTOR_", "")
+
+        # Ensure FAULT_ prefix
+        if not value.startswith("FAULT_") and value != "NONE":
+            value = f"FAULT_{value}"
+
+        try:
+            return cls(value)
+        except ValueError:
+            return cls.FAULT_UNKNOWN
+
+
+@unique
+class HopperStatus(Enum):
+    """Hopper status."""
+
+    ENABLED = "ENABLED"
+    DISABLED = "DISABLED"
+    MOTOR_FAULT_SHORT = "MOTOR_FAULT_SHORT"
+    MOTOR_OT_AMPS = "MOTOR_OT_AMPS"
+    MOTOR_DISCONNECTED = "MOTOR_DISCONNECTED"
+    EMPTY = "EMPTY"
+
+
+@unique
+class LitterLevelState(Enum):
+    """Litter level state."""
+
+    OVERFILL = "OVERFILL"
+    OPTIMAL = "OPTIMAL"
+    REFILL = "REFILL"
+    LOW = "LOW"
+    EMPTY = "EMPTY"
+
+
+@unique
+class NightLightMode(Enum):
+    """Night light mode of a Robot."""
+
+    OFF = "OFF"
+    ON = "ON"
+    AUTO = "AUTO"

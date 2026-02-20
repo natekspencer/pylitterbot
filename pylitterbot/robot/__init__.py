@@ -201,3 +201,8 @@ class Robot(Event):
     def parse_websocket_message(data: dict) -> dict | None:
         """Parse a wesocket message."""
         raise NotImplementedError()
+
+    @classmethod
+    async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:
+        """Fetch robot data for account."""
+        raise NotImplementedError()

@@ -3,21 +3,25 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time, timedelta, timezone
-from enum import Enum, IntEnum, unique
+from datetime import datetime, time, timedelta
+from enum import Enum, unique
 from json import dumps
 from typing import TYPE_CHECKING, Any, Dict, Union, cast
 from uuid import uuid4
-
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:  # pragma: no cover
-    from backports.zoneinfo import ZoneInfo  # type: ignore
+from zoneinfo import ZoneInfo
 
 from ..activity import Activity, Insight
-from ..enums import LitterBoxStatus, LitterRobot4Command
+from ..enums import (
+    BrightnessLevel,
+    GlobeMotorFaultStatus,
+    HopperStatus,
+    LitterBoxStatus,
+    LitterLevelState,
+    LitterRobot4Command,
+    NightLightMode,
+)
 from ..exceptions import InvalidCommandException, LitterRobotException
-from ..utils import encode, to_enum, to_timestamp, utcnow
+from ..utils import calculate_litter_level, encode, to_enum, to_timestamp, utcnow
 from .litterrobot import LitterRobot
 from .models import LITTER_ROBOT_4_MODEL
 
@@ -61,15 +65,6 @@ DISPLAY_CODE_STATUS_MAP = {"DC_CAT_DETECT": LitterBoxStatus.CAT_DETECTED}
 LITTER_LEVEL_EMPTY = 500
 
 
-@unique
-class BrightnessLevel(IntEnum):
-    """Brightness level of a Litter-Robot 4 unit."""
-
-    LOW = 25
-    MEDIUM = 50
-    HIGH = 100
-
-
 # Deprecated. Use BrightnessLevel.
 NightLightLevel = BrightnessLevel
 
@@ -95,54 +90,6 @@ class FirmwareUpdateStatus(Enum):
     COMPLETED = "COMPLETED"
     CANCELLATION_IN_PROGRESS = "CANCELLATION_IN_PROGRESS"
     DELETION_IN_PROGRESS = "DELETION_IN_PROGRESS"
-
-
-@unique
-class HopperStatus(Enum):
-    """Hopper status."""
-
-    ENABLED = "ENABLED"
-    DISABLED = "DISABLED"
-    MOTOR_FAULT_SHORT = "MOTOR_FAULT_SHORT"
-    MOTOR_OT_AMPS = "MOTOR_OT_AMPS"
-    MOTOR_DISCONNECTED = "MOTOR_DISCONNECTED"
-    EMPTY = "EMPTY"
-
-
-@unique
-class GlobeMotorFaultStatus(Enum):
-    """Globe motor fault status."""
-
-    NONE = "NONE"
-    FAULT_CLEAR = "FAULT_CLEAR"
-    FAULT_TIMEOUT = "FAULT_TIMEOUT"
-    FAULT_DISCONNECT = "FAULT_DISCONNECT"
-    FAULT_UNDERVOLTAGE = "FAULT_UNDERVOLTAGE"
-    FAULT_OVERTORQUE_AMP = "FAULT_OVERTORQUE_AMP"
-    FAULT_OVERTORQUE_SLOPE = "FAULT_OVERTORQUE_SLOPE"
-    FAULT_PINCH = "FAULT_PINCH"
-    FAULT_ALL_SENSORS = "FAULT_ALL_SENSORS"
-    FAULT_UNKNOWN = "FAULT_UNKNOWN"
-
-
-@unique
-class LitterLevelState(Enum):
-    """Litter level state."""
-
-    OVERFILL = "OVERFILL"
-    OPTIMAL = "OPTIMAL"
-    REFILL = "REFILL"
-    LOW = "LOW"
-    EMPTY = "EMPTY"
-
-
-@unique
-class NightLightMode(Enum):
-    """Night light mode of a Litter-Robot 4 unit."""
-
-    OFF = "OFF"
-    ON = "ON"
-    AUTO = "AUTO"
 
 
 @unique
@@ -240,15 +187,15 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return self._data.get("isFirmwareUpdateTriggered") is True
 
     @property
-    def globe_motor_fault_status(self) -> GlobeMotorFaultStatus | None:
+    def globe_motor_fault_status(self) -> GlobeMotorFaultStatus:
         """Return the globe motor fault status."""
-        return to_enum(self._data.get("globeMotorFaultStatus"), GlobeMotorFaultStatus)
+        return GlobeMotorFaultStatus.from_raw(self._data.get("globeMotorFaultStatus"))
 
     @property
-    def globe_motor_retract_fault_status(self) -> GlobeMotorFaultStatus | None:
+    def globe_motor_retract_fault_status(self) -> GlobeMotorFaultStatus:
         """Return the globe motor retract fault status."""
         value = self._data.get("globeMotorRetractFaultStatus")
-        return to_enum(value, GlobeMotorFaultStatus)
+        return GlobeMotorFaultStatus.from_raw(value)
 
     @property
     def hopper_status(self) -> HopperStatus | None:
@@ -261,7 +208,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return self._data.get("isDFIFull") is True
 
     @property
-    def is_hopper_removed(self) -> bool | None:
+    def is_hopper_removed(self) -> bool:
         """Return `True` if the hopper is removed/disabled."""
         return self._data.get("isHopperRemoved") is True
 
@@ -297,17 +244,12 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         ~ 461 low
         ~ 471 very low
         """
+        is_cleaning = self._data.get("robotStatus") == "ROBOT_CLEAN"
         new_level = int(self._data.get("litterLevel", LITTER_LEVEL_EMPTY))
-        now = datetime.now(timezone.utc)
-        if self._data.get("robotStatus") == "ROBOT_CLEAN":
-            self._litter_level_exp = now + timedelta(minutes=1)
-        elif (
-            self._litter_level_exp is None
-            or self._litter_level_exp < now
-            or abs(self._litter_level - new_level) < 10
-        ):
-            self._litter_level = new_level
-        return max(round(100 - (self._litter_level - 440) / 0.6, -1), 0)
+        self._litter_level, self._litter_level_exp, percent = calculate_litter_level(
+            is_cleaning, new_level, self._litter_level, self._litter_level_exp
+        )
+        return percent
 
     @property
     def litter_level_state(self) -> LitterLevelState | None:
@@ -877,3 +819,31 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         elif data_type not in ("start_ack", "ka", "complete"):
             _LOGGER.debug(data)
         return None
+
+    @classmethod
+    async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:
+        """Fetch robot data for account."""
+        result = await account.session.post(
+            LR4_ENDPOINT,
+            json={
+                "query": f"""
+                    query GetLR4($userId: String!) {{
+                        getLitterRobot4ByUser(userId: $userId) {LITTER_ROBOT_4_MODEL}
+                    }}
+                """,
+                "variables": {"userId": account.user_id},
+            },
+        )
+
+        if not isinstance(result, dict):
+            return []
+
+        data = result.get("data")
+        if not isinstance(data, dict):
+            return []
+
+        robots = data.get("getLitterRobot4ByUser")
+        if isinstance(robots, list):
+            return [r for r in robots if isinstance(r, dict)]
+
+        return []

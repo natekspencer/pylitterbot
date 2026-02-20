@@ -138,7 +138,8 @@ I appreciate your contributions! 🚀
 
 ## TODO
 
-- Add support for Litter-Robot 5/EVO models
+- Validate Litter-Robot EVO model data/endpoints if it differs from Litter-Robot 5
+- Add support for Litter-Robot 5 cameras
 
 ---
 
