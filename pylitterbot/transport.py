@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generic, TypeVar
 
 from aiohttp import ClientError, ClientWebSocketResponse, WSMsgType
+from aiohttp.typedefs import URL
 
 from .utils import utcnow
 
@@ -114,7 +115,7 @@ class WebSocketMonitor(Transport):
                 task_to_await.cancel()
 
     async def _run(self) -> None:
-        """Run the main reconnect loop."""
+        """Run the WebSocket monitor."""
         delay = self._reconnect_base
         while not self._stop_event.is_set():
             try:
@@ -138,9 +139,10 @@ class WebSocketMonitor(Transport):
         config = await self._protocol.ws_config_factory(robot)
         connection_init = config.pop("connection_init", None)
 
+        _LOGGER.debug("WebSocket connecting: %s", URL(config["url"]).with_query(None))
         session = robot._account.session.websession
         async with session.ws_connect(**config) as ws:
-            _LOGGER.debug("WebSocket connected: %s", ws._response.url.with_query(None))
+            _LOGGER.debug("WebSocket connected")
             self._ws = ws
             if connection_init:
                 await ws.send_json(connection_init)
@@ -185,6 +187,8 @@ class PollingTransport(Transport):
 
     async def start(self, robot: Robot) -> None:
         """Start polling *robot*."""
+        if self._task and not self._task.done():
+            return  # already running
         self._stop_event.clear()
         self._task = asyncio.create_task(self._run(robot))
 
@@ -198,6 +202,7 @@ class PollingTransport(Transport):
                 self._task.cancel()
 
     async def _run(self, robot: Robot) -> None:
+        """Run the polling transport."""
         while not self._stop_event.is_set():
             try:
                 await robot.refresh()

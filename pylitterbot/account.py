@@ -242,7 +242,7 @@ class Account:
         return await self.session.get_bearer_authorization()
 
     def get_monitor_for(
-        self, robot_cls: type, protocol: WebSocketProtocol
+        self, robot_cls: type[Robot], protocol: WebSocketProtocol
     ) -> WebSocketMonitor:
         """Return (creating if needed) the WebSocket monitor for this account + robot type."""
         if robot_cls not in self._monitors:

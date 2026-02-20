@@ -33,6 +33,7 @@ class Robot(Event):
     _path: str
 
     _transport: Transport | None = None
+    _subscribed: bool = False
 
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a robot."""
@@ -184,10 +185,8 @@ class Robot(Event):
     def _build_transport(self) -> Transport:
         """Return the Transport instance for this robot.
 
-        Default: no-op (raises NotImplementedError so old subclasses that
-        override ``_subscription_loop`` directly keep working).
         Override in subclasses:
-          - WebSocket robots → return cls._monitor  (shared WebSocketMonitor)
+          - WebSocket robots → return self._account.get_monitor_for(type(self), self._WS_PROTOCOL)
           - Polling robots  → return PollingTransport(interval=30)
         """
         raise NotImplementedError(
@@ -197,13 +196,18 @@ class Robot(Event):
 
     async def subscribe(self) -> None:
         """Start receiving updates (WebSocket or polling)."""
+        if self._subscribed:
+            _LOGGER.debug("%s already subscribed", self.name)
+            return
         if self._transport is None:
             self._transport = self._build_transport()
         await self._transport.start(self)
+        self._subscribed = True
         _LOGGER.debug("%s subscribed to updates", self.name)
 
     async def unsubscribe(self) -> None:
         """Stop receiving updates."""
         if self._transport is not None:
             await self._transport.stop(self)
+            self._subscribed = False
             _LOGGER.debug("%s unsubscribed from updates", self.name)

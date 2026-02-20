@@ -834,8 +834,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     async def _ws_subscribe(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         """Subscribe to the WebSocket for updates."""
-        await self._ws_unsubscribe(ws)
-
         self._ws_subscription_id = str(uuid4())
         auth = await self._account.get_bearer_authorization()
         await ws.send_json(
@@ -867,6 +865,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         """Unsubscribe from WebSocket updates."""
         if self._ws_subscription_id:
             await ws.send_json({"id": self._ws_subscription_id, "type": "stop"})
+            self._ws_subscription_id = None
 
     def _ws_message_handler(self, data: dict) -> None:
         """Handle a message from the WebSocket."""
