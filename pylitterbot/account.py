@@ -146,6 +146,7 @@ class Account:
         for result in results:
             if isinstance(result, BaseException):
                 _LOGGER.warning("Error during unsubscribe: %s", result)
+        self._monitors.clear()
         await self.session.close()
 
     async def refresh_user(self) -> None:

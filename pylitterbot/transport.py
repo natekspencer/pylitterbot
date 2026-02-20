@@ -23,6 +23,17 @@ _RobotT = TypeVar("_RobotT", bound="Robot")
 BACKOFF_SECONDS_MAX = 300.0
 
 
+async def cancel_task(*tasks: asyncio.Task | None) -> None:
+    """Cancel task(s)."""
+    for task in tasks:
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+
 @dataclass
 class WebSocketProtocol(Generic[_RobotT]):
     """All WebSocket behaviour for a given robot type."""
@@ -112,7 +123,7 @@ class WebSocketMonitor(Transport):
             try:
                 await asyncio.wait_for(task_to_await, timeout=5.0)
             except asyncio.TimeoutError:
-                task_to_await.cancel()
+                await cancel_task(task_to_await)
 
     async def _run(self) -> None:
         """Run the WebSocket monitor."""
@@ -147,31 +158,32 @@ class WebSocketMonitor(Transport):
         async with session.ws_connect(**config) as ws:
             _LOGGER.debug("WebSocket connected")
             self._ws = ws
-            if connection_init:
-                await ws.send_json(connection_init)
+            try:
+                if connection_init:
+                    await ws.send_json(connection_init)
 
-            if self._protocol.subscribe_factory:
-                for robot in list(self._listeners.values()):
-                    await self._protocol.subscribe_factory(robot, ws)
+                if self._protocol.subscribe_factory:
+                    for robot in list(self._listeners.values()):
+                        await self._protocol.subscribe_factory(robot, ws)
 
-            async for msg in ws:
-                if self._stop_event.is_set():
-                    await ws.close()
-                    return
-                self._last_received = utcnow()
-                if msg.type == WSMsgType.TEXT:
-                    if self._protocol.message_handler:
-                        for robot in list(self._listeners.values()):
-                            try:
-                                self._protocol.message_handler(robot, msg.json())
-                            except Exception:
-                                _LOGGER.exception(
-                                    "Error dispatching WS message to %r", robot
-                                )
-                elif msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE):
-                    break
-
-            self._ws = None
+                async for msg in ws:
+                    if self._stop_event.is_set():
+                        await ws.close()
+                        return
+                    self._last_received = utcnow()
+                    if msg.type == WSMsgType.TEXT:
+                        if self._protocol.message_handler:
+                            for robot in list(self._listeners.values()):
+                                try:
+                                    self._protocol.message_handler(robot, msg.json())
+                                except Exception:
+                                    _LOGGER.exception(
+                                        "Error dispatching WS message to %r", robot
+                                    )
+                    elif msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE):
+                        break
+            finally:
+                self._ws = None
 
 
 class PollingTransport(Transport):
@@ -202,11 +214,7 @@ class PollingTransport(Transport):
             try:
                 await asyncio.wait_for(asyncio.shield(self._task), timeout=5.0)
             except asyncio.TimeoutError:
-                self._task.cancel()
-                try:
-                    await self._task
-                except asyncio.CancelledError:
-                    pass
+                await cancel_task(self._task)
 
     async def _run(self, robot: Robot) -> None:
         """Run the polling transport."""
