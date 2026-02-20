@@ -94,6 +94,11 @@ class WebSocketMonitor(Transport):
             if self._task is None or self._task.done():
                 self._stop_event.clear()
                 self._task = asyncio.create_task(self._run())
+            elif self._stop_event.is_set():
+                # A concurrent stop() set the event while its task is still
+                # winding down.  Clear it so _run() reconnects once _connect()
+                # returns, rather than exiting and leaving this listener orphaned.
+                self._stop_event.clear()
             elif self._ws is not None and self._protocol.subscribe_factory:
                 await self._protocol.subscribe_factory(robot, self._ws)
 
@@ -121,7 +126,7 @@ class WebSocketMonitor(Transport):
         # Await outside the lock so concurrent start() calls don't deadlock
         if task_to_await is not None:
             try:
-                await asyncio.wait_for(task_to_await, timeout=5.0)
+                await asyncio.wait_for(asyncio.shield(task_to_await), timeout=5.0)
             except asyncio.TimeoutError:
                 await cancel_task(task_to_await)
 
