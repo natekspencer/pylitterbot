@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, time, timedelta, timezone
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
+
+import aiohttp
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
 from ..exceptions import InvalidCommandException
+from ..transport import WebSocketMonitor, WebSocketProtocol
 from ..utils import round_time, to_timestamp, today_at_time, urljoin, utcnow
 from .litterrobot import MINIMUM_CYCLES_LEFT_DEFAULT, LitterRobot
 
@@ -279,25 +282,6 @@ class LitterRobot3(LitterRobot):
             ],
         )
 
-    async def send_subscribe_request(self, send_stop: bool = False) -> None:
-        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
-        if not self._ws:
-            return
-        await self._ws.send_json({"action": "ping"})
-
-    async def send_unsubscribe_request(self) -> None:
-        """Send an unsubscribe request."""
-        # Litter-Robot 3 does not have a subscription id, so this just does nothing
-
-    @staticmethod
-    async def get_websocket_config(account: Account) -> dict[str, Any]:
-        """Get wesocket config."""
-        return {
-            "url": WEBSOCKET_ENDPOINT,
-            "params": None,
-            "headers": {"authorization": await account.get_bearer_authorization()},
-        }
-
     @staticmethod
     def parse_websocket_message(data: dict) -> dict | None:
         """Parse a wesocket message."""
@@ -317,3 +301,31 @@ class LitterRobot3(LitterRobot):
             return [r for r in result if isinstance(r, dict)]
 
         return []
+
+    async def _ws_config_factory(self) -> dict[str, Any]:
+        """Return the WebSocket configuration."""
+        auth = await self._account.get_bearer_authorization()
+        return {
+            "url": WEBSOCKET_ENDPOINT,
+            "headers": {"authorization": auth},
+        }
+
+    async def _ws_subscribe(self, ws: aiohttp.ClientWebSocketResponse) -> None:
+        """Subscribe to the WebSocket for updates."""
+        await ws.send_json({"action": "ping"})
+
+    def _ws_message_handler(self, data: dict) -> None:
+        """Handle a message from the WebSocket."""
+        parsed = self.parse_websocket_message(data)
+        if isinstance(parsed, dict) and str(parsed.get(self._data_id)) == self.id:
+            self._update_data(parsed)
+
+    _WS_PROTOCOL: ClassVar[WebSocketProtocol] = WebSocketProtocol(
+        ws_config_factory=_ws_config_factory,
+        subscribe_factory=_ws_subscribe,
+        message_handler=_ws_message_handler,
+    )
+
+    def _build_transport(self) -> WebSocketMonitor:
+        """Build the transport."""
+        return self._account.get_monitor_for(type(self), self._WS_PROTOCOL)

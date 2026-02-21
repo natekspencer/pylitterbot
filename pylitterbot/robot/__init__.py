@@ -8,10 +8,10 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
-from aiohttp import ClientWebSocketResponse
 from deepdiff import DeepDiff
 
 from ..event import EVENT_UPDATE, Event
+from ..transport import Transport
 from ..utils import to_timestamp, urljoin
 
 if TYPE_CHECKING:
@@ -32,6 +32,9 @@ class Robot(Event):
 
     _path: str
 
+    _transport: Transport | None = None
+    _subscribed: bool = False
+
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a robot."""
         super().__init__()
@@ -39,9 +42,6 @@ class Robot(Event):
         self._account = account
 
         self._is_loaded = False
-
-        self._ws: ClientWebSocketResponse | None = None
-        self._ws_subscription_id: str | None = None
 
         if data:
             if data.get(self._data_serial) is None:
@@ -122,31 +122,6 @@ class Robot(Event):
     async def set_panel_lockout(self, value: bool) -> bool:
         """Turn the panel lock on or off."""
 
-    @abstractmethod
-    async def send_subscribe_request(self, send_stop: bool = False) -> None:
-        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
-
-    async def subscribe(self) -> None:
-        """Open a web socket connection to receive updates."""
-        try:
-            self._ws = await self._account.ws_connect(self)
-            await self.send_subscribe_request()
-            _LOGGER.debug("%s subscribed to updates", self.name)
-        except Exception as ex:  # pylint: disable=broad-except
-            _LOGGER.error(ex)
-
-    async def send_unsubscribe_request(self) -> None:
-        """Send an unsubscribe request."""
-        if self._ws and self._ws_subscription_id:
-            await self._ws.send_json({"id": self._ws_subscription_id, "type": "stop"})
-
-    async def unsubscribe(self) -> None:
-        """Unsubscribe from the web socket."""
-        if self._ws is not None and not self._ws.closed:
-            await self.send_unsubscribe_request()
-            self._ws = None
-            _LOGGER.debug("%s unsubscribed from updates", self.name)
-
     def _update_data(
         self,
         data: dict,
@@ -192,17 +167,37 @@ class Robot(Event):
             urljoin(self._path, subpath), json=json, **kwargs
         )
 
-    @staticmethod
-    async def get_websocket_config(account: Account) -> dict[str, Any]:
-        """Get wesocket config."""
-        raise NotImplementedError()
-
-    @staticmethod
-    def parse_websocket_message(data: dict) -> dict | None:
-        """Parse a wesocket message."""
-        raise NotImplementedError()
-
     @classmethod
     async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:
         """Fetch robot data for account."""
         raise NotImplementedError()
+
+    def _build_transport(self) -> Transport:
+        """Return the Transport instance for this robot.
+
+        Override in subclasses:
+          - WebSocket robots → return self._account.get_monitor_for(type(self), self._WS_PROTOCOL)
+          - Polling robots  → return PollingTransport(interval=30)
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement _build_transport() "
+            "or override subscribe()/unsubscribe() directly."
+        )
+
+    async def subscribe(self) -> None:
+        """Start receiving updates (WebSocket or polling)."""
+        if self._subscribed:
+            _LOGGER.debug("%s already subscribed", self.name)
+            return
+        if self._transport is None:
+            self._transport = self._build_transport()
+        await self._transport.start(self)
+        self._subscribed = True
+        _LOGGER.debug("%s subscribed to updates", self.name)
+
+    async def unsubscribe(self) -> None:
+        """Stop receiving updates."""
+        if self._transport is not None:
+            await self._transport.stop(self)
+            self._subscribed = False
+            _LOGGER.debug("%s unsubscribed from updates", self.name)

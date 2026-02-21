@@ -5,12 +5,15 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from datetime import datetime, time, timedelta
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, TypeVar, cast
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+import aiohttp
+
 from ..enums import FeederRobotCommand
 from ..exceptions import InvalidCommandException
+from ..transport import WebSocketMonitor, WebSocketProtocol
 from ..utils import decode, to_timestamp, utcnow
 from . import Robot
 from .models import FEEDER_ROBOT_MODEL
@@ -59,6 +62,8 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
 
     _last_updated_at: str | None = None
     _next_feeding: datetime | None = None
+
+    _ws_subscription_id: str | None = None
 
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a Feeder-Robot."""
@@ -367,48 +372,6 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
             self._update_data(data)
         return self.panel_lock_enabled == value
 
-    async def send_subscribe_request(self, send_stop: bool = False) -> None:
-        """Send a subscribe request and, optionally, unsubscribe from a previous subscription."""
-        if not self._ws:
-            return
-        if send_stop:
-            await self.send_unsubscribe_request()
-        self._ws_subscription_id = str(uuid4())
-
-        await self._ws.send_json(
-            {
-                "type": "connection_init",
-                "payload": {
-                    "headers": {
-                        "Authorization": await self._account.get_bearer_authorization()
-                    }
-                },
-            }
-        )
-        await self._ws.send_json(
-            {
-                "type": "start",
-                "id": self._ws_subscription_id,
-                "payload": {
-                    "query": f"""
-                            subscription GetFeeder($id: Int!) {{
-                                feeder_unit_by_pk(id: $id) {FEEDER_ROBOT_MODEL}
-                            }}
-                        """,
-                    "variables": {"id": self.id},
-                },
-            }
-        )
-
-    @staticmethod
-    async def get_websocket_config(account: Account) -> dict[str, Any]:
-        """Get wesocket config."""
-        return {
-            "url": FEEDER_ENDPOINT,
-            "params": None,
-            "headers": {"sec-websocket-protocol": "graphql-ws"},
-        }
-
     @staticmethod
     def parse_websocket_message(data: dict) -> dict | None:
         """Parse a wesocket message."""
@@ -446,3 +409,56 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
             return [r for r in robots if isinstance(r, dict)]
 
         return []
+
+    async def _ws_config_factory(self) -> dict[str, Any]:
+        """Return the WebSocket configuration."""
+        auth = await self._account.get_bearer_authorization()
+        return {
+            "url": FEEDER_ENDPOINT,
+            "headers": {"sec-websocket-protocol": "graphql-ws"},
+            "connection_init": {
+                "type": "connection_init",
+                "payload": {"headers": {"Authorization": auth}},
+            },
+        }
+
+    async def _ws_subscribe(self, ws: aiohttp.ClientWebSocketResponse) -> None:
+        """Subscribe to the WebSocket for updates."""
+        self._ws_subscription_id = str(uuid4())
+        await ws.send_json(
+            {
+                "type": "start",
+                "id": self._ws_subscription_id,
+                "payload": {
+                    "query": f"""
+                        subscription GetFeeder($id: Int!) {{
+                            feeder_unit_by_pk(id: $id) {FEEDER_ROBOT_MODEL}
+                        }}
+                    """,
+                    "variables": {"id": self.id},
+                },
+            }
+        )
+
+    async def _ws_unsubscribe(self, ws: aiohttp.ClientWebSocketResponse) -> None:
+        """Unsubscribe from WebSocket updates."""
+        if self._ws_subscription_id:
+            await ws.send_json({"id": self._ws_subscription_id, "type": "stop"})
+            self._ws_subscription_id = None
+
+    def _ws_message_handler(self, data: dict) -> None:
+        """Handle a message from the WebSocket."""
+        parsed = self.parse_websocket_message(data)
+        if isinstance(parsed, dict) and str(parsed.get(self._data_id)) == self.id:
+            self._update_data(parsed)
+
+    _WS_PROTOCOL: ClassVar[WebSocketProtocol] = WebSocketProtocol(
+        ws_config_factory=_ws_config_factory,
+        subscribe_factory=_ws_subscribe,
+        unsubscribe_factory=_ws_unsubscribe,
+        message_handler=_ws_message_handler,
+    )
+
+    def _build_transport(self) -> WebSocketMonitor:
+        """Build the transport."""
+        return self._account.get_monitor_for(type(self), self._WS_PROTOCOL)

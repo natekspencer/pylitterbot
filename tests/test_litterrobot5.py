@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 from aiohttp import ClientConnectionError
-from aiohttp.typedefs import URL
 from aioresponses import aioresponses
 from freezegun.api import FrozenDateTimeFactory
+from yarl import URL
 
 from pylitterbot import Account
 from pylitterbot.enums import GlobeMotorFaultStatus, LitterBoxStatus
@@ -1129,18 +1129,6 @@ async def test_litter_robot_5_last_seen(
     assert robot.last_seen is not None
     assert robot.last_seen.year == 2025
     assert robot.last_seen.month == 12
-
-    await robot._account.disconnect()
-
-
-async def test_litter_robot_5_send_subscribe_request(
-    mock_account: Account,
-) -> None:
-    """Tests that send_subscribe_request is a no-op for LR5."""
-    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
-    # Should not raise
-    await robot.send_subscribe_request()
-    await robot.send_subscribe_request(send_stop=True)
 
     await robot._account.disconnect()
 
