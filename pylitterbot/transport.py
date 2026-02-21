@@ -137,17 +137,25 @@ class WebSocketMonitor(Transport):
             try:
                 await self._connect()
                 delay = self._reconnect_base  # reset on clean close
-            except (ClientError, OSError) as exc:
-                _LOGGER.warning(
-                    "WebSocket error (%s); reconnecting in %.1fs", exc, delay
-                )
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                if isinstance(exc, (ClientError, OSError)):
+                    _LOGGER.warning(
+                        "WebSocket error (%s); reconnecting in %.1fs", exc, delay
+                    )
+                else:
+                    _LOGGER.exception(
+                        "Unexpected error in WebSocket monitor; reconnecting in %.1fs",
+                        delay,
+                    )
+
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=delay)
                 except asyncio.TimeoutError:
                     pass  # normal: keep looping
+
                 delay = min(delay * 2, BACKOFF_SECONDS_MAX)
-            except asyncio.CancelledError:
-                break
 
     async def _connect(self) -> None:
         """Open one WebSocket session and dispatch messages."""
@@ -227,11 +235,18 @@ class PollingTransport(Transport):
         while not self._stop_event.is_set():
             try:
                 await robot.refresh()
+            except Exception as exc:
+                delay = min(delay * 1.5, BACKOFF_SECONDS_MAX)
+                _LOGGER.warning(
+                    "Polling refresh failed for %r, retrying in %.1fs: %s",
+                    robot.name,
+                    delay,
+                    exc,
+                )
+            else:
                 self._last_received = utcnow()
                 delay = self._interval  # reset on success
-            except Exception as exc:
-                _LOGGER.warning("Polling refresh failed for %r: %s", robot, exc)
-                delay = min(delay * 2, BACKOFF_SECONDS_MAX)
+
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=delay)
             except asyncio.TimeoutError:
