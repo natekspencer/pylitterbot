@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 
-from ..enums import FeederRobotCommand
+from ..enums import FeederRobotCapability, FeederRobotCommand
 from ..exceptions import InvalidCommandException
 from ..transport import WebSocketMonitor, WebSocketProtocol
 from ..utils import decode, to_timestamp, utcnow
@@ -31,6 +31,16 @@ COMMAND_ENDPOINT = (
 )
 COMMAND_ENDPOINT_KEY = decode(
     "dzJ0UEZiamxQMTNHVW1iOGRNalVMNUIyWXlQVkQzcEo3RXk2Zno4dg=="
+)
+
+FR_CAPABILITIES = (
+    FeederRobotCapability.FOOD_LEVEL
+    | FeederRobotCapability.FOOD_DISPENSING
+    | FeederRobotCapability.FEEDING_SCHEDULE
+    | FeederRobotCapability.MEAL_INSERT_SIZE
+    | FeederRobotCapability.SLEEP_MODE
+    | FeederRobotCapability.PANEL_LOCKOUT
+    | FeederRobotCapability.GIVE_SNACK
 )
 
 FOOD_LEVEL_MAP = {9: 100, 8: 70, 7: 60, 6: 50, 5: 40, 4: 30, 3: 20, 2: 10, 1: 5, 0: 0}
@@ -73,6 +83,11 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
     def _state_info(self, key: str, default: _T | None = None) -> _T | Any:
         """Get an attribute from the data.state.info section."""
         return cast(_T, self._data["state"]["info"].get(key, default))
+
+    @property
+    def capabilities(self) -> FeederRobotCapability:
+        """Return the capabilities of this robot."""
+        return FR_CAPABILITIES
 
     @property
     def firmware(self) -> str:

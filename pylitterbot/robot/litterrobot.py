@@ -9,13 +9,20 @@ from datetime import datetime, time
 from typing import Any, cast
 
 from ..activity import Activity, Insight
-from ..enums import LitterBoxCommand, LitterBoxStatus
+from ..enums import LitterBoxCommand, LitterBoxStatus, LitterRobotCapability
 from ..utils import to_timestamp
 from . import Robot
 
 _LOGGER = logging.getLogger(__name__)
 
-
+_BASE_CAPABILITIES = (
+    LitterRobotCapability.WASTE_DRAWER
+    | LitterRobotCapability.CLEAN_CYCLES
+    | LitterRobotCapability.CYCLE_WAIT_TIME
+    | LitterRobotCapability.PANEL_LOCKOUT
+    | LitterRobotCapability.NIGHT_LIGHT_MODE
+    | LitterRobotCapability.SLEEP_MODE
+)
 MINIMUM_CYCLES_LEFT_DEFAULT = 3
 
 

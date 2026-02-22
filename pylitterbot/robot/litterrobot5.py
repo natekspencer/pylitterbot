@@ -18,12 +18,13 @@ from ..enums import (
     LitterBoxStatus,
     LitterLevelState,
     LitterRobot5Command,
+    LitterRobotCapability,
     NightLightMode,
 )
 from ..exceptions import InvalidCommandException, LitterRobotException
 from ..transport import PollingTransport
 from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin, utcnow
-from .litterrobot import LitterRobot
+from .litterrobot import _BASE_CAPABILITIES, LitterRobot
 
 if TYPE_CHECKING:
     from ..account import Account
@@ -31,6 +32,15 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 LR5_ENDPOINT = "https://ub.prod.iothings.site"
+LR5_CAPABILITIES = (
+    _BASE_CAPABILITIES
+    | LitterRobotCapability.RESET_WASTE_DRAWER
+    | LitterRobotCapability.LITTER_LEVEL
+    | LitterRobotCapability.PET_WEIGHT
+    | LitterRobotCapability.NIGHT_LIGHT_BRIGHTNESS
+    | LitterRobotCapability.PANEL_BRIGHTNESS
+    | LitterRobotCapability.RESET
+)
 # Maps for state.state field (StPascalCase format from real API)
 LR5_STATE_MAP = {
     "StRobotBonnet": LitterBoxStatus.BONNET_REMOVED,
@@ -126,6 +136,14 @@ class LitterRobot5(LitterRobot):
         """Initialize a Litter-Robot 5."""
         super().__init__(data, account)
         self._path = LR5_ENDPOINT
+
+    @property
+    def capabilities(self) -> LitterRobotCapability:
+        """Return the capabilities of this robot."""
+        caps = LR5_CAPABILITIES
+        if self.is_pro:
+            caps |= LitterRobotCapability.CAMERA
+        return caps
 
     @property
     def is_pro(self) -> bool:

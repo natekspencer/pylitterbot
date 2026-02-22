@@ -9,11 +9,11 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 import aiohttp
 
 from ..activity import Activity, Insight
-from ..enums import LitterBoxCommand, LitterBoxStatus
+from ..enums import LitterBoxCommand, LitterBoxStatus, LitterRobotCapability
 from ..exceptions import InvalidCommandException
 from ..transport import WebSocketMonitor, WebSocketProtocol
 from ..utils import round_time, to_timestamp, today_at_time, urljoin, utcnow
-from .litterrobot import MINIMUM_CYCLES_LEFT_DEFAULT, LitterRobot
+from .litterrobot import _BASE_CAPABILITIES, MINIMUM_CYCLES_LEFT_DEFAULT, LitterRobot
 
 if TYPE_CHECKING:
     from ..account import Account
@@ -23,6 +23,8 @@ _LOGGER = logging.getLogger(__name__)
 DEFAULT_ENDPOINT = "https://v2.api.whisker.iothings.site"
 DEFAULT_ENDPOINT_KEY = "cDduZE1vajYxbnBSWlA1Q1Z6OXY0VWowYkc3Njl4eTY3NThRUkJQYg=="
 WEBSOCKET_ENDPOINT = "https://8s1fz54a82.execute-api.us-east-1.amazonaws.com/prod"
+
+LR3_CAPABILITIES = _BASE_CAPABILITIES | LitterRobotCapability.RESET_WASTE_DRAWER
 
 SLEEP_MODE_ACTIVE = "sleepModeActive"
 SLEEP_MODE_TIME = "sleepModeTime"
@@ -46,6 +48,11 @@ class LitterRobot3(LitterRobot):
             DEFAULT_ENDPOINT,
             f"users/{account.user_id}/robots/{self.id}",
         )
+
+    @property
+    def capabilities(self) -> LitterRobotCapability:
+        """Return the capabilities of this robot."""
+        return LR3_CAPABILITIES
 
     @property
     def clean_cycle_wait_time_minutes(self) -> int:

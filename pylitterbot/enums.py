@@ -4,10 +4,49 @@ from __future__ import annotations
 
 import logging
 import re
-from enum import Enum, IntEnum, unique
+from enum import Enum, IntEnum, IntFlag, auto, unique
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class LitterRobotCapability(IntFlag):
+    """Capabilities for Litter-Robots."""
+
+    # All models
+    WASTE_DRAWER = auto()
+    RESET_WASTE_DRAWER = auto()
+    CLEAN_CYCLES = auto()
+    CYCLE_WAIT_TIME = auto()
+    PANEL_LOCKOUT = auto()
+    NIGHT_LIGHT_MODE = auto()
+    SLEEP_MODE = auto()
+
+    # LR4+
+    LITTER_LEVEL = auto()
+    PET_WEIGHT = auto()
+    NIGHT_LIGHT_BRIGHTNESS = auto()
+    PANEL_BRIGHTNESS = auto()
+    RESET = auto()
+    FIRMWARE_UPDATE = auto()
+    LITTER_HOPPER = auto()
+
+    # LR5+
+
+    # LR5 Pro only
+    CAMERA = auto()
+
+
+class FeederRobotCapability(IntFlag):
+    """Capabilities for Feeder-Robots."""
+
+    FOOD_LEVEL = auto()
+    FOOD_DISPENSING = auto()
+    FEEDING_SCHEDULE = auto()
+    MEAL_INSERT_SIZE = auto()
+    PANEL_LOCKOUT = auto()
+    GIVE_SNACK = auto()
+    SLEEP_MODE = auto()
 
 
 class FeederRobotCommand:

@@ -20,12 +20,13 @@ from ..enums import (
     LitterBoxStatus,
     LitterLevelState,
     LitterRobot4Command,
+    LitterRobotCapability,
     NightLightMode,
 )
 from ..exceptions import InvalidCommandException, LitterRobotException
 from ..transport import WebSocketMonitor, WebSocketProtocol
 from ..utils import calculate_litter_level, encode, to_enum, to_timestamp, utcnow
-from .litterrobot import LitterRobot
+from .litterrobot import _BASE_CAPABILITIES, LitterRobot
 from .models import LITTER_ROBOT_4_MODEL
 
 if TYPE_CHECKING:
@@ -34,6 +35,15 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 LR4_ENDPOINT = "https://lr4.iothings.site/graphql"
+LR4_CAPABILITIES = (
+    _BASE_CAPABILITIES
+    | LitterRobotCapability.LITTER_LEVEL
+    | LitterRobotCapability.PET_WEIGHT
+    | LitterRobotCapability.NIGHT_LIGHT_BRIGHTNESS
+    | LitterRobotCapability.PANEL_BRIGHTNESS
+    | LitterRobotCapability.RESET
+    | LitterRobotCapability.FIRMWARE_UPDATE
+)
 LR4_STATUS_MAP = {
     "ROBOT_BONNET": LitterBoxStatus.BONNET_REMOVED,
     "ROBOT_CAT_DETECT": LitterBoxStatus.CAT_DETECTED,
@@ -166,6 +176,14 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         """Initialize a Litter-Robot 4."""
         super().__init__(data, account)
         self._path = LR4_ENDPOINT
+
+    @property
+    def capabilities(self) -> LitterRobotCapability:
+        """Return the capabilities of this robot."""
+        caps = LR4_CAPABILITIES
+        if not self.is_hopper_removed:
+            caps |= LitterRobotCapability.LITTER_HOPPER
+        return caps
 
     @property
     def clean_cycle_wait_time_minutes(self) -> int:
