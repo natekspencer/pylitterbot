@@ -20,7 +20,12 @@ from ..enums import (
     LitterRobot5Command,
     NightLightMode,
 )
-from ..exceptions import InvalidCommandException, LitterRobotException
+from ..event import EVENT_UPDATE
+from ..exceptions import (
+    CameraNotAvailableException,
+    InvalidCommandException,
+    LitterRobotException,
+)
 from ..transport import PollingTransport
 from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin, utcnow
 from .litterrobot import LitterRobot
@@ -126,6 +131,7 @@ class LitterRobot5(LitterRobot):
         """Initialize a Litter-Robot 5."""
         super().__init__(data, account)
         self._path = LR5_ENDPOINT
+        self._camera_audio_enabled: bool | None = None
 
     @property
     def is_pro(self) -> bool:
@@ -478,7 +484,14 @@ class LitterRobot5(LitterRobot):
 
     @property
     def camera_audio_enabled(self) -> bool:
-        """Return `True` if camera audio is enabled (Pro only)."""
+        """Return `True` if camera audio is enabled (Pro only).
+
+        Uses locally cached state from ``set_camera_audio`` when available,
+        since the robot API's ``soundSettings.cameraAudioEnabled`` field does
+        not reflect changes made via the camera settings API.
+        """
+        if self._camera_audio_enabled is not None:
+            return self._camera_audio_enabled
         return self._sound_settings.get("cameraAudioEnabled") is True
 
     @property
@@ -514,8 +527,14 @@ class LitterRobot5(LitterRobot):
     @property
     def sleep_mode_enabled(self) -> bool:
         """Return True if sleep mode is enabled for any day."""
-        schedules = self._data.get("sleepSchedules") or []
-        return any(day.get("isEnabled", False) for day in schedules)
+        schedules = self._data.get("sleepSchedules")
+        if isinstance(schedules, dict):
+            iterable = schedules.values()
+        elif isinstance(schedules, list):
+            iterable = schedules
+        else:
+            return False
+        return any(day.get("isEnabled", False) for day in iterable)
 
     @property
     def sleep_mode_start_time(self) -> datetime | None:
@@ -728,10 +747,17 @@ class LitterRobot5(LitterRobot):
                 f"robots/{self.serial}",
                 json={command: kwargs.get("value")},
             )
-            return True
         except InvalidCommandException as ex:
             _LOGGER.error(ex)
             return False
+        # Update local state to reflect the change immediately
+        value = kwargs.get("value")
+        if isinstance(value, dict):
+            existing = self._data.get(command)
+            if isinstance(existing, dict):
+                value = {**existing, **value}
+        self._update_data({command: value}, partial=True)
+        return True
 
     async def _send_command(self, command: str) -> bool:
         """Send an operational command via POST /robots/{serial}/commands."""
@@ -893,10 +919,12 @@ class LitterRobot5(LitterRobot):
 
     async def set_camera_audio(self, value: bool) -> bool:
         """Enable or disable camera audio (Pro only)."""
-        return await self._dispatch_command(
-            LitterRobot5Command.SOUND_SETTINGS,
-            value={"cameraAudioEnabled": value},
-        )
+        client = self.get_camera_client()
+        if await client.set_audio_enabled(value):
+            self._camera_audio_enabled = value
+            self.emit(EVENT_UPDATE)
+            return True
+        return False
 
     async def set_wait_time(self, wait_time: int) -> bool:
         """Set the wait time on the Litter-Robot."""
@@ -964,6 +992,40 @@ class LitterRobot5(LitterRobot):
         data = await self._account.session.request("GET", url, params=params)
         return cast(list[dict[str, Any]], data) if isinstance(data, list) else []
 
+    async def reassign_pet_visit(
+        self,
+        event_id: str,
+        from_pet_id: str | None = None,
+        to_pet_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Reassign or unassign a pet visit activity.
+
+        Args:
+            event_id: The eventId of the activity to modify.
+            from_pet_id: Pet to remove from the visit (for reassign/unassign).
+            to_pet_id: Pet to assign the visit to (for reassign). Omit for unassign.
+
+        Returns:
+            The updated activity dict on success, or None on failure.
+
+        """
+        if not from_pet_id and not to_pet_id:
+            raise ValueError(
+                "At least one of from_pet_id or to_pet_id must be provided"
+            )
+        body: dict[str, str] = {"eventId": event_id}
+        if from_pet_id:
+            body["fromPetId"] = from_pet_id
+        if to_pet_id:
+            body["toPetId"] = to_pet_id
+        url = f"{LR5_ENDPOINT}/robots/{self.serial}/activities"
+        try:
+            data = await self._account.session.request("PATCH", url, json=body)
+            return cast(dict[str, Any], data) if isinstance(data, dict) else None
+        except (ClientResponseError, ClientConnectorError, ClientConnectionError) as ex:
+            _LOGGER.error("Reassign pet visit failed: %s", ex)
+            return None
+
     async def get_insight(
         self, days: int = 30, timezone_offset: int | None = None
     ) -> Insight:
@@ -1029,6 +1091,112 @@ class LitterRobot5(LitterRobot):
         raise NotImplementedError(
             "Firmware updates cannot be triggered via the LR5 REST API."
         )
+
+    # -- Camera convenience methods ----------------------------------------
+
+    @property
+    def has_camera(self) -> bool:
+        """Return `True` if this robot has camera metadata (Pro model)."""
+        return self.camera_metadata is not None
+
+    def get_camera_client(self) -> Any:
+        """Return a ``CameraClient`` for this robot's camera.
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        from ..camera import CameraClient
+        from ..utils import decode
+
+        cam = self.camera_metadata
+        if not cam or not cam.get("deviceId"):
+            raise CameraNotAvailableException(
+                f"Robot {self.serial} does not have a camera"
+            )
+
+        from .litterrobot3 import DEFAULT_ENDPOINT_KEY
+
+        return CameraClient(
+            session=self._account.session,
+            device_id=cam["deviceId"],
+            api_key=decode(DEFAULT_ENDPOINT_KEY),
+        )
+
+    async def get_camera_session(self) -> Any:
+        """Generate a camera streaming session.
+
+        Returns:
+            A ``CameraSession`` with TURN credentials and signaling URL.
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        client = self.get_camera_client()
+        return await client.generate_session()
+
+    async def get_camera_videos(
+        self, date: str | None = None, limit: int | None = None
+    ) -> list[Any]:
+        """Fetch recorded camera video clips.
+
+        Args:
+            date: Optional date (YYYY-MM-DD) filter.
+            limit: Optional max results.
+
+        """
+        client = self.get_camera_client()
+        return list(await client.get_videos(date=date, limit=limit))
+
+    async def get_camera_video_settings(self) -> dict[str, Any] | None:
+        """Fetch the camera's reported video settings."""
+        client = self.get_camera_client()
+        result: dict[str, Any] | None = await client.get_video_settings()
+        return result
+
+    async def set_camera_view(self, view: str) -> bool:
+        """Switch the camera live-view canvas.
+
+        Args:
+            view: ``"front"`` or ``"globe"``.
+
+        Raises:
+            InvalidCommandException: If the view is not recognized.
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        from ..camera import CAMERA_CANVAS_FRONT, CAMERA_CANVAS_GLOBE
+
+        view_map = {
+            "front": CAMERA_CANVAS_FRONT,
+            "globe": CAMERA_CANVAS_GLOBE,
+        }
+        canvas = view_map.get(view.lower())
+        if canvas is None:
+            raise InvalidCommandException(
+                f"Invalid camera view {view!r}. Must be 'front' or 'globe'."
+            )
+        client = self.get_camera_client()
+        result: bool = await client.set_camera_canvas(canvas)
+        return result
+
+    def create_camera_stream(self, **kwargs: Any) -> Any:
+        """Create a ``CameraStream`` for live WebRTC streaming.
+
+        Requires the ``aiortc`` optional dependency.
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+            ImportError: If ``aiortc`` is not installed.
+
+        """
+        from ..camera import CameraStream
+
+        client = self.get_camera_client()
+        return CameraStream(client, **kwargs)
+
+    # -- Class methods / transport -----------------------------------------
 
     @classmethod
     async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:
