@@ -441,22 +441,29 @@ class CameraSignalingRelay:
             "sdpMLineIndex": candidate.get("sdpMLineIndex", 0),
         }
         if self._ws and not self._ws.closed:
-            await self._ws.send_json(msg)
-        else:
-            _LOGGER.debug(
-                "Signaling relay: WS closed — buffering ICE candidate for reconnect"
-            )
-            self._pending_candidates.append(msg)
-            # If the WS closed after delivering the answer (expected server behavior),
-            # try to reconnect and forward any buffered browser ICE candidates.
-            if (
-                self._session
-                and not self._closed
-                and (self._reconnect_task is None or self._reconnect_task.done())
-            ):
-                self._reconnect_task = asyncio.ensure_future(
-                    self._reconnect_and_flush()
+            try:
+                await self._ws.send_json(msg)
+                return
+            except Exception:
+                _LOGGER.debug(
+                    "Signaling relay: send failed — buffering ICE candidate for reconnect",
+                    exc_info=True,
                 )
+
+        _LOGGER.debug(
+            "Signaling relay: WS closed — buffering ICE candidate for reconnect"
+        )
+        self._pending_candidates.append(msg)
+        # If the WS closed after delivering the answer (expected server behavior),
+        # try to reconnect and forward any buffered browser ICE candidates.
+        if (
+            self._session
+            and not self._closed
+            and (self._reconnect_task is None or self._reconnect_task.done())
+        ):
+            self._reconnect_task = asyncio.ensure_future(
+                self._reconnect_and_flush()
+            )
 
     async def close(self) -> None:
         """Cancel tasks and close the signaling WebSocket."""
