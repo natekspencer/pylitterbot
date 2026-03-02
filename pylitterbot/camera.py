@@ -461,9 +461,7 @@ class CameraSignalingRelay:
             and not self._closed
             and (self._reconnect_task is None or self._reconnect_task.done())
         ):
-            self._reconnect_task = asyncio.ensure_future(
-                self._reconnect_and_flush()
-            )
+            self._reconnect_task = asyncio.ensure_future(self._reconnect_and_flush())
 
     async def close(self) -> None:
         """Cancel tasks and close the signaling WebSocket."""
