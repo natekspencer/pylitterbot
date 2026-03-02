@@ -558,7 +558,9 @@ class CameraSignalingRelay:
                         break
                     await ws.send_json(msg)
                     sent += 1
-                    _LOGGER.debug("Signaling relay: forwarded late ICE candidate via reconnect")
+                    _LOGGER.debug(
+                        "Signaling relay: forwarded late ICE candidate via reconnect"
+                    )
             finally:
                 # Re-queue any candidates that were not successfully sent.
                 if sent < len(pending):
