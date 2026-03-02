@@ -21,6 +21,9 @@ dependencies = [
 ]
 dynamic = ["version"]
 
+[project.optional-dependencies]
+camera = ["aiortc>=1.9.0"]
+
 [project.urls]
 Homepage = "https://github.com/natekspencer/pylitterbot"
 Repository = "https://github.com/natekspencer/pylitterbot"
