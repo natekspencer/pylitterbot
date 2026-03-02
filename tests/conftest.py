@@ -155,6 +155,13 @@ def mock_aioresponse() -> aioresponses:
             payload={},
             repeat=True,
         )
+        mock.patch(
+            re.compile(
+                rf"^{re.escape(CAMERA_SETTINGS_API)}/prod/v1/cameras/.*/desired-settings/audioSettings"
+            ),
+            payload={},
+            repeat=True,
+        )
         mock.get(
             re.compile(
                 rf"^{re.escape(CAMERA_INVENTORY_API)}/prod/v1/cameras/{re.escape(CAMERA_DEVICE_ID)}$"

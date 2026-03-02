@@ -976,12 +976,9 @@ async def test_litter_robot_5_set_camera_audio(
     mock_account: Account,
 ) -> None:
     """Tests toggling camera audio."""
-    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
 
-    mock_aioresponse.patch(LR5_GET_URL, payload={})
     assert await robot.set_camera_audio(True)
-
-    mock_aioresponse.patch(LR5_GET_URL, payload={})
     assert await robot.set_camera_audio(False)
 
     await robot._account.disconnect()
