@@ -920,6 +920,8 @@ class LitterRobot5(LitterRobot):
 
     async def set_camera_audio(self, value: bool) -> bool:
         """Enable or disable camera audio (Pro only)."""
+        if not self.has_camera:
+            return False
         client = self.get_camera_client()
         if await client.set_audio_enabled(value):
             self._camera_audio_enabled = value
