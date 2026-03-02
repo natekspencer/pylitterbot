@@ -528,8 +528,9 @@ class LitterRobot5(LitterRobot):
     def sleep_mode_enabled(self) -> bool:
         """Return True if sleep mode is enabled for any day."""
         schedules = self._data.get("sleepSchedules")
+        iterable: list[dict[str, Any]]
         if isinstance(schedules, dict):
-            iterable = schedules.values()
+            iterable = list(schedules.values())
         elif isinstance(schedules, list):
             iterable = schedules
         else:
@@ -1097,7 +1098,8 @@ class LitterRobot5(LitterRobot):
     @property
     def has_camera(self) -> bool:
         """Return `True` if this robot has camera metadata (Pro model)."""
-        return self.camera_metadata is not None
+        cam = self.camera_metadata
+        return isinstance(cam, dict) and bool(cam.get("deviceId"))
 
     def get_camera_client(self) -> Any:
         """Return a ``CameraClient`` for this robot's camera.

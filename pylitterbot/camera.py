@@ -547,15 +547,23 @@ class CameraSignalingRelay:
         try:
             websession = self._client._session.websession  # noqa: SLF001
             ws = await websession.ws_connect(self._session.signaling_url)
-            pending, self._pending_candidates = self._pending_candidates[:], []
-            for msg in pending:
-                if self._closed:
-                    break
-                await ws.send_json(msg)
-                _LOGGER.debug(
-                    "Signaling relay: forwarded late ICE candidate via reconnect"
-                )
-            await ws.close()
+            # Swap out the list before sending so any new candidates buffered
+            # during the flush are preserved for a subsequent reconnect rather
+            # than being lost if we clear the list and then fail mid-send.
+            pending, self._pending_candidates = self._pending_candidates, []
+            sent = 0
+            try:
+                for msg in pending:
+                    if self._closed:
+                        break
+                    await ws.send_json(msg)
+                    sent += 1
+                    _LOGGER.debug("Signaling relay: forwarded late ICE candidate via reconnect")
+            finally:
+                # Re-queue any candidates that were not successfully sent.
+                if sent < len(pending):
+                    self._pending_candidates = pending[sent:] + self._pending_candidates
+                await ws.close()
         except Exception:
             if not self._closed:
                 _LOGGER.debug(
