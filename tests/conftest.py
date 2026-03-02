@@ -12,6 +12,7 @@ from aioresponses import aioresponses
 from pycognito import TokenVerificationException
 
 from pylitterbot import Account
+from pylitterbot.camera import CAMERA_INVENTORY_API, CAMERA_SETTINGS_API, WATFORD_API
 from pylitterbot.pet import PET_PROFILE_ENDPOINT
 from pylitterbot.robot.feederrobot import FEEDER_ENDPOINT
 from pylitterbot.robot.litterrobot3 import DEFAULT_ENDPOINT
@@ -21,6 +22,12 @@ from pylitterbot.utils import urljoin
 
 from .common import (
     ACTIVITY_RESPONSE,
+    CAMERA_DEVICE_ID,
+    CAMERA_EVENTS_RESPONSE,
+    CAMERA_INFO_RESPONSE,
+    CAMERA_SESSION_RESPONSE,
+    CAMERA_VIDEO_SETTINGS_RESPONSE,
+    CAMERA_VIDEOS_RESPONSE,
     FEEDER_ROBOT_DATA,
     INSIGHT_RESPONSE,
     LITTER_ROBOT_4_DATA,
@@ -118,4 +125,62 @@ def mock_aioresponse() -> aioresponses:
             repeat=True,
         )
         mock.post(PET_PROFILE_ENDPOINT, payload={"data": {"getPetsByUser": [PET_DATA]}})
+
+        # Camera API endpoints
+        mock.get(
+            re.compile(
+                rf"^{re.escape(WATFORD_API)}/api/device-manager/client/generate-session/.*"
+            ),
+            payload=CAMERA_SESSION_RESPONSE,
+            repeat=True,
+        )
+        mock.get(
+            re.compile(
+                rf"^{re.escape(CAMERA_SETTINGS_API)}/prod/v1/cameras/.*/reported-settings/videoSettings"
+            ),
+            payload=CAMERA_VIDEO_SETTINGS_RESPONSE,
+            repeat=True,
+        )
+        mock.get(
+            re.compile(
+                rf"^{re.escape(CAMERA_SETTINGS_API)}/prod/v1/cameras/.*/reported-settings/audioSettings"
+            ),
+            payload={"audioEnabled": True, "volume": 50},
+            repeat=True,
+        )
+        mock.patch(
+            re.compile(
+                rf"^{re.escape(CAMERA_SETTINGS_API)}/prod/v1/cameras/.*/desired-settings/videoSettings"
+            ),
+            payload={},
+            repeat=True,
+        )
+        mock.patch(
+            re.compile(
+                rf"^{re.escape(CAMERA_SETTINGS_API)}/prod/v1/cameras/.*/desired-settings/audioSettings"
+            ),
+            payload={},
+            repeat=True,
+        )
+        mock.get(
+            re.compile(
+                rf"^{re.escape(CAMERA_INVENTORY_API)}/prod/v1/cameras/{re.escape(CAMERA_DEVICE_ID)}$"
+            ),
+            payload=CAMERA_INFO_RESPONSE,
+            repeat=True,
+        )
+        mock.get(
+            re.compile(
+                rf"^{re.escape(CAMERA_INVENTORY_API)}/prod/v1/cameras/.*/videos"
+            ),
+            payload=CAMERA_VIDEOS_RESPONSE,
+            repeat=True,
+        )
+        mock.get(
+            re.compile(
+                rf"^{re.escape(CAMERA_INVENTORY_API)}/prod/v1/cameras/.*/events"
+            ),
+            payload=CAMERA_EVENTS_RESPONSE,
+            repeat=True,
+        )
         yield mock
