@@ -443,7 +443,9 @@ class CameraSignalingRelay:
         if self._ws and not self._ws.closed:
             await self._ws.send_json(msg)
         else:
-            _LOGGER.debug("Signaling relay: WS closed — buffering ICE candidate for reconnect")
+            _LOGGER.debug(
+                "Signaling relay: WS closed — buffering ICE candidate for reconnect"
+            )
             self._pending_candidates.append(msg)
             # If the WS closed after delivering the answer (expected server behavior),
             # try to reconnect and forward any buffered browser ICE candidates.
@@ -550,7 +552,9 @@ class CameraSignalingRelay:
                 if self._closed:
                     break
                 await ws.send_json(msg)
-                _LOGGER.debug("Signaling relay: forwarded late ICE candidate via reconnect")
+                _LOGGER.debug(
+                    "Signaling relay: forwarded late ICE candidate via reconnect"
+                )
             await ws.close()
         except Exception:
             if not self._closed:
