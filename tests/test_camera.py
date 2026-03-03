@@ -476,12 +476,13 @@ class TestCameraSignalingRelay:
                 received_candidates = []
                 answer_event = asyncio.Event()
 
+                def on_answer(sdp: str) -> None:
+                    received_answer.append(sdp)
+                    answer_event.set()
+
                 session = await relay.start(
                     offer_sdp="v=0\r\n",
-                    on_answer=lambda sdp: (
-                        received_answer.append(sdp),
-                        answer_event.set(),
-                    ),
+                    on_answer=on_answer,
                     on_candidate=lambda c: received_candidates.append(c),
                 )
 
@@ -545,13 +546,14 @@ class TestCameraSignalingRelay:
                 received_candidates = []
                 candidate_event = asyncio.Event()
 
+                def on_candidate(c: dict[str, Any]) -> None:
+                    received_candidates.append(c)
+                    candidate_event.set()
+
                 await relay.start(
                     offer_sdp="v=0\r\n",
                     on_answer=lambda sdp: None,
-                    on_candidate=lambda c: (
-                        received_candidates.append(c),
-                        candidate_event.set(),
-                    ),
+                    on_candidate=on_candidate,
                 )
 
                 await asyncio.wait_for(candidate_event.wait(), timeout=1.0)
