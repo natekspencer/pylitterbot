@@ -27,9 +27,6 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
 WATFORD_API = "https://watford.ienso-dev.com"
 CAMERA_SETTINGS_API = "https://7mnuil943l.execute-api.us-east-1.amazonaws.com"
 CAMERA_INVENTORY_API = "https://rrntg65uwf.execute-api.us-east-1.amazonaws.com"
@@ -45,10 +42,6 @@ GENERATE_SESSION_PATH = "api/device-manager/client/generate-session"
 SIGNALING_PATH = "api/signaling"
 
 PING_INTERVAL = 5  # seconds – ping frequently to prevent server idle timeout (~18s)
-
-# ---------------------------------------------------------------------------
-# Dataclasses
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -129,11 +122,6 @@ class VideoClip:
         )
 
 
-# ---------------------------------------------------------------------------
-# CameraClient — REST API (no aiortc dependency)
-# ---------------------------------------------------------------------------
-
-
 class CameraClient:
     """REST client for LR5 Pro camera APIs.
 
@@ -172,8 +160,6 @@ class CameraClient:
             headers["x-api-key"] = self._api_key
         return headers
 
-    # -- Session -----------------------------------------------------------
-
     async def generate_session(self, *, auto_start: bool = True) -> CameraSession:
         """Create a camera streaming session.
 
@@ -189,8 +175,6 @@ class CameraClient:
                 "Failed to generate camera session: unexpected response"
             )
         return CameraSession.from_response(data)
-
-    # -- Video settings ----------------------------------------------------
 
     async def get_video_settings(
         self, settings_type: str = "videoSettings"
@@ -253,8 +237,6 @@ class CameraClient:
         except ClientResponseError:
             return False
 
-    # -- Audio settings ----------------------------------------------------
-
     async def get_audio_settings(self) -> dict[str, Any] | None:
         """Fetch reported audio settings for the camera."""
         url = (
@@ -267,8 +249,6 @@ class CameraClient:
             return None
         return data if isinstance(data, dict) else None
 
-    # -- Camera info -------------------------------------------------------
-
     async def get_camera_info(self) -> dict[str, Any] | None:
         """Fetch camera device information from the inventory API."""
         url = f"{CAMERA_INVENTORY_API}/prod/v1/cameras/{self._device_id}"
@@ -277,8 +257,6 @@ class CameraClient:
         except ClientResponseError:
             return None
         return data if isinstance(data, dict) else None
-
-    # -- Videos ------------------------------------------------------------
 
     async def get_videos(
         self, date: str | None = None, limit: int | None = None
@@ -311,8 +289,6 @@ class CameraClient:
             VideoClip.from_response(item) for item in data if isinstance(item, dict)
         ]
 
-    # -- Events ------------------------------------------------------------
-
     async def get_events(self, limit: int | None = None) -> list[dict[str, Any]]:
         """Fetch camera events (AI detections, etc.).
 
@@ -335,11 +311,6 @@ class CameraClient:
         if not isinstance(data, list):
             return []
         return [item for item in data if isinstance(item, dict)]
-
-
-# ---------------------------------------------------------------------------
-# CameraSignalingRelay — Browser-to-camera WebRTC signaling (no aiortc)
-# ---------------------------------------------------------------------------
 
 
 class CameraSignalingRelay:
@@ -592,10 +563,6 @@ class CameraSignalingRelay:
                 _LOGGER.debug("Relay ping loop ended")
 
 
-# ---------------------------------------------------------------------------
-# CameraStream — WebRTC (requires aiortc)
-# ---------------------------------------------------------------------------
-
 try:
     from aiortc import (
         RTCConfiguration,
@@ -658,8 +625,6 @@ class CameraStream:
         self._connected = asyncio.Event()
         self._stopped = False
 
-    # -- Callback registration ---------------------------------------------
-
     def on_video_frame(self, callback: Callable) -> None:
         """Register a callback for incoming video frames."""
         self._video_callback = callback
@@ -671,8 +636,6 @@ class CameraStream:
     def on_connection_state_change(self, callback: Callable) -> None:
         """Register a callback for peer connection state changes."""
         self._state_callback = callback
-
-    # -- Lifecycle ---------------------------------------------------------
 
     async def start(self) -> None:
         """Start the WebRTC streaming session."""
@@ -780,8 +743,6 @@ class CameraStream:
         except asyncio.TimeoutError:
             return False
 
-    # -- Context manager ---------------------------------------------------
-
     async def __aenter__(self) -> CameraStream:
         """Start the stream on context entry."""
         await self.start()
@@ -790,8 +751,6 @@ class CameraStream:
     async def __aexit__(self, *exc: Any) -> None:
         """Stop the stream on context exit."""
         await self.stop()
-
-    # -- Internal ----------------------------------------------------------
 
     @staticmethod
     def _build_ice_servers(

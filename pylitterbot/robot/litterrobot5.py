@@ -530,9 +530,9 @@ class LitterRobot5(LitterRobot):
         schedules = self._data.get("sleepSchedules")
         iterable: list[dict[str, Any]]
         if isinstance(schedules, dict):
-            iterable = list(schedules.values())
+            iterable = [day for day in schedules.values() if isinstance(day, dict)]
         elif isinstance(schedules, list):
-            iterable = schedules
+            iterable = [day for day in schedules if isinstance(day, dict)]
         else:
             return False
         return any(day.get("isEnabled", False) for day in iterable)
@@ -1095,8 +1095,6 @@ class LitterRobot5(LitterRobot):
             "Firmware updates cannot be triggered via the LR5 REST API."
         )
 
-    # -- Camera convenience methods ----------------------------------------
-
     @property
     def has_camera(self) -> bool:
         """Return `True` if this robot has camera metadata (Pro model)."""
@@ -1199,8 +1197,6 @@ class LitterRobot5(LitterRobot):
 
         client = self.get_camera_client()
         return CameraStream(client, **kwargs)
-
-    # -- Class methods / transport -----------------------------------------
 
     @classmethod
     async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:

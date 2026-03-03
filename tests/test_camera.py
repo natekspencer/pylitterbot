@@ -52,11 +52,6 @@ from .common import (
 pytestmark = pytest.mark.asyncio
 
 
-# ---------------------------------------------------------------------------
-# CameraSession dataclass tests
-# ---------------------------------------------------------------------------
-
-
 class TestCameraSession:
     """Tests for CameraSession dataclass."""
 
@@ -105,11 +100,6 @@ class TestCameraSession:
         assert len(session.turn_servers) == 1
 
 
-# ---------------------------------------------------------------------------
-# VideoClip dataclass tests
-# ---------------------------------------------------------------------------
-
-
 class TestVideoClip:
     """Tests for VideoClip dataclass."""
 
@@ -142,11 +132,6 @@ class TestVideoClip:
         assert clip.id == ""
         assert clip.thumbnail_url is None
         assert clip.event_type is None
-
-
-# ---------------------------------------------------------------------------
-# CameraClient REST tests
-# ---------------------------------------------------------------------------
 
 
 class TestCameraClient:
@@ -320,11 +305,6 @@ class TestCameraClient:
         assert "x-api-key" not in headers
 
 
-# ---------------------------------------------------------------------------
-# LR5 camera convenience method tests
-# ---------------------------------------------------------------------------
-
-
 class TestLR5CameraMethods:
     """Tests for LitterRobot5 camera convenience methods."""
 
@@ -434,11 +414,6 @@ class TestLR5CameraMethods:
             await robot.set_camera_view("rear")
 
 
-# ---------------------------------------------------------------------------
-# CameraSignalingRelay tests
-# ---------------------------------------------------------------------------
-
-
 class _AsyncWSIterator:
     """Async iterator that yields mock WebSocket messages."""
 
@@ -499,10 +474,14 @@ class TestCameraSignalingRelay:
                 relay = CameraSignalingRelay(client)
                 received_answer = []
                 received_candidates = []
+                answer_event = asyncio.Event()
 
                 session = await relay.start(
                     offer_sdp="v=0\r\n",
-                    on_answer=lambda sdp: received_answer.append(sdp),
+                    on_answer=lambda sdp: (
+                        received_answer.append(sdp),
+                        answer_event.set(),
+                    ),
                     on_candidate=lambda c: received_candidates.append(c),
                 )
 
@@ -516,7 +495,7 @@ class TestCameraSignalingRelay:
                 assert b64decode(call_args["sdp"]).decode() == "v=0\r\n"
 
                 # Wait for receive loop to process the answer
-                await asyncio.sleep(0.1)
+                await asyncio.wait_for(answer_event.wait(), timeout=1.0)
 
                 assert len(received_answer) == 1
                 assert received_answer[0] == answer_sdp
@@ -564,14 +543,18 @@ class TestCameraSignalingRelay:
             ):
                 relay = CameraSignalingRelay(client)
                 received_candidates = []
+                candidate_event = asyncio.Event()
 
                 await relay.start(
                     offer_sdp="v=0\r\n",
                     on_answer=lambda sdp: None,
-                    on_candidate=lambda c: received_candidates.append(c),
+                    on_candidate=lambda c: (
+                        received_candidates.append(c),
+                        candidate_event.set(),
+                    ),
                 )
 
-                await asyncio.sleep(0.1)
+                await asyncio.wait_for(candidate_event.wait(), timeout=1.0)
 
                 assert len(received_candidates) == 1
                 assert "candidate:1" in received_candidates[0]["candidate"]
@@ -663,11 +646,6 @@ class TestCameraSignalingRelay:
         assert relay.session is None
 
 
-# ---------------------------------------------------------------------------
-# CameraStream tests (mock aiortc)
-# ---------------------------------------------------------------------------
-
-
 class TestCameraStream:
     """Tests for CameraStream WebRTC functionality."""
 
@@ -693,6 +671,7 @@ class TestCameraStream:
         mock_pc.createOffer = AsyncMock(
             return_value=MagicMock(sdp="v=0\r\n", type="offer")
         )
+        mock_pc.localDescription = MagicMock(sdp="v=0\r\n")
         mock_pc.setLocalDescription = AsyncMock()
         mock_pc.setRemoteDescription = AsyncMock()
         mock_pc.addIceCandidate = AsyncMock()
