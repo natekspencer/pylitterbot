@@ -479,6 +479,76 @@ PET_DATA: dict[str, Any] = {
 }
 
 
+CAMERA_DEVICE_ID = LITTER_ROBOT_5_PRO_DATA["cameraMetadata"]["deviceId"]
+
+CAMERA_SESSION_RESPONSE: dict[str, Any] = {
+    "sessionId": "test-session-id-1234",
+    "sessionToken": "test-session-token-abcdef",
+    "sessionExpiration": "2025-12-31T23:59:59.000000Z",
+    "turnCredentials": [
+        {
+            "urls": ["turn:turn.example.com:443?transport=tcp"],
+            "username": "turn-user",
+            "credential": "turn-pass",
+        }
+    ],
+}
+
+CAMERA_VIDEO_SETTINGS_RESPONSE: dict[str, Any] = {
+    "reportedSettings": [
+        {
+            "data": {
+                "streams": {
+                    "live-view": {
+                        "canvas": "sensor_0_1080p",
+                    }
+                }
+            }
+        }
+    ]
+}
+
+CAMERA_VIDEOS_RESPONSE: list[dict[str, Any]] = [
+    {
+        "id": "video-001",
+        "thumbnailUrl": "https://example.com/thumb1.jpg",
+        "eventType": "PET_VISIT",
+        "duration": 15.5,
+        "createdAt": "2025-12-01T12:00:00.000000Z",
+    },
+    {
+        "id": "video-002",
+        "thumbnailUrl": "https://example.com/thumb2.jpg",
+        "eventType": "MOTION",
+        "duration": 8.2,
+        "createdAt": "2025-12-01T11:00:00.000000Z",
+    },
+]
+
+CAMERA_INFO_RESPONSE: dict[str, Any] = {
+    "deviceId": CAMERA_DEVICE_ID,
+    "serialNumber": "E0510076020EBFV",
+    "model": "LR5_PRO_CAMERA",
+    "status": "online",
+    "firmwareVersion": "1.2.2-1233",
+}
+
+CAMERA_EVENTS_RESPONSE: list[dict[str, Any]] = [
+    {
+        "eventId": "evt-001",
+        "type": "PET_VISIT",
+        "timestamp": "2025-12-01T12:00:00.000000Z",
+        "cameraId": CAMERA_DEVICE_ID,
+    },
+    {
+        "eventId": "evt-002",
+        "type": "MOTION",
+        "timestamp": "2025-12-01T11:00:00.000000Z",
+        "cameraId": CAMERA_DEVICE_ID,
+    },
+]
+
+
 async def get_account(
     logged_in: bool = False,
     load_robots: bool = False,
