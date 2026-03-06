@@ -1,6 +1,6 @@
 """pylitterbot module."""
 
-__version__ = "2025.1.0.post9.dev0+480004c"
+__version__ = "0.0.0"
 
 from .account import Account
 from .pet import Pet
