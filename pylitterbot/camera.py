@@ -616,6 +616,7 @@ class CameraStream:
         self._ws: Any | None = None  # aiohttp ClientWebSocketResponse
         self._ping_task: asyncio.Task[None] | None = None
         self._receive_task: asyncio.Task[None] | None = None
+        self._media_tasks: list[asyncio.Task[None]] = []
 
         self._video_callback: Callable | None = None
         self._audio_callback: Callable | None = None
@@ -656,9 +657,15 @@ class CameraStream:
         def on_track(track: Any) -> None:
             _LOGGER.debug("Received %s track: %s", track.kind, track.id)
             if track.kind == "video" and self._video_callback:
-                asyncio.ensure_future(self._consume_track(track, self._video_callback))
+                task = asyncio.ensure_future(
+                    self._consume_track(track, self._video_callback)
+                )
+                self._media_tasks.append(task)
             elif track.kind == "audio" and self._audio_callback:
-                asyncio.ensure_future(self._consume_track(track, self._audio_callback))
+                task = asyncio.ensure_future(
+                    self._consume_track(track, self._audio_callback)
+                )
+                self._media_tasks.append(task)
 
         # 5. Monitor connection state
         @self._pc.on("connectionstatechange")
@@ -675,7 +682,7 @@ class CameraStream:
         self._pc.addTransceiver("audio", direction="recvonly")
 
         # 7. Connect to signaling websocket
-        websession = self._client._session.websession
+        websession = self._client._session.websession  # noqa: SLF001
         self._ws = await websession.ws_connect(
             self._session.signaling_url,
         )
@@ -705,6 +712,17 @@ class CameraStream:
     async def stop(self) -> None:
         """Stop the WebRTC streaming session and clean up resources."""
         self._stopped = True
+
+        for task in self._media_tasks:
+            if not task.done():
+                task.cancel()
+        for task in self._media_tasks:
+            if not task.done():
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._media_tasks.clear()
 
         if self._ping_task and not self._ping_task.done():
             self._ping_task.cancel()
