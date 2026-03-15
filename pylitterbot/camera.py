@@ -68,9 +68,8 @@ class CameraSession:
         if isinstance(turn_creds, dict):
             turn_creds = [turn_creds]
 
-        signaling_url = (
-            f"wss://watford.ienso-dev.com/{SIGNALING_PATH}?accessToken={session_token}"
-        )
+        ws_base = WATFORD_API.replace("https://", "wss://")
+        signaling_url = f"{ws_base}/{SIGNALING_PATH}?accessToken={session_token}"
 
         return cls(
             session_id=data.get("sessionId", ""),
@@ -774,7 +773,9 @@ class CameraStream:
                 )
             # Also add the STUN URL from Whisker's API format if present
             stun_url = cred.get("stunUrl")
-            if stun_url and stun_url not in (s.urls for s in servers):
+            if stun_url and not any(
+                stun_url == s.urls or stun_url in s.urls for s in servers
+            ):
                 servers.append(RTCIceServer(urls=stun_url))
         return servers
 

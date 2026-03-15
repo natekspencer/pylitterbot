@@ -685,7 +685,7 @@ class TestCameraStream:
         mock_ws.send_json = AsyncMock()
         mock_ws.close = AsyncMock()
         mock_ws.ping = AsyncMock()
-        mock_ws.__aiter__ = MagicMock(return_value=iter([]))
+        mock_ws.__aiter__ = lambda self: _AsyncWSIterator([])
 
         mock_session = CameraSession.from_response(CAMERA_SESSION_RESPONSE)
 
