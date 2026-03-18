@@ -841,15 +841,10 @@ class LitterRobot5(LitterRobot):
 
     async def set_panel_lockout(self, value: bool) -> bool:
         """Turn the panel lock on or off."""
-        if await self._dispatch_command(
+        await self._dispatch_command(
             LitterRobot5Command.PANEL_SETTINGS,
             value={LitterRobot5Command.KEYPAD_LOCKED: value},
-        ):
-            data = deepcopy(self._data)
-            data.setdefault(LitterRobot5Command.PANEL_SETTINGS, {})[
-                LitterRobot5Command.KEYPAD_LOCKED
-            ] = value
-            self._update_data(data)
+        )
         return self.panel_lock_enabled == value
 
     async def set_privacy_mode(self, value: bool) -> bool:
@@ -932,15 +927,10 @@ class LitterRobot5(LitterRobot):
             raise InvalidCommandException(
                 f"Attempt to send an invalid wait time to Litter-Robot. Wait time must be one of: {self.VALID_WAIT_TIMES}, but received {wait_time}"
             )
-        if await self._dispatch_command(
+        await self._dispatch_command(
             LitterRobot5Command.LITTER_ROBOT_SETTINGS,
             value={LitterRobot5Command.CYCLE_DELAY: wait_time},
-        ):
-            data = deepcopy(self._data)
-            data.setdefault(LitterRobot5Command.LITTER_ROBOT_SETTINGS, {})[
-                LitterRobot5Command.CYCLE_DELAY
-            ] = wait_time
-            self._update_data(data)
+        )
         return self.clean_cycle_wait_time_minutes == wait_time
 
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
@@ -1069,7 +1059,7 @@ class LitterRobot5(LitterRobot):
                        color="#FF0000").
 
         """
-        current = self._data.get("nightLightSettings") or {}
+        current = self._night_light_settings
         merged = {
             "mode": current.get("mode", "Auto"),
             "brightness": current.get("brightness", 100),
