@@ -52,10 +52,12 @@ def encode(value: str | dict) -> str:
     return b64encode(value.encode(ENCODING)).decode(ENCODING)
 
 
-def to_timestamp(timestamp: str | None) -> datetime | None:
+def to_timestamp(timestamp: str | int | float | None) -> datetime | None:
     """Construct a UTC offset-aware datetime from a Litter-Robot API timestamp."""
     if not timestamp:
         return None
+    if isinstance(timestamp, (int, float)):
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
     if "Z" in timestamp:
         timestamp = timestamp.replace("Z", "")
     if (utc_offset := "+00:00") not in timestamp:

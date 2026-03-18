@@ -514,8 +514,29 @@ class LitterRobot5(LitterRobot):
     @property
     def sleep_mode_enabled(self) -> bool:
         """Return True if sleep mode is enabled for any day."""
-        schedules = self._data.get("sleepSchedules") or []
-        return any(day.get("isEnabled", False) for day in schedules)
+        schedules = self._data.get("sleepSchedules")
+        iterable: list[dict[str, Any]]
+        if isinstance(schedules, dict):
+            iterable = [day for day in schedules.values() if isinstance(day, dict)]
+        elif isinstance(schedules, list):
+            iterable = [day for day in schedules if isinstance(day, dict)]
+        else:
+            return False
+        return any(day.get("isEnabled", False) for day in iterable)
+
+    @property
+    def sleep_schedules(self) -> list[dict[str, Any]]:
+        """Return the sleep schedule entries as a list of dicts.
+
+        Each entry contains dayOfWeek, isEnabled, sleepTime, and wakeTime.
+        Times are in minutes from midnight.
+        """
+        schedules = self._data.get("sleepSchedules")
+        if isinstance(schedules, dict):
+            return [day for day in schedules.values() if isinstance(day, dict)]
+        if isinstance(schedules, list):
+            return [day for day in schedules if isinstance(day, dict)]
+        return []
 
     @property
     def sleep_mode_start_time(self) -> datetime | None:
@@ -728,10 +749,17 @@ class LitterRobot5(LitterRobot):
                 f"robots/{self.serial}",
                 json={command: kwargs.get("value")},
             )
-            return True
         except InvalidCommandException as ex:
             _LOGGER.error(ex)
             return False
+        # Update local state to reflect the change immediately
+        value = kwargs.get("value")
+        if isinstance(value, dict):
+            existing = self._data.get(command)
+            if isinstance(existing, dict):
+                value = {**existing, **value}
+        self._update_data({command: value}, partial=True)
+        return True
 
     async def _send_command(self, command: str) -> bool:
         """Send an operational command via POST /robots/{serial}/commands."""
@@ -1029,6 +1057,68 @@ class LitterRobot5(LitterRobot):
         raise NotImplementedError(
             "Firmware updates cannot be triggered via the LR5 REST API."
         )
+
+    async def update_night_light_settings(self, **updates: Any) -> bool:
+        """Update night light settings atomically.
+
+        The LR5 API replaces the entire nightLightSettings object on PATCH,
+        so all fields must be sent together to avoid losing values.
+
+        Args:
+            **updates: Fields to update (e.g., mode="On", brightness=100,
+                       color="#FF0000").
+
+        """
+        current = self._data.get("nightLightSettings") or {}
+        merged = {
+            "mode": current.get("mode", "Auto"),
+            "brightness": current.get("brightness", 100),
+            "color": current.get("color", ""),
+            **updates,
+        }
+        return await self._dispatch_command(
+            LitterRobot5Command.NIGHT_LIGHT_SETTINGS, value=merged
+        )
+
+    async def reassign_pet_visit(
+        self,
+        event_id: str,
+        from_pet_id: str | None = None,
+        to_pet_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Reassign or unassign a pet visit activity.
+
+        Reassignment updates the pet's weight history on the device.
+
+        Args:
+            event_id: The eventId of the activity to modify.
+            from_pet_id: Pet to remove from the visit (for reassign/unassign).
+            to_pet_id: Pet to assign the visit to (for reassign). Omit to unassign.
+
+        Returns:
+            The updated activity dict on success, or None on failure.
+
+        """
+        if not from_pet_id and not to_pet_id:
+            raise ValueError(
+                "At least one of from_pet_id or to_pet_id must be provided"
+            )
+        body: dict[str, str] = {"eventId": event_id}
+        if from_pet_id:
+            body["fromPetId"] = from_pet_id
+        if to_pet_id:
+            body["toPetId"] = to_pet_id
+        url = f"{LR5_ENDPOINT}/robots/{self.serial}/activities"
+        try:
+            data = await self._account.session.request("PATCH", url, json=body)
+            return cast(dict[str, Any], data) if isinstance(data, dict) else None
+        except (
+            ClientResponseError,
+            ClientConnectorError,
+            ClientConnectionError,
+        ) as ex:
+            _LOGGER.error("Reassign pet visit failed: %s", ex)
+            return None
 
     @classmethod
     async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:

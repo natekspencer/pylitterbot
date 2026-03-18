@@ -1147,3 +1147,92 @@ async def test_litter_robot_5_firmware_details_esp_fallback(
     assert details["latestFirmware"]["espFirmwareVersion"] == "v2.5.6"
 
     await robot._account.disconnect()
+
+
+async def test_litter_robot_5_sleep_schedules(
+    mock_account: Account,
+) -> None:
+    """Tests the sleep_schedules public property."""
+    data = deepcopy(LITTER_ROBOT_5_DATA)
+    # List format
+    data["sleepSchedules"] = [
+        {"dayOfWeek": 0, "isEnabled": True, "sleepTime": 1320, "wakeTime": 420},
+        {"dayOfWeek": 1, "isEnabled": False, "sleepTime": 1320, "wakeTime": 420},
+    ]
+    robot = LitterRobot5(data=data, account=mock_account)
+    schedules = robot.sleep_schedules
+    assert len(schedules) == 2
+    assert schedules[0]["dayOfWeek"] == 0
+    assert schedules[0]["isEnabled"] is True
+    assert robot.sleep_mode_enabled
+
+    # Dict format
+    data["sleepSchedules"] = {
+        "0": {"dayOfWeek": 0, "isEnabled": False, "sleepTime": 1320, "wakeTime": 420},
+    }
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert len(robot.sleep_schedules) == 1
+    assert not robot.sleep_mode_enabled
+
+    # Missing schedules
+    data["sleepSchedules"] = None
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.sleep_schedules == []
+    assert not robot.sleep_mode_enabled
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_reassign_pet_visit(
+    mock_account: Account,
+    mock_aioresponse: aioresponses,
+) -> None:
+    """Tests reassign_pet_visit API call."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    activities_url = f"{LR5_ENDPOINT}/robots/{robot.serial}/activities"
+
+    # Successful reassignment
+    mock_aioresponse.patch(
+        activities_url,
+        payload={
+            "messageId": "msg-001",
+            "type": "PET_VISIT",
+            "isReassigned": True,
+        },
+    )
+    result = await robot.reassign_pet_visit(
+        event_id="evt-001",
+        from_pet_id="PET-aaa",
+        to_pet_id="PET-bbb",
+    )
+    assert result is not None
+    assert result["isReassigned"] is True
+
+    # Missing both pet IDs raises ValueError
+    with pytest.raises(ValueError, match="At least one"):
+        await robot.reassign_pet_visit(event_id="evt-002")
+
+    # API failure returns None
+    mock_aioresponse.patch(
+        activities_url,
+        exception=ClientConnectionError("Connection failed"),
+    )
+    result = await robot.reassign_pet_visit(event_id="evt-003", to_pet_id="PET-bbb")
+    assert result is None
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_update_night_light_settings(
+    mock_account: Account,
+    mock_aioresponse: aioresponses,
+) -> None:
+    """Tests update_night_light_settings sends merged settings."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    patch_url = URL(f"{LR5_ENDPOINT}/robots/{robot.serial}")
+
+    mock_aioresponse.patch(patch_url, payload={})
+    result = await robot.update_night_light_settings(mode="On")
+    assert result is True
+
+    await robot._account.disconnect()
