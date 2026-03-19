@@ -1166,14 +1166,6 @@ async def test_litter_robot_5_sleep_schedules(
     assert schedules[0]["isEnabled"] is True
     assert robot.sleep_mode_enabled
 
-    # Dict format
-    data["sleepSchedules"] = {
-        "0": {"dayOfWeek": 0, "isEnabled": False, "sleepTime": 1320, "wakeTime": 420},
-    }
-    robot = LitterRobot5(data=data, account=mock_account)
-    assert len(robot.sleep_schedules) == 1
-    assert not robot.sleep_mode_enabled
-
     # Missing schedules
     data["sleepSchedules"] = None
     robot = LitterRobot5(data=data, account=mock_account)
@@ -1223,16 +1215,20 @@ async def test_litter_robot_5_reassign_pet_visit(
     await robot._account.disconnect()
 
 
-async def test_litter_robot_5_update_night_light_settings(
+async def test_litter_robot_5_set_night_light_settings(
     mock_account: Account,
     mock_aioresponse: aioresponses,
 ) -> None:
-    """Tests update_night_light_settings sends merged settings."""
+    """Tests set_night_light_settings sends partial updates."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
     patch_url = URL(f"{LR5_ENDPOINT}/robots/{robot.serial}")
 
     mock_aioresponse.patch(patch_url, payload={})
-    result = await robot.update_night_light_settings(mode="On")
+    result = await robot.set_night_light_settings(mode="On")
+    assert result is True
+
+    mock_aioresponse.patch(patch_url, payload={})
+    result = await robot.set_night_light_settings(brightness=50, color="#FF0000")
     assert result is True
 
     await robot._account.disconnect()

@@ -514,15 +514,7 @@ class LitterRobot5(LitterRobot):
     @property
     def sleep_mode_enabled(self) -> bool:
         """Return True if sleep mode is enabled for any day."""
-        schedules = self._data.get("sleepSchedules")
-        iterable: list[dict[str, Any]]
-        if isinstance(schedules, dict):
-            iterable = [day for day in schedules.values() if isinstance(day, dict)]
-        elif isinstance(schedules, list):
-            iterable = [day for day in schedules if isinstance(day, dict)]
-        else:
-            return False
-        return any(day.get("isEnabled", False) for day in iterable)
+        return any(day.get("isEnabled", False) for day in self.sleep_schedules)
 
     @property
     def sleep_schedules(self) -> list[dict[str, Any]]:
@@ -532,8 +524,6 @@ class LitterRobot5(LitterRobot):
         Times are in minutes from midnight.
         """
         schedules = self._data.get("sleepSchedules")
-        if isinstance(schedules, dict):
-            return [day for day in schedules.values() if isinstance(day, dict)]
         if isinstance(schedules, list):
             return [day for day in schedules if isinstance(day, dict)]
         return []
@@ -1048,26 +1038,30 @@ class LitterRobot5(LitterRobot):
             "Firmware updates cannot be triggered via the LR5 REST API."
         )
 
-    async def update_night_light_settings(self, **updates: Any) -> bool:
-        """Update night light settings atomically.
-
-        The LR5 API replaces the entire nightLightSettings object on PATCH,
-        so all fields must be sent together to avoid losing values.
+    async def set_night_light_settings(
+        self,
+        *,
+        mode: str | None = None,
+        brightness: int | None = None,
+        color: str | None = None,
+    ) -> bool:
+        """Set night light settings.
 
         Args:
-            **updates: Fields to update (e.g., mode="On", brightness=100,
-                       color="#FF0000").
+            mode: Night light mode (e.g., "On", "Off", "Auto").
+            brightness: Brightness level (0-100).
+            color: Color hex string (e.g., "#FF0000").
 
         """
-        current = self._night_light_settings
-        merged = {
-            "mode": current.get("mode", "Auto"),
-            "brightness": current.get("brightness", 100),
-            "color": current.get("color", ""),
-            **updates,
-        }
+        value: dict[str, Any] = {}
+        if mode is not None:
+            value["mode"] = mode
+        if brightness is not None:
+            value["brightness"] = brightness
+        if color is not None:
+            value["color"] = color
         return await self._dispatch_command(
-            LitterRobot5Command.NIGHT_LIGHT_SETTINGS, value=merged
+            LitterRobot5Command.NIGHT_LIGHT_SETTINGS, value=value
         )
 
     async def reassign_pet_visit(
