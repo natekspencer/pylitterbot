@@ -1086,7 +1086,7 @@ class LitterRobot5(LitterRobot):
 
         """
         if not from_pet_id and not to_pet_id:
-            raise ValueError(
+            raise InvalidCommandException(
                 "At least one of from_pet_id or to_pet_id must be provided"
             )
         body: dict[str, str] = {"eventId": event_id}

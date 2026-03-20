@@ -1200,8 +1200,8 @@ async def test_litter_robot_5_reassign_pet_visit(
     assert result is not None
     assert result["isReassigned"] is True
 
-    # Missing both pet IDs raises ValueError
-    with pytest.raises(ValueError, match="At least one"):
+    # Missing both pet IDs raises InvalidCommandException
+    with pytest.raises(InvalidCommandException, match="At least one"):
         await robot.reassign_pet_visit(event_id="evt-002")
 
     # API failure returns None
