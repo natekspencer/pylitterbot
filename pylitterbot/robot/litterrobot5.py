@@ -808,11 +808,21 @@ class LitterRobot5(LitterRobot):
         """
         value: dict[str, Any] = {}
         if mode is not None:
+            if not isinstance(mode, NightLightMode):
+                raise InvalidCommandException(
+                    f"Invalid night light mode: {mode!r}. Must be a NightLightMode enum value."
+                )
             value["mode"] = mode.value.capitalize()
         if brightness is not None:
+            if not isinstance(brightness, int) or not 0 <= brightness <= 100:
+                raise InvalidCommandException(
+                    f"Invalid brightness: {brightness!r}. Must be an integer between 0 and 100."
+                )
             value["brightness"] = brightness
         if color is not None:
             value["color"] = color
+        if not value:
+            return True
         return await self._dispatch_command(
             LitterRobot5Command.NIGHT_LIGHT_SETTINGS, value=value
         )
