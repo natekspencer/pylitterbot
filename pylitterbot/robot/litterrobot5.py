@@ -848,10 +848,11 @@ class LitterRobot5(LitterRobot):
 
     async def set_panel_lockout(self, value: bool) -> bool:
         """Turn the panel lock on or off."""
-        await self._dispatch_command(
+        if not await self._dispatch_command(
             LitterRobot5Command.PANEL_SETTINGS,
             value={LitterRobot5Command.KEYPAD_LOCKED: value},
-        )
+        ):
+            return False
         return self.panel_lock_enabled == value
 
     async def set_privacy_mode(self, value: bool) -> bool:
@@ -934,10 +935,11 @@ class LitterRobot5(LitterRobot):
             raise InvalidCommandException(
                 f"Attempt to send an invalid wait time to Litter-Robot. Wait time must be one of: {self.VALID_WAIT_TIMES}, but received {wait_time}"
             )
-        await self._dispatch_command(
+        if not await self._dispatch_command(
             LitterRobot5Command.LITTER_ROBOT_SETTINGS,
             value={LitterRobot5Command.CYCLE_DELAY: wait_time},
-        )
+        ):
+            return False
         return self.clean_cycle_wait_time_minutes == wait_time
 
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
