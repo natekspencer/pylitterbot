@@ -791,27 +791,44 @@ class LitterRobot5(LitterRobot):
         self._update_data({"name": name}, partial=True)
         return self.name == name
 
+    async def set_night_light_settings(
+        self,
+        *,
+        mode: NightLightMode | None = None,
+        brightness: int | None = None,
+        color: str | None = None,
+    ) -> bool:
+        """Set night light settings.
+
+        Args:
+            mode: Night light mode.
+            brightness: Brightness level (0-100).
+            color: Color hex string (e.g., "#FF0000").
+
+        """
+        value: dict[str, Any] = {}
+        if mode is not None:
+            value["mode"] = mode.value.capitalize()
+        if brightness is not None:
+            value["brightness"] = brightness
+        if color is not None:
+            value["color"] = color
+        return await self._dispatch_command(
+            LitterRobot5Command.NIGHT_LIGHT_SETTINGS, value=value
+        )
+
     async def set_night_light(self, value: bool) -> bool:
         """Turn the night light on or off."""
-        mode = (NightLightMode.ON if value else NightLightMode.OFF).value.capitalize()
-        return await self._dispatch_command(
-            LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
-            value={"mode": mode},
-        )
+        mode = NightLightMode.ON if value else NightLightMode.OFF
+        return await self.set_night_light_settings(mode=mode)
 
     async def set_night_light_brightness(self, brightness: int) -> bool:
         """Set the night light brightness (0-100)."""
-        return await self._dispatch_command(
-            LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
-            value={"brightness": brightness},
-        )
+        return await self.set_night_light_settings(brightness=brightness)
 
     async def set_night_light_mode(self, mode: NightLightMode) -> bool:
         """Set the night light mode (On, Off, Auto/Ambient)."""
-        return await self._dispatch_command(
-            LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
-            value={"mode": mode.value.capitalize()},
-        )
+        return await self.set_night_light_settings(mode=mode)
 
     async def set_panel_brightness(self, brightness: BrightnessLevel) -> bool:
         """Set the panel brightness."""
@@ -1038,35 +1055,10 @@ class LitterRobot5(LitterRobot):
             "Firmware updates cannot be triggered via the LR5 REST API."
         )
 
-    async def set_night_light_settings(
-        self,
-        *,
-        mode: str | None = None,
-        brightness: int | None = None,
-        color: str | None = None,
-    ) -> bool:
-        """Set night light settings.
-
-        Args:
-            mode: Night light mode (e.g., "On", "Off", "Auto").
-            brightness: Brightness level (0-100).
-            color: Color hex string (e.g., "#FF0000").
-
-        """
-        value: dict[str, Any] = {}
-        if mode is not None:
-            value["mode"] = mode
-        if brightness is not None:
-            value["brightness"] = brightness
-        if color is not None:
-            value["color"] = color
-        return await self._dispatch_command(
-            LitterRobot5Command.NIGHT_LIGHT_SETTINGS, value=value
-        )
-
     async def reassign_pet_visit(
         self,
         event_id: str,
+        *,
         from_pet_id: str | None = None,
         to_pet_id: str | None = None,
     ) -> dict[str, Any] | None:

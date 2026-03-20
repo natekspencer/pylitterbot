@@ -1224,7 +1224,7 @@ async def test_litter_robot_5_set_night_light_settings(
     patch_url = URL(f"{LR5_ENDPOINT}/robots/{robot.serial}")
 
     mock_aioresponse.patch(patch_url, payload={})
-    result = await robot.set_night_light_settings(mode="On")
+    result = await robot.set_night_light_settings(mode=NightLightMode.ON)
     assert result is True
 
     mock_aioresponse.patch(patch_url, payload={})
