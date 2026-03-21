@@ -514,8 +514,19 @@ class LitterRobot5(LitterRobot):
     @property
     def sleep_mode_enabled(self) -> bool:
         """Return True if sleep mode is enabled for any day."""
-        schedules = self._data.get("sleepSchedules") or []
-        return any(day.get("isEnabled", False) for day in schedules)
+        return any(day.get("isEnabled", False) for day in self.sleep_schedules)
+
+    @property
+    def sleep_schedules(self) -> list[dict[str, Any]]:
+        """Return the sleep schedule entries as a list of dicts.
+
+        Each entry contains dayOfWeek, isEnabled, sleepTime, and wakeTime.
+        Times are in minutes from midnight.
+        """
+        schedules = self._data.get("sleepSchedules")
+        if isinstance(schedules, list):
+            return [day for day in schedules if isinstance(day, dict)]
+        return []
 
     @property
     def sleep_mode_start_time(self) -> datetime | None:
@@ -728,10 +739,17 @@ class LitterRobot5(LitterRobot):
                 f"robots/{self.serial}",
                 json={command: kwargs.get("value")},
             )
-            return True
         except InvalidCommandException as ex:
             _LOGGER.error(ex)
             return False
+        # Update local state to reflect the change immediately
+        value = kwargs.get("value")
+        if isinstance(value, dict):
+            existing = self._data.get(command)
+            if isinstance(existing, dict):
+                value = {**existing, **value}
+        self._update_data({command: value}, partial=True)
+        return True
 
     async def _send_command(self, command: str) -> bool:
         """Send an operational command via POST /robots/{serial}/commands."""
@@ -773,27 +791,52 @@ class LitterRobot5(LitterRobot):
         self._update_data({"name": name}, partial=True)
         return self.name == name
 
+    async def set_night_light_settings(
+        self,
+        *,
+        mode: NightLightMode | None = None,
+        brightness: int | None = None,
+        color: str | None = None,
+    ) -> bool:
+        """Set night light settings.
+
+        Args:
+            mode: Night light mode.
+            brightness: Brightness level (0-100).
+            color: Color hex string (e.g., "#FF0000").
+
+        """
+        value: dict[str, Any] = {}
+        if mode is not None:
+            value["mode"] = mode.value.capitalize()
+        if brightness is not None:
+            if not 0 <= brightness <= 100:
+                raise InvalidCommandException(
+                    f"Invalid brightness: {brightness!r}. Must be between 0 and 100."
+                )
+            value["brightness"] = brightness
+        if color is not None:
+            value["color"] = color
+        if not value:
+            raise InvalidCommandException(
+                "At least one of mode, brightness, or color must be provided."
+            )
+        return await self._dispatch_command(
+            LitterRobot5Command.NIGHT_LIGHT_SETTINGS, value=value
+        )
+
     async def set_night_light(self, value: bool) -> bool:
         """Turn the night light on or off."""
-        mode = (NightLightMode.ON if value else NightLightMode.OFF).value.capitalize()
-        return await self._dispatch_command(
-            LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
-            value={"mode": mode},
-        )
+        mode = NightLightMode.ON if value else NightLightMode.OFF
+        return await self.set_night_light_settings(mode=mode)
 
     async def set_night_light_brightness(self, brightness: int) -> bool:
         """Set the night light brightness (0-100)."""
-        return await self._dispatch_command(
-            LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
-            value={"brightness": brightness},
-        )
+        return await self.set_night_light_settings(brightness=brightness)
 
     async def set_night_light_mode(self, mode: NightLightMode) -> bool:
         """Set the night light mode (On, Off, Auto/Ambient)."""
-        return await self._dispatch_command(
-            LitterRobot5Command.NIGHT_LIGHT_SETTINGS,
-            value={"mode": mode.value.capitalize()},
-        )
+        return await self.set_night_light_settings(mode=mode)
 
     async def set_panel_brightness(self, brightness: BrightnessLevel) -> bool:
         """Set the panel brightness."""
@@ -813,15 +856,11 @@ class LitterRobot5(LitterRobot):
 
     async def set_panel_lockout(self, value: bool) -> bool:
         """Turn the panel lock on or off."""
-        if await self._dispatch_command(
+        if not await self._dispatch_command(
             LitterRobot5Command.PANEL_SETTINGS,
             value={LitterRobot5Command.KEYPAD_LOCKED: value},
         ):
-            data = deepcopy(self._data)
-            data.setdefault(LitterRobot5Command.PANEL_SETTINGS, {})[
-                LitterRobot5Command.KEYPAD_LOCKED
-            ] = value
-            self._update_data(data)
+            return False
         return self.panel_lock_enabled == value
 
     async def set_privacy_mode(self, value: bool) -> bool:
@@ -904,15 +943,11 @@ class LitterRobot5(LitterRobot):
             raise InvalidCommandException(
                 f"Attempt to send an invalid wait time to Litter-Robot. Wait time must be one of: {self.VALID_WAIT_TIMES}, but received {wait_time}"
             )
-        if await self._dispatch_command(
+        if not await self._dispatch_command(
             LitterRobot5Command.LITTER_ROBOT_SETTINGS,
             value={LitterRobot5Command.CYCLE_DELAY: wait_time},
         ):
-            data = deepcopy(self._data)
-            data.setdefault(LitterRobot5Command.LITTER_ROBOT_SETTINGS, {})[
-                LitterRobot5Command.CYCLE_DELAY
-            ] = wait_time
-            self._update_data(data)
+            return False
         return self.clean_cycle_wait_time_minutes == wait_time
 
     async def get_activity_history(self, limit: int = 100) -> list[Activity]:
@@ -1029,6 +1064,47 @@ class LitterRobot5(LitterRobot):
         raise NotImplementedError(
             "Firmware updates cannot be triggered via the LR5 REST API."
         )
+
+    async def reassign_pet_visit(
+        self,
+        event_id: str,
+        *,
+        from_pet_id: str | None = None,
+        to_pet_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Reassign or unassign a pet visit activity.
+
+        Reassignment updates the pet's weight history on the device.
+
+        Args:
+            event_id: The eventId of the activity to modify.
+            from_pet_id: Pet to remove from the visit (for reassign/unassign).
+            to_pet_id: Pet to assign the visit to (for reassign). Omit to unassign.
+
+        Returns:
+            The updated activity dict on success, or None on failure.
+
+        """
+        if not from_pet_id and not to_pet_id:
+            raise InvalidCommandException(
+                "At least one of from_pet_id or to_pet_id must be provided"
+            )
+        body: dict[str, str] = {"eventId": event_id}
+        if from_pet_id:
+            body["fromPetId"] = from_pet_id
+        if to_pet_id:
+            body["toPetId"] = to_pet_id
+        url = f"{LR5_ENDPOINT}/robots/{self.serial}/activities"
+        try:
+            data = await self._account.session.request("PATCH", url, json=body)
+            return cast(dict[str, Any], data) if isinstance(data, dict) else None
+        except (
+            ClientResponseError,
+            ClientConnectorError,
+            ClientConnectionError,
+        ) as ex:
+            _LOGGER.error("Reassign pet visit failed: %s", ex)
+            return None
 
     @classmethod
     async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:
