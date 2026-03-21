@@ -1085,6 +1085,8 @@ class LitterRobot5(LitterRobot):
             The updated activity dict on success, or None on failure.
 
         """
+        if not event_id:
+            raise InvalidCommandException("An event_id must be provided")
         if not from_pet_id and not to_pet_id:
             raise InvalidCommandException(
                 "At least one of from_pet_id or to_pet_id must be provided"
