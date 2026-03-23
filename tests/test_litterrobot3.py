@@ -123,8 +123,9 @@ async def test_litter_robot_3_when_sleep_mode_disabled(mock_account: Account) ->
     assert robot.sleep_mode_start_time
 
     robot._update_data({**ROBOT_DATA, SLEEP_MODE_ACTIVE: "0", SLEEP_MODE_TIME: None})
-    assert not robot.sleep_mode_enabled
-    assert not robot.sleep_mode_start_time
+    updated_robot: LitterRobot3 = robot
+    assert not updated_robot.sleep_mode_enabled
+    assert not updated_robot.sleep_mode_start_time
 
 
 async def test_litter_robot_3_with_unknown_status(mock_account: Account) -> None:
