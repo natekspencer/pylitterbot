@@ -316,7 +316,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     @property
     def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
         """Return the sleep mode window."""
-        now = datetime.now(ZoneInfo(self._data["unitTimezone"]))
+        now = datetime.now(ZoneInfo(self.timezone)) if self.timezone else utcnow()
         return sched.current_window(now) if (sched := self._sleep_schedule) else None
 
     @property
@@ -355,6 +355,11 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     def surface_type(self) -> SurfaceType | None:
         """Return the surface type."""
         return to_enum(self._data.get("surfaceType"), SurfaceType)
+
+    @property
+    def timezone(self) -> str:
+        """Return the timezone."""
+        return cast(str, self._data.get("unitTimezone"))
 
     @property
     def usb_fault_status(self) -> UsbFaultStatus | None:
