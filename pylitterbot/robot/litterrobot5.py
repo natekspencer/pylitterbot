@@ -517,25 +517,13 @@ class LitterRobot5(LitterRobot):
     @property
     def sleep_mode_enabled(self) -> bool:
         """Return True if sleep mode is enabled for any day."""
-        return any(day.get("isEnabled", False) for day in self.sleep_schedules)
-
-    @property
-    def sleep_schedules(self) -> list[dict[str, Any]]:
-        """Return the sleep schedule entries as a list of dicts.
-
-        Each entry contains dayOfWeek, isEnabled, sleepTime, and wakeTime.
-        Times are in minutes from midnight.
-        """
-        schedules = self._data.get("sleepSchedules")
-        if isinstance(schedules, list):
-            return [day for day in schedules if isinstance(day, dict)]
-        return []
+        return (schedule := self.sleep_schedule) is not None and schedule.is_enabled
 
     @property
     def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
         """Return the sleep mode window."""
         now = datetime.now(ZoneInfo(self.timezone)) if self.timezone else utcnow()
-        return sched.current_window(now) if (sched := self._sleep_schedule) else None
+        return sched.current_window(now) if (sched := self.sleep_schedule) else None
 
     @property
     def status(self) -> LitterBoxStatus:

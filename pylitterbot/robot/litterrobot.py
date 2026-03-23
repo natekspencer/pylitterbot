@@ -112,7 +112,7 @@ class LitterRobot(Robot):
     @property
     def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
         """Return the sleep mode window."""
-        return schedule.current_window() if (schedule := self._sleep_schedule) else None
+        return schedule.current_window() if (schedule := self.sleep_schedule) else None
 
     @property
     def sleep_mode_start_time(self) -> datetime | None:
@@ -123,6 +123,11 @@ class LitterRobot(Robot):
     def sleep_mode_end_time(self) -> datetime | None:
         """Return the sleep mode end time, if any."""
         return window[1] if (window := self._sleep_mode_window) else None
+
+    @property
+    def sleep_schedule(self) -> SleepSchedule | None:
+        """Return the sleep schedule, if any."""
+        return self._sleep_schedule
 
     @property
     @abstractmethod

@@ -1181,10 +1181,10 @@ async def test_litter_robot_5_firmware_details_esp_fallback(
     await robot._account.disconnect()
 
 
-async def test_litter_robot_5_sleep_schedules(
+async def test_litter_robot_5_sleep_schedule(
     mock_account: Account,
 ) -> None:
-    """Tests the sleep_schedules public property."""
+    """Tests the sleep_schedule public property."""
     data = deepcopy(LITTER_ROBOT_5_DATA)
     # List format
     data["sleepSchedules"] = [
@@ -1192,16 +1192,18 @@ async def test_litter_robot_5_sleep_schedules(
         {"dayOfWeek": 1, "isEnabled": False, "sleepTime": 1320, "wakeTime": 420},
     ]
     robot = LitterRobot5(data=data, account=mock_account)
-    schedules = robot.sleep_schedules
-    assert len(schedules) == 2
-    assert schedules[0]["dayOfWeek"] == 0
-    assert schedules[0]["isEnabled"] is True
+    assert robot.sleep_schedule
+    sleep_schedule = robot.sleep_schedule
+    assert len(sleep_schedule.days) == 2
+    assert sleep_schedule.days[0].day == 0
+    assert sleep_schedule.days[0].is_enabled is True
     assert robot.sleep_mode_enabled
 
     # Missing schedules
     data["sleepSchedules"] = None
     robot = LitterRobot5(data=data, account=mock_account)
-    assert robot.sleep_schedules == []
+    assert robot.sleep_schedule
+    assert not robot.sleep_schedule.is_enabled
     assert not robot.sleep_mode_enabled
 
     await robot._account.disconnect()

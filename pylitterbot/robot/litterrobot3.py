@@ -78,7 +78,7 @@ class LitterRobot3(LitterRobot):
 
         While sleeping, it won't automatically perform a clean cycle.
         """
-        return (schedule := self._sleep_schedule) is not None and schedule.is_active()
+        return (schedule := self.sleep_schedule) is not None and schedule.is_active()
 
     @property
     def is_waste_drawer_full(self) -> bool:
