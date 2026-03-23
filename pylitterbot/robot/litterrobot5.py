@@ -6,7 +6,6 @@ import logging
 from copy import deepcopy
 from datetime import datetime, time
 from typing import TYPE_CHECKING, Any, cast
-from zoneinfo import ZoneInfo
 
 from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponseError
 
@@ -23,7 +22,7 @@ from ..enums import (
 from ..exceptions import InvalidCommandException, LitterRobotException
 from ..sleep_schedule import SleepSchedule
 from ..transport import PollingTransport
-from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin, utcnow
+from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin
 from .litterrobot import LitterRobot
 
 if TYPE_CHECKING:
@@ -184,7 +183,7 @@ class LitterRobot5(LitterRobot):
         return to_timestamp(self._state.get("lastSeen") or self._data.get("lastSeen"))
 
     @property
-    def timezone(self) -> str:
+    def timezone(self) -> str | None:
         """Return the timezone."""
         return cast(str, self._data.get("timezone"))
 
@@ -515,12 +514,6 @@ class LitterRobot5(LitterRobot):
     def pinch_status(self) -> str:
         """Return the pinch detection status."""
         return cast(str, self._state.get("pinchStatus", ""))
-
-    @property
-    def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
-        """Return the sleep mode window."""
-        now = datetime.now(ZoneInfo(self.timezone)) if self.timezone else utcnow()
-        return sched.current_window(now) if (sched := self.sleep_schedule) else None
 
     @property
     def status(self) -> LitterBoxStatus:

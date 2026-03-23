@@ -8,7 +8,6 @@ from enum import Enum, unique
 from json import dumps
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 from uuid import uuid4
-from zoneinfo import ZoneInfo
 
 import aiohttp
 
@@ -308,12 +307,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return cast(int, self._data.get("scoopsSavedCount", 0))
 
     @property
-    def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
-        """Return the sleep mode window."""
-        now = datetime.now(ZoneInfo(self.timezone)) if self.timezone else utcnow()
-        return sched.current_window(now) if (sched := self.sleep_schedule) else None
-
-    @property
     def status(self) -> LitterBoxStatus:
         """Return the status of the Litter-Robot.
 
@@ -351,7 +344,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return to_enum(self._data.get("surfaceType"), SurfaceType)
 
     @property
-    def timezone(self) -> str:
+    def timezone(self) -> str | None:
         """Return the timezone."""
         return cast(str, self._data.get("unitTimezone"))
 

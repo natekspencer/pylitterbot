@@ -103,6 +103,11 @@ class LitterRobot3(LitterRobot):
         return bool(self._data.get(SLEEP_MODE_ACTIVE, "0") != "0")
 
     @property
+    def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
+        """Return the sleep mode window."""
+        return sched.current_window() if (sched := self.sleep_schedule) else None
+
+    @property
     def status(self) -> LitterBoxStatus:
         """Return the status of the Litter-Robot."""
         return LitterBoxStatus(self.status_code)

@@ -106,6 +106,11 @@ class Robot(Event):
         """Return the datetime the robot was onboarded, if any."""
         return to_timestamp(self._data.get(self._data_setup_date))
 
+    @property
+    def timezone(self) -> str | None:
+        """Return the timezone, if any."""
+        return None
+
     @abstractmethod
     async def refresh(self) -> None:
         """Refresh the robot data from the API."""

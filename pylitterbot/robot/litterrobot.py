@@ -7,6 +7,7 @@ from abc import abstractmethod
 from collections.abc import Callable
 from datetime import datetime, time
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
@@ -112,7 +113,8 @@ class LitterRobot(Robot):
     @property
     def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
         """Return the sleep mode window."""
-        return schedule.current_window() if (schedule := self.sleep_schedule) else None
+        now = datetime.now(ZoneInfo(self.timezone) if self.timezone else None)
+        return sched.current_window(now) if (sched := self.sleep_schedule) else None
 
     @property
     def sleep_mode_start_time(self) -> datetime | None:
