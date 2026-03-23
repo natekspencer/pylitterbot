@@ -116,12 +116,12 @@ class LitterRobot(Robot):
 
     @property
     def sleep_mode_start_time(self) -> datetime | None:
-        """Return the sleep mode start time, if any."""
+        """Return the start time of the current or next sleep cycle, if any."""
         return window[0] if (window := self._sleep_mode_window) else None
 
     @property
     def sleep_mode_end_time(self) -> datetime | None:
-        """Return the sleep mode end time, if any."""
+        """Return the end time of the current or previous sleep cycle, if any."""
         return window[1] if (window := self._sleep_mode_window) else None
 
     @property
