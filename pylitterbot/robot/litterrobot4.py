@@ -308,12 +308,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return cast(int, self._data.get("scoopsSavedCount", 0))
 
     @property
-    def sleep_mode_enabled(self) -> bool:
-        """Return `True` if sleep mode is enabled."""
-        sleep_schedule = self._data["weekdaySleepModeEnabled"]
-        return any(day["isEnabled"] for day in sleep_schedule.values())
-
-    @property
     def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
         """Return the sleep mode window."""
         now = datetime.now(ZoneInfo(self.timezone)) if self.timezone else utcnow()

@@ -105,9 +105,9 @@ class LitterRobot(Robot):
         return cast(str, self._data.get(self._data_power_status, "NC"))
 
     @property
-    @abstractmethod
     def sleep_mode_enabled(self) -> bool:
         """Return `True` if sleep mode is enabled."""
+        return (schedule := self.sleep_schedule) is not None and schedule.is_enabled
 
     @property
     def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:

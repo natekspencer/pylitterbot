@@ -99,6 +99,8 @@ MODEL_TYPE_MAP = {
     MODEL_TYPE_PRO: "Litter-Robot 5 Pro",
 }
 
+SLEEP_SCHEDULES = "sleepSchedules"
+
 DEFAULT_POLLING_INTERVAL = 30.0
 
 
@@ -515,11 +517,6 @@ class LitterRobot5(LitterRobot):
         return cast(str, self._state.get("pinchStatus", ""))
 
     @property
-    def sleep_mode_enabled(self) -> bool:
-        """Return True if sleep mode is enabled for any day."""
-        return (schedule := self.sleep_schedule) is not None and schedule.is_enabled
-
-    @property
     def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
         """Return the sleep mode window."""
         now = datetime.now(ZoneInfo(self.timezone)) if self.timezone else utcnow()
@@ -617,7 +614,7 @@ class LitterRobot5(LitterRobot):
 
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info."""
-        sleep_data = self._data.get("sleepSchedules") or []
+        sleep_data = self._data.get(SLEEP_SCHEDULES) or []
         if sleep_data == self._previous_sleep_data:
             return
         self._previous_sleep_data = sleep_data
@@ -801,10 +798,7 @@ class LitterRobot5(LitterRobot):
                 If None, updates all days.
 
         """
-        schedules = deepcopy(self._data.get("sleepSchedules", []))
-        # Normalize dict format (legacy: {dayName: {...}}) to list format
-        if isinstance(schedules, dict):
-            schedules = list(schedules.values())
+        schedules = deepcopy(self._data.get(SLEEP_SCHEDULES, []))
         if not schedules:
             schedules = [
                 {"dayOfWeek": d, "isEnabled": False, "sleepTime": 0, "wakeTime": 0}
@@ -824,9 +818,9 @@ class LitterRobot5(LitterRobot):
                 schedule["wakeTime"] = wake_time
         try:
             await self._patch(
-                f"robots/{self.serial}", json={"sleepSchedules": schedules}
+                f"robots/{self.serial}", json={SLEEP_SCHEDULES: schedules}
             )
-            self._update_data({"sleepSchedules": schedules}, partial=True)
+            self._update_data({SLEEP_SCHEDULES: schedules}, partial=True)
             return True
         except Exception as ex:
             _LOGGER.error("Failed to set sleep mode: %s", ex)
