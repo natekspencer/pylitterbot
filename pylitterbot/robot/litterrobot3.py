@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import aiohttp
@@ -11,8 +11,9 @@ import aiohttp
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
 from ..exceptions import InvalidCommandException
+from ..sleep_schedule import SleepSchedule
 from ..transport import WebSocketMonitor, WebSocketProtocol
-from ..utils import round_time, to_timestamp, today_at_time, urljoin, utcnow
+from ..utils import to_timestamp, today_at_time, urljoin, utcnow
 from .litterrobot import MINIMUM_CYCLES_LEFT_DEFAULT, LitterRobot
 
 if TYPE_CHECKING:
@@ -36,6 +37,7 @@ class LitterRobot3(LitterRobot):
     """Data and methods for interacting with a Litter-Robot 3 automatic, self-cleaning litter box."""
 
     _attr_model = "Litter-Robot 3"
+    _previous_sleep_data: str | None
 
     VALID_WAIT_TIMES = [3, 7, 15]
 
@@ -72,11 +74,11 @@ class LitterRobot3(LitterRobot):
 
     @property
     def is_sleeping(self) -> bool:
-        """Return `True` if the Litter-Robot is currently "sleeping" and won't automatically perform a clean cycle."""
-        return (
-            self.sleep_mode_enabled
-            and int(self._data[SLEEP_MODE_ACTIVE][1:3]) < SLEEP_DURATION_HOURS
-        )
+        """Return `True` if the Litter-Robot is currently "sleeping".
+
+        While sleeping, it won't automatically perform a clean cycle.
+        """
+        return (schedule := self.sleep_schedule) is not None and schedule.is_active()
 
     @property
     def is_waste_drawer_full(self) -> bool:
@@ -101,6 +103,11 @@ class LitterRobot3(LitterRobot):
         return bool(self._data.get(SLEEP_MODE_ACTIVE, "0") != "0")
 
     @property
+    def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
+        """Return the sleep mode window."""
+        return sched.get_window() if (sched := self.sleep_schedule) else None
+
+    @property
     def status(self) -> LitterBoxStatus:
         """Return the status of the Litter-Robot."""
         return LitterBoxStatus(self.status_code)
@@ -119,50 +126,14 @@ class LitterRobot3(LitterRobot):
 
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info of a Litter-Robot."""
-        sleep_mode_active = self._data.get(SLEEP_MODE_ACTIVE, "0")
-        sleep_mode_time = self._data.get(SLEEP_MODE_TIME)
-
-        start_time = end_time = None
-
-        # The newer API uses `sleepModeTime` to avoid "drift" in the reported sleep start time
-        if sleep_mode_time:
-            start_time = today_at_time(
-                datetime.fromtimestamp(sleep_mode_time, timezone.utc).timetz()
-            )
-
-        # Handle older API sleep start time
-        if self.sleep_mode_enabled and not start_time:
-            try:
-                [hours, minutes, seconds] = list(
-                    map(int, sleep_mode_active[1:].split(":"))
-                )
-                # Round to the nearest minute to reduce "drift"
-                if self.last_seen is not None:
-                    start_time = round_time(
-                        today_at_time(self.last_seen.timetz())
-                        + (
-                            timedelta(hours=0 if self.is_sleeping else 24)
-                            - timedelta(hours=hours, minutes=minutes, seconds=seconds)
-                        )
-                    )
-                else:
-                    start_time = datetime.now(timezone.utc)
-            except ValueError:
-                _LOGGER.error(
-                    "Unable to parse sleep mode start time from value '%s'",
-                    sleep_mode_active,
-                )
-
-        if start_time:
-            now = utcnow()
-            if start_time <= now - SLEEP_DURATION:
-                start_time += timedelta(hours=24)
-            end_time = start_time + (
-                SLEEP_DURATION if start_time <= now else (SLEEP_DURATION * -2)
-            )
-
-        self._sleep_mode_start_time = start_time
-        self._sleep_mode_end_time = end_time
+        sleep_time = self._data.get(SLEEP_MODE_TIME) or 0
+        sleep_data = f"{self.sleep_mode_enabled}.{sleep_time}"
+        if sleep_data == self._previous_sleep_data:
+            return
+        self._previous_sleep_data = sleep_data
+        self._sleep_schedule = SleepSchedule.from_timestamp(
+            sleep_time, duration=SLEEP_DURATION, is_enabled=self.sleep_mode_enabled
+        )
 
     async def _dispatch_command(self, command: str, **kwargs: Any) -> bool:
         """Send a command to the Litter-Robot."""

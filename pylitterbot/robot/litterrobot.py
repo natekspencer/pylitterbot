@@ -7,9 +7,11 @@ from abc import abstractmethod
 from collections.abc import Callable
 from datetime import datetime, time
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
+from ..sleep_schedule import SleepSchedule
 from ..utils import to_timestamp
 from . import Robot
 
@@ -43,8 +45,8 @@ class LitterRobot(Robot):
     _command_power_on = LitterBoxCommand.POWER_ON
 
     _minimum_cycles_left: int = MINIMUM_CYCLES_LEFT_DEFAULT
-    _sleep_mode_start_time: datetime | None = None
-    _sleep_mode_end_time: datetime | None = None
+    _previous_sleep_data: dict | list | str | None = None
+    _sleep_schedule: SleepSchedule | None = None
 
     @property
     @abstractmethod
@@ -104,19 +106,30 @@ class LitterRobot(Robot):
         return cast(str, self._data.get(self._data_power_status, "NC"))
 
     @property
-    @abstractmethod
     def sleep_mode_enabled(self) -> bool:
         """Return `True` if sleep mode is enabled."""
+        return (schedule := self.sleep_schedule) is not None and schedule.is_enabled
+
+    @property
+    def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
+        """Return the sleep mode window."""
+        now = datetime.now(ZoneInfo(self.timezone) if self.timezone else None)
+        return sched.get_window(now) if (sched := self.sleep_schedule) else None
 
     @property
     def sleep_mode_start_time(self) -> datetime | None:
-        """Return the sleep mode start time, if any."""
-        return self._sleep_mode_start_time
+        """Return the start time of the current or next sleep cycle, if any."""
+        return window[0] if (window := self._sleep_mode_window) else None
 
     @property
     def sleep_mode_end_time(self) -> datetime | None:
-        """Return the sleep mode end time, if any."""
-        return self._sleep_mode_end_time
+        """Return the end time of the current or previous sleep cycle, if any."""
+        return window[1] if (window := self._sleep_mode_window) else None
+
+    @property
+    def sleep_schedule(self) -> SleepSchedule | None:
+        """Return the sleep schedule, if any."""
+        return self._sleep_schedule
 
     @property
     @abstractmethod
