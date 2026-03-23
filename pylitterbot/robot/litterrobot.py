@@ -114,7 +114,7 @@ class LitterRobot(Robot):
     def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
         """Return the sleep mode window."""
         now = datetime.now(ZoneInfo(self.timezone) if self.timezone else None)
-        return sched.current_window(now) if (sched := self.sleep_schedule) else None
+        return sched.get_window(now) if (sched := self.sleep_schedule) else None
 
     @property
     def sleep_mode_start_time(self) -> datetime | None:

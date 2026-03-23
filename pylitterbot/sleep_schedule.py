@@ -121,23 +121,23 @@ class SleepSchedule:
         """Get day."""
         return next((e for e in self.days if e.day == day), None)
 
-    def current_window(
-        self, now: datetime | None = None
+    def get_window(
+        self, dt: datetime | None = None
     ) -> tuple[datetime, datetime] | None:
-        """Return the current or next sleep window."""
+        """Return the window for the given datetime or now, if empty."""
         if not self.is_enabled:
             return None
 
-        if now is None:
-            now = utcnow()
+        if dt is None:
+            dt = utcnow()
 
-        if (window := self._cached_window) and max(window) > now:
+        if (window := self._cached_window) and max(window) > dt:
             return window
 
         start = end = None
 
         for offset in range(-7, 8):
-            day = now + timedelta(days=offset)
+            day = dt + timedelta(days=offset)
             entry = self.get_day(DayOfWeek.from_date(day))
             if entry is None or not entry.is_enabled:
                 continue
@@ -145,17 +145,17 @@ class SleepSchedule:
             sleep_minutes = entry.sleep_time.hour * 60 + entry.sleep_time.minute
             wake_minutes = entry.wake_time.hour * 60 + entry.wake_time.minute
 
-            start_of_day = datetime.combine(day.date(), time(), now.tzinfo)
+            start_of_day = datetime.combine(day.date(), time(), dt.tzinfo)
 
             if wake_minutes < sleep_minutes:  # crosses midnight
                 start = start_of_day - timedelta(minutes=1440 - sleep_minutes)
             else:
                 start = start_of_day + timedelta(minutes=sleep_minutes)
 
-            if now >= start or end is None:
+            if dt >= start or end is None:
                 end = start_of_day + timedelta(minutes=wake_minutes)
 
-            if now > max(start, end):
+            if dt > max(start, end):
                 continue
             break
 
@@ -166,10 +166,10 @@ class SleepSchedule:
         self._cached_window = (start, end)
         return self._cached_window
 
-    def is_active(self, now: datetime | None = None) -> bool:
-        """Return `True` if the window is active (sleeping)."""
-        if not (window := self.current_window(now)):
+    def is_active(self, dt: datetime | None = None) -> bool:
+        """Return `True` if the window is active (sleeping) for the given datetime."""
+        if not (window := self.get_window(dt)):
             return False
-        if now is None:
-            now = utcnow()
-        return window[0] <= now < window[1]
+        if dt is None:
+            dt = utcnow()
+        return window[0] <= dt < window[1]
