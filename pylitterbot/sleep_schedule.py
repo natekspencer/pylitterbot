@@ -168,7 +168,7 @@ class SleepSchedule:
 
     def is_active(self, now: datetime | None = None) -> bool:
         """Return `True` if the window is active (sleeping)."""
-        if not (window := self.current_window()):
+        if not (window := self.current_window(now)):
             return False
         if now is None:
             now = utcnow()

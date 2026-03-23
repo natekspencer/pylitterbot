@@ -45,7 +45,7 @@ class LitterRobot(Robot):
     _command_power_on = LitterBoxCommand.POWER_ON
 
     _minimum_cycles_left: int = MINIMUM_CYCLES_LEFT_DEFAULT
-    _previous_sleep_data: dict | list | int | None = None
+    _previous_sleep_data: dict | list | str | None = None
     _sleep_schedule: SleepSchedule | None = None
 
     @property

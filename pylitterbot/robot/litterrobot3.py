@@ -37,7 +37,7 @@ class LitterRobot3(LitterRobot):
     """Data and methods for interacting with a Litter-Robot 3 automatic, self-cleaning litter box."""
 
     _attr_model = "Litter-Robot 3"
-    _previous_sleep_data: int | None
+    _previous_sleep_data: str | None
 
     VALID_WAIT_TIMES = [3, 7, 15]
 
@@ -126,12 +126,13 @@ class LitterRobot3(LitterRobot):
 
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info of a Litter-Robot."""
-        sleep_data = self._data.get(SLEEP_MODE_TIME) or 0
+        sleep_time = self._data.get(SLEEP_MODE_TIME) or 0
+        sleep_data = f"{self.sleep_mode_enabled}.{sleep_time}"
         if sleep_data == self._previous_sleep_data:
             return
         self._previous_sleep_data = sleep_data
         self._sleep_schedule = SleepSchedule.from_timestamp(
-            sleep_data, duration=SLEEP_DURATION, is_enabled=self.sleep_mode_enabled
+            sleep_time, duration=SLEEP_DURATION, is_enabled=self.sleep_mode_enabled
         )
 
     async def _dispatch_command(self, command: str, **kwargs: Any) -> bool:
