@@ -386,7 +386,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info of a Litter-Robot."""
-        sleep_data = self._data.get("weekdaySleepModeEnabled")
+        sleep_data = cast(dict, self._data.get("weekdaySleepModeEnabled"))
         if sleep_data == self._previous_sleep_data:
             return
         self._previous_sleep_data = sleep_data

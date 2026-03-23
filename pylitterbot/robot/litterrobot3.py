@@ -121,7 +121,8 @@ class LitterRobot3(LitterRobot):
 
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info of a Litter-Robot."""
-        if (sleep_data := self._data.get(SLEEP_MODE_TIME)) == self._previous_sleep_data:
+        sleep_data = cast(int, self._data.get(SLEEP_MODE_TIME))
+        if sleep_data == self._previous_sleep_data:
             return
         self._previous_sleep_data = sleep_data
         self._sleep_schedule = SleepSchedule.from_timestamp(
