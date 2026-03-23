@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from copy import deepcopy
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time
 from typing import TYPE_CHECKING, Any, cast
 from zoneinfo import ZoneInfo
 
@@ -21,6 +21,7 @@ from ..enums import (
     NightLightMode,
 )
 from ..exceptions import InvalidCommandException, LitterRobotException
+from ..sleep_schedule import SleepSchedule
 from ..transport import PollingTransport
 from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin, utcnow
 from .litterrobot import LitterRobot
@@ -121,6 +122,8 @@ class LitterRobot5(LitterRobot):
 
     _litter_level = LITTER_LEVEL_EMPTY
     _litter_level_exp: datetime | None = None
+
+    _previous_sleep_data: list[dict] | None
 
     def __init__(self, data: dict, account: Account) -> None:
         """Initialize a Litter-Robot 5."""
@@ -529,16 +532,10 @@ class LitterRobot5(LitterRobot):
         return []
 
     @property
-    def sleep_mode_start_time(self) -> datetime | None:
-        """Return the sleep mode start time, if any."""
-        self._revalidate_sleep_info()
-        return self._sleep_mode_start_time
-
-    @property
-    def sleep_mode_end_time(self) -> datetime | None:
-        """Return the sleep mode end time, if any."""
-        self._revalidate_sleep_info()
-        return self._sleep_mode_end_time
+    def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
+        """Return the sleep mode window."""
+        now = datetime.now(ZoneInfo(self.timezone)) if self.timezone else utcnow()
+        return sched.current_window(now) if (sched := self._sleep_schedule) else None
 
     @property
     def status(self) -> LitterBoxStatus:
@@ -630,87 +627,13 @@ class LitterRobot5(LitterRobot):
         """Return the approximate waste drawer level."""
         return cast(float, self._state.get("dfiLevelPercent", 0.0))
 
-    def _revalidate_sleep_info(self) -> None:
-        """Revalidate sleep info."""
-        if (
-            self.sleep_mode_enabled
-            and (now := utcnow()) > (self._sleep_mode_start_time or now)
-            and now > (self._sleep_mode_end_time or now)
-        ):
-            self._parse_sleep_info()
-
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info."""
-        start = end = None
-        try:
-            now = (
-                datetime.now(ZoneInfo(self.timezone))
-                if self.timezone
-                else datetime.now(timezone.utc)
-            )
-        except Exception:
-            now = datetime.now(timezone.utc)
-
-        schedules = self._data.get("sleepSchedules")
-        # Normalize schedules into a dict keyed by weekday name for compatibility with original code
-        schedule_by_weekday: dict[str, dict] = {}
-
-        if isinstance(schedules, list):
-            # schedule items are {dayOfWeek: 0-6, isEnabled, sleepTime, wakeTime}
-            for item in schedules:
-                dow = item.get("dayOfWeek")
-                try:
-                    day_name = (now + timedelta(days=(dow - now.weekday()))).strftime(
-                        "%A"
-                    )
-                except Exception:
-                    # fallback: map 0->Monday per common conventions? Use Python weekday: Monday=0
-                    # If user supplies Sunday=0 adjust accordingly. We'll attempt both: check for 0->Sunday vs 0->Monday heuristics.
-                    # Try direct mapping first: 0->Monday
-                    mapping = [
-                        "Monday",
-                        "Tuesday",
-                        "Wednesday",
-                        "Thursday",
-                        "Friday",
-                        "Saturday",
-                        "Sunday",
-                    ]
-                    day_name = (
-                        mapping[dow]
-                        if isinstance(dow, int) and 0 <= dow <= 6
-                        else "Monday"
-                    )
-                schedule_by_weekday[day_name] = item
-        elif isinstance(schedules, dict):
-            # older shape: direct weekday->schedule mapping
-            schedule_by_weekday = schedules
-        else:
-            schedule_by_weekday = {}
-
-        for idx in range(-7, 8):
-            day = now + timedelta(days=idx)
-            name = day.strftime("%A")
-            schedule = schedule_by_weekday.get(name)
-            if not schedule or not schedule.get("isEnabled"):
-                continue
-
-            start_of_day = datetime.combine(day.date(), time(), day.tzinfo)
-            sleep_time = schedule.get("sleepTime", 0)
-            wake_time = schedule.get("wakeTime", 0)
-            # sleepTime/wakeTime appear to be minutes from midnight in original code
-            if sleep_time < wake_time:
-                start = start_of_day + timedelta(minutes=sleep_time)
-            else:
-                # sleep crosses previous day boundary (e.g., sleep at 22:00, wake at 7:00)
-                start = start_of_day - timedelta(minutes=1440 - sleep_time)
-            end = start_of_day + timedelta(minutes=wake_time)
-            # If now is within this sleep window, use it
-            if start <= now <= end:
-                break
-
-        self._sleep_mode_start_time = start
-        self._sleep_mode_end_time = end
+        sleep_data = self._data.get("sleepSchedules")
+        if sleep_data == self._previous_sleep_data:
+            return
+        self._previous_sleep_data = sleep_data
+        self._sleep_schedule = SleepSchedule.parse(sleep_data)
 
     async def _dispatch_command(self, command: str, **kwargs: Any) -> bool:
         """Send a command to the Litter-Robot.

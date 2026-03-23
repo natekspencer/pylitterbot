@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from enum import Enum, unique
 from json import dumps
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -23,6 +23,7 @@ from ..enums import (
     NightLightMode,
 )
 from ..exceptions import InvalidCommandException, LitterRobotException
+from ..sleep_schedule import SleepSchedule
 from ..transport import WebSocketMonitor, WebSocketProtocol
 from ..utils import calculate_litter_level, encode, to_enum, to_timestamp, utcnow
 from .litterrobot import LitterRobot
@@ -159,6 +160,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     _firmware_details: dict[str, bool | dict[str, str]] | None = None
     _firmware_details_requested: datetime | None = None
+
+    _previous_sleep_data: dict[str, dict] | None
 
     _ws_subscription_id: str | None = None
 
@@ -311,16 +314,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return any(day["isEnabled"] for day in sleep_schedule.values())
 
     @property
-    def sleep_mode_start_time(self) -> datetime | None:
-        """Return the sleep mode start time, if any."""
-        self._revalidate_sleep_info()
-        return self._sleep_mode_start_time
-
-    @property
-    def sleep_mode_end_time(self) -> datetime | None:
-        """Return the sleep mode end time, if any."""
-        self._revalidate_sleep_info()
-        return self._sleep_mode_end_time
+    def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
+        """Return the sleep mode window."""
+        now = datetime.now(ZoneInfo(self._data["unitTimezone"]))
+        return sched.current_window(now) if (sched := self._sleep_schedule) else None
 
     @property
     def status(self) -> LitterBoxStatus:
@@ -374,15 +371,6 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         """Return the Wi-Fi mode status."""
         return to_enum(self._data.get("wifiModeStatus"), WifiModeStatus)
 
-    def _revalidate_sleep_info(self) -> None:
-        """Revalidate sleep info."""
-        if (
-            self.sleep_mode_enabled
-            and (now := utcnow()) > (self._sleep_mode_start_time or now)
-            and now > (self._sleep_mode_end_time or now)
-        ):
-            self._parse_sleep_info()
-
     def _parse_activity(self, activity: dict[str, str]) -> LitterBoxStatus | str:
         """Parse an activity."""
         value = activity["value"]
@@ -398,26 +386,11 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info of a Litter-Robot."""
-        start = end = None
-        now = datetime.now(ZoneInfo(self._data["unitTimezone"]))
-        sleep_schedule = self._data["weekdaySleepModeEnabled"]
-        for idx in range(-7, 8):
-            day = now + timedelta(days=idx)
-            if (schedule := sleep_schedule[day.strftime("%A")])["isEnabled"]:
-                start_of_day = datetime.combine(day, time(), day.tzinfo)
-                if (wake_time := schedule["wakeTime"]) < (
-                    sleep_time := schedule["sleepTime"]
-                ):
-                    start = start_of_day - timedelta(minutes=1440 - sleep_time)
-                else:
-                    start = start_of_day + timedelta(minutes=sleep_time)
-                if now > start or end is None:
-                    end = start_of_day + timedelta(minutes=wake_time)
-                if now > max(start, end):
-                    continue
-                break
-        self._sleep_mode_start_time = start
-        self._sleep_mode_end_time = end
+        sleep_data = self._data.get("weekdaySleepModeEnabled")
+        if sleep_data == self._previous_sleep_data:
+            return
+        self._previous_sleep_data = sleep_data
+        self._sleep_schedule = SleepSchedule.parse(sleep_data)
 
     async def _dispatch_command(self, command: str, **kwargs: Any) -> bool:
         """Send a command to the Litter-Robot."""

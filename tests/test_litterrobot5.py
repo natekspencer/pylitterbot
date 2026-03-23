@@ -75,7 +75,7 @@ async def test_litter_robot_5(
     assert robot.status == LitterBoxStatus.READY
     assert robot.status_code == LitterBoxStatus.READY.value
     assert robot.status_text == LitterBoxStatus.READY.text
-    assert robot.timezone == "America/New_York"
+    assert robot.timezone == "America/Denver"
     assert robot.waste_drawer_level == 16
 
     await robot._account.disconnect()
@@ -798,6 +798,45 @@ async def test_litter_robot_5_sleep_mode_enabled(
     assert robot.sleep_mode_enabled
 
     await robot._account.disconnect()
+
+
+async def test_litter_robot_5_sleep_time(
+    freezer: FrozenDateTimeFactory, mock_account: Account
+) -> None:
+    """Tests that a Litter-Robot 5 parses sleep time as expected."""
+    freezer.move_to("2026-03-22 12:00:00-06:00")
+    sleep_schedules = {
+        "sleepSchedules": [
+            {"dayOfWeek": 0, "isEnabled": True, "sleepTime": 1350, "wakeTime": 450},
+            {"dayOfWeek": 1, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+            {"dayOfWeek": 2, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+            {"dayOfWeek": 3, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+            {"dayOfWeek": 4, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+            {"dayOfWeek": 5, "isEnabled": False, "sleepTime": 0, "wakeTime": 0},
+            {"dayOfWeek": 6, "isEnabled": True, "sleepTime": 1350, "wakeTime": 450},
+        ]
+    }
+    data = {**LITTER_ROBOT_5_DATA, **sleep_schedules}
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.sleep_mode_enabled
+    assert robot.sleep_mode_start_time
+    assert robot.sleep_mode_start_time.isoformat() == "2026-03-27T22:30:00-06:00"
+    assert robot.sleep_mode_end_time
+    assert robot.sleep_mode_end_time.isoformat() == "2026-03-22T07:30:00-06:00"
+
+    freezer.move_to("2026-03-27 22:30:00-06:00")
+    assert robot.sleep_mode_enabled
+    assert robot.sleep_mode_start_time
+    assert robot.sleep_mode_start_time.isoformat() == "2026-03-27T22:30:00-06:00"
+    assert robot.sleep_mode_end_time
+    assert robot.sleep_mode_end_time.isoformat() == "2026-03-22T07:30:00-06:00"
+
+    freezer.tick()
+    assert robot.sleep_mode_enabled
+    assert robot.sleep_mode_start_time
+    assert robot.sleep_mode_start_time.isoformat() == "2026-03-27T22:30:00-06:00"
+    assert robot.sleep_mode_end_time
+    assert robot.sleep_mode_end_time.isoformat() == "2026-03-28T07:30:00-06:00"
 
 
 async def test_litter_robot_5_sleep_mode_disabled(

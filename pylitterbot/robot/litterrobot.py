@@ -10,6 +10,7 @@ from typing import Any, cast
 
 from ..activity import Activity, Insight
 from ..enums import LitterBoxCommand, LitterBoxStatus
+from ..sleep_schedule import SleepSchedule
 from ..utils import to_timestamp
 from . import Robot
 
@@ -43,8 +44,8 @@ class LitterRobot(Robot):
     _command_power_on = LitterBoxCommand.POWER_ON
 
     _minimum_cycles_left: int = MINIMUM_CYCLES_LEFT_DEFAULT
-    _sleep_mode_start_time: datetime | None = None
-    _sleep_mode_end_time: datetime | None = None
+    _previous_sleep_data: dict | list | int | None = None
+    _sleep_schedule: SleepSchedule | None = None
 
     @property
     @abstractmethod
@@ -109,14 +110,19 @@ class LitterRobot(Robot):
         """Return `True` if sleep mode is enabled."""
 
     @property
+    def _sleep_mode_window(self) -> tuple[datetime, datetime] | None:
+        """Return the sleep mode window."""
+        return schedule.current_window() if (schedule := self._sleep_schedule) else None
+
+    @property
     def sleep_mode_start_time(self) -> datetime | None:
         """Return the sleep mode start time, if any."""
-        return self._sleep_mode_start_time
+        return window[0] if (window := self._sleep_mode_window) else None
 
     @property
     def sleep_mode_end_time(self) -> datetime | None:
         """Return the sleep mode end time, if any."""
-        return self._sleep_mode_end_time
+        return window[1] if (window := self._sleep_mode_window) else None
 
     @property
     @abstractmethod

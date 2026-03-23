@@ -1,8 +1,7 @@
-"""Test robot module."""
+"""Test litterrobot3 module."""
 
 # pylint: disable=protected-access
 import asyncio
-import logging
 import random
 from collections.abc import Callable
 from datetime import datetime, time, timedelta, timezone
@@ -12,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 from aioresponses import CallbackResult, aioresponses
+from freezegun.api import FrozenDateTimeFactory
 from yarl import URL
 
 from pylitterbot import Account
@@ -36,8 +36,11 @@ from .common import (
 pytestmark = pytest.mark.asyncio
 
 
-async def test_robot_setup(mock_account: Account) -> None:
+async def test_litter_robot_3_setup(
+    freezer: FrozenDateTimeFactory, mock_account: Account
+) -> None:
     """Tests that robot setup is successful and parses as expected."""
+    freezer.move_to("2021-02-01 00:30:00-00:00")
     robot = LitterRobot3(data=ROBOT_DATA, account=mock_account)
     assert robot
     assert (
@@ -74,8 +77,11 @@ async def test_robot_setup(mock_account: Account) -> None:
     assert robot.status_text == LitterBoxStatus.READY.text
     assert robot.waste_drawer_level == 50
 
+    freezer.move_to("2021-02-01 10:30:00-00:00")
+    assert not robot.is_sleeping
 
-async def test_robot_with_zero_cycle_capacity(mock_account: Account) -> None:
+
+async def test_litter_robot_3_with_zero_cycle_capacity(mock_account: Account) -> None:
     """Tests that a robot with zero cycle capacity doesn't cause an error."""
     data = {**ROBOT_DATA, "cycleCount": 0, "unitStatus": "DFS"}
     robot = LitterRobot3(data=data, account=mock_account)
@@ -83,7 +89,7 @@ async def test_robot_with_zero_cycle_capacity(mock_account: Account) -> None:
     assert robot.waste_drawer_level == 100
 
 
-async def test_robot_with_sleep_mode_time(mock_account: Account) -> None:
+async def test_litter_robot_3_with_sleep_mode_time(mock_account: Account) -> None:
     """Tests that robot with `sleepModeTime` is setup correctly."""
     for hour in range(-12, 25, 12):
         with patch(
@@ -104,25 +110,7 @@ async def test_robot_with_sleep_mode_time(mock_account: Account) -> None:
             )
 
 
-async def test_robot_with_invalid_sleep_mode_active(
-    mock_account: Account, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Tests that a robot with an invalid `sleepModeActive` value is setup correctly."""
-    invalid_value = "17F"
-    robot = LitterRobot3(
-        data={**ROBOT_DATA, "sleepModeActive": invalid_value}, account=mock_account
-    )
-    assert caplog.record_tuples == [
-        (
-            "pylitterbot.robot.litterrobot3",
-            logging.ERROR,
-            f"Unable to parse sleep mode start time from value '{invalid_value}'",
-        )
-    ]
-    assert robot.sleep_mode_start_time is None
-
-
-async def test_robot_with_unknown_status(mock_account: Account) -> None:
+async def test_litter_robot_3_with_unknown_status(mock_account: Account) -> None:
     """Tests that a robot with an unknown `unitStatus` is setup correctly."""
     random_status = "_" + "".join(random.sample(ascii_letters, 3))
 
@@ -135,7 +123,9 @@ async def test_robot_with_unknown_status(mock_account: Account) -> None:
     assert robot.status.text == "Unknown"
 
 
-async def test_robot_with_drawer_full_status(mock_aioresponse: aioresponses) -> None:
+async def test_litter_robot_3_with_drawer_full_status(
+    mock_aioresponse: aioresponses,
+) -> None:
     """Tests that a robot with a `unitStatus` of DF1/DF2 calls the activity endpoint."""
     url = ROBOT_ENDPOINT % ROBOT_FULL_ID
 
@@ -166,7 +156,7 @@ async def test_robot_with_drawer_full_status(mock_aioresponse: aioresponses) -> 
     await robot._account.disconnect()
 
 
-async def test_robot_deleted(mock_account: Account) -> None:
+async def test_litter_robot_3_deleted(mock_account: Account) -> None:
     """Tests that robot setup for a deleted robot without serial number throws an error."""
     with pytest.raises(ValueError):
         LitterRobot3(data=ROBOT_DELETED_DATA, account=mock_account)
@@ -304,7 +294,7 @@ async def test_invalid_commands(
     await robot._account.disconnect()
 
 
-async def test_robot_update_event(mock_account: Account) -> None:
+async def test_litter_robot_3_update_event(mock_account: Account) -> None:
     """Test robot emits an update event."""
     robot = LitterRobot3(data=ROBOT_DATA, account=mock_account)
     assert not robot._listeners
