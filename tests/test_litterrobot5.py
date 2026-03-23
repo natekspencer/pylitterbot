@@ -829,13 +829,6 @@ async def test_litter_robot_5_sleep_time(
     assert robot.sleep_mode_start_time
     assert robot.sleep_mode_start_time.isoformat() == "2026-03-27T22:30:00-06:00"
     assert robot.sleep_mode_end_time
-    assert robot.sleep_mode_end_time.isoformat() == "2026-03-22T07:30:00-06:00"
-
-    freezer.tick()
-    assert robot.sleep_mode_enabled
-    assert robot.sleep_mode_start_time
-    assert robot.sleep_mode_start_time.isoformat() == "2026-03-27T22:30:00-06:00"
-    assert robot.sleep_mode_end_time
     assert robot.sleep_mode_end_time.isoformat() == "2026-03-28T07:30:00-06:00"
 
 

@@ -152,7 +152,7 @@ class SleepSchedule:
             else:
                 start = start_of_day + timedelta(minutes=sleep_minutes)
 
-            if now > start or end is None:
+            if now >= start or end is None:
                 end = start_of_day + timedelta(minutes=wake_minutes)
 
             if now > max(start, end):
