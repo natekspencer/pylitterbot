@@ -629,7 +629,7 @@ class LitterRobot5(LitterRobot):
 
     def _parse_sleep_info(self) -> None:
         """Parse the sleep info."""
-        sleep_data = cast(list, self._data.get("sleepSchedules"))
+        sleep_data = self._data.get("sleepSchedules") or []
         if sleep_data == self._previous_sleep_data:
             return
         self._previous_sleep_data = sleep_data

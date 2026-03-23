@@ -18,7 +18,13 @@ from pylitterbot import Account
 from pylitterbot.enums import LitterBoxCommand, LitterBoxStatus
 from pylitterbot.exceptions import InvalidCommandException
 from pylitterbot.robot import EVENT_UPDATE
-from pylitterbot.robot.litterrobot3 import UNIT_STATUS, LitterRobot, LitterRobot3
+from pylitterbot.robot.litterrobot3 import (
+    SLEEP_MODE_ACTIVE,
+    SLEEP_MODE_TIME,
+    UNIT_STATUS,
+    LitterRobot,
+    LitterRobot3,
+)
 
 from .common import (
     COMMAND_RESPONSE,
@@ -101,13 +107,24 @@ async def test_litter_robot_3_with_sleep_mode_time(mock_account: Account) -> Non
             )
 
             robot = LitterRobot3(
-                data={**ROBOT_DATA, "sleepModeTime": int(start_time.timestamp())},
+                data={**ROBOT_DATA, SLEEP_MODE_TIME: int(start_time.timestamp())},
                 account=mock_account,
             )
             assert (
                 robot.sleep_mode_start_time
                 and robot.sleep_mode_start_time.timetz() == start_time.timetz()
             )
+
+
+async def test_litter_robot_3_when_sleep_mode_disabled(mock_account: Account) -> None:
+    """Tests that robot with `sleepModeTime` removed is updated correctly."""
+    robot = LitterRobot3(data=ROBOT_DATA, account=mock_account)
+    assert robot.sleep_mode_enabled
+    assert robot.sleep_mode_start_time
+
+    robot._update_data({**ROBOT_DATA, SLEEP_MODE_ACTIVE: "0", SLEEP_MODE_TIME: None})
+    assert not robot.sleep_mode_enabled
+    assert not robot.sleep_mode_start_time
 
 
 async def test_litter_robot_3_with_unknown_status(mock_account: Account) -> None:
@@ -222,7 +239,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
         json = kwargs["json"]
         assert json.get("sleepModeEnable")
         assert robot.sleep_mode_start_time
-        assert json.get("sleepModeTime") in (
+        assert json.get(SLEEP_MODE_TIME) in (
             robot.sleep_mode_start_time.timestamp(),
             (robot.sleep_mode_start_time + timedelta(hours=24)).timestamp(),
         )
@@ -235,7 +252,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
         json = kwargs["json"]
         assert json.get("sleepModeEnable")
         assert robot.sleep_mode_start_time
-        assert json.get("sleepModeTime") in (
+        assert json.get(SLEEP_MODE_TIME) in (
             robot.sleep_mode_start_time.timestamp(),
             (robot.sleep_mode_start_time + timedelta(hours=24)).timestamp(),
         )
