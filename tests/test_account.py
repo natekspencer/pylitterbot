@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import pytest
 from aioresponses import aioresponses
@@ -83,6 +83,21 @@ async def test_account(
         side_effect=mock_client_response_error(),
     ):
         await account.refresh_robots()
+
+    await account.disconnect()
+
+
+async def test_account_get_robots(mock_aioresponse: aioresponses) -> None:
+    """Tests that an account is properly setup."""
+    account = await get_account(token_update_callback=lambda token: None)
+
+    await account.connect(username=USERNAME, password=PASSWORD, load_robots=True)
+    assert len(account.get_robots(FeederRobot)) == 1
+
+    with patch.object(
+        FeederRobot, "is_onboarded", new_callable=PropertyMock, return_value=False
+    ):
+        assert len(account.get_robots(FeederRobot, ignore_removed=True)) == 0
 
     await account.disconnect()
 

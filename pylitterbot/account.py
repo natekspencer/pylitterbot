@@ -86,9 +86,16 @@ class Account:
             None,
         )
 
-    def get_robots(self, robot_class: type[_RobotT]) -> list[_RobotT]:
+    def get_robots(
+        self, robot_class: type[_RobotT], *, ignore_removed: bool = False
+    ) -> list[_RobotT]:
         """If found, return the specified class of robots."""
-        return [robot for robot in self._robots if isinstance(robot, robot_class)]
+        return [
+            robot
+            for robot in self._robots
+            if isinstance(robot, robot_class)
+            and robot.is_onboarded == (ignore_removed or robot.is_onboarded)
+        ]
 
     def get_pet(self, pet_id: str) -> Pet | None:
         """If found, return the pet with the specified id."""

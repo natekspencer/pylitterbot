@@ -90,6 +90,11 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         return bool(self._state_info("gravity"))
 
     @property
+    def is_onboarded(self) -> bool:
+        """Return `True` if the robot is onboarded."""
+        return bool(self._state_info("onBoarded"))
+
+    @property
     def is_online(self) -> bool:
         """Return `True` if the robot is online."""
         return bool(self._state_info("online"))
