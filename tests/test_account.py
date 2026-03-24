@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import pytest
 from aioresponses import aioresponses
@@ -94,8 +94,8 @@ async def test_account_get_robots(mock_aioresponse: aioresponses) -> None:
     await account.connect(username=USERNAME, password=PASSWORD, load_robots=True)
     assert len(account.get_robots(FeederRobot)) == 1
 
-    with patch(
-        "pylitterbot.robot.feederrobot.FeederRobot.is_onboarded", return_value=False
+    with patch.object(
+        FeederRobot, "is_onboarded", new_callable=PropertyMock, return_value=False
     ):
         assert len(account.get_robots(FeederRobot, ignore_removed=True)) == 0
 
