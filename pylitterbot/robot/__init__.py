@@ -63,6 +63,11 @@ class Robot(Event):
 
     @property
     @abstractmethod
+    def is_onboarded(self) -> bool:
+        """Return `True` if the robot is onboarded."""
+
+    @property
+    @abstractmethod
     def is_online(self) -> bool:
         """Return `True` if the robot is online."""
 

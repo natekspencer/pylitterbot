@@ -87,6 +87,21 @@ async def test_account(
     await account.disconnect()
 
 
+async def test_account_get_robots(mock_aioresponse: aioresponses) -> None:
+    """Tests that an account is properly setup."""
+    account = await get_account(token_update_callback=lambda token: None)
+
+    await account.connect(username=USERNAME, password=PASSWORD, load_robots=True)
+    assert len(account.get_robots(FeederRobot)) == 1
+
+    with patch(
+        "pylitterbot.robot.feederrobot.FeederRobot.is_onboarded", return_value=False
+    ):
+        assert len(account.get_robots(FeederRobot, ignore_removed=True)) == 0
+
+    await account.disconnect()
+
+
 # @pytest.mark.parametrize(
 #     "side_effect,exception",
 #     [
