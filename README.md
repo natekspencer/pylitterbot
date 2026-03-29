@@ -140,6 +140,10 @@ Add this to your Claude Desktop config (`claude_desktop_config.json`):
 }
 ```
 
+> **Note:** The configuration above stores credentials in plaintext. Ensure
+> appropriate file permissions on your config file (owner-only read/write) and
+> avoid committing it to version control.
+
 ### Available tools
 
 **Status and info:** `get_robots`, `get_robot_status`, `get_activity_history`, `get_insight`, `get_pets`
