@@ -18,9 +18,7 @@ async def resolve_robot(identifier: str) -> Robot:
         if robot.name.lower() == identifier.lower() or robot.id == identifier:
             return robot
     available = ", ".join(r.name for r in account.robots)
-    raise ValueError(
-        f"No robot found matching '{identifier}'. Available: {available}"
-    )
+    raise ValueError(f"No robot found matching '{identifier}'. Available: {available}")
 
 
 async def resolve_litter_robot(identifier: str) -> LitterRobot:

@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pylitterbot.robot.litterrobot5 import LitterRobot5
-
 from pylitterbot.mcp.helpers import format_pet_summary, resolve_robot
 from pylitterbot.mcp.server import get_account, mcp
+from pylitterbot.robot.litterrobot5 import LitterRobot5
 
 
 def _resolve_pet_id(pets: list, identifier: str) -> str:
@@ -16,9 +15,7 @@ def _resolve_pet_id(pets: list, identifier: str) -> str:
         if pet.name.lower() == identifier.lower() or pet.id == identifier:
             return pet.id
     available = ", ".join(p.name for p in pets)
-    raise ValueError(
-        f"No pet found matching '{identifier}'. Available: {available}"
-    )
+    raise ValueError(f"No pet found matching '{identifier}'. Available: {available}")
 
 
 @mcp.tool()
@@ -44,6 +41,7 @@ async def reassign_pet_visit(
         event_id: The event ID of the activity to reassign.
         from_pet: Name or ID of the pet currently assigned to the visit.
         to_pet: Name or ID of the pet to reassign the visit to.
+
     """
     resolved = await resolve_robot(robot)
     if not isinstance(resolved, LitterRobot5):

@@ -73,9 +73,7 @@ class TestStartCleaning:
         """start_cleaning calls start_cleaning on the resolved LitterRobot."""
         from pylitterbot.mcp.tools.commands import start_cleaning
 
-        with patch(
-            "pylitterbot.mcp.helpers.get_account", return_value=mock_account
-        ):
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await start_cleaning(robot="Kitchen")
         mock_account.robots[0].start_cleaning.assert_awaited_once()
         assert "Kitchen" in result
@@ -100,9 +98,7 @@ class TestResetRobot:
         """reset_robot calls reset on an LR4."""
         from pylitterbot.mcp.tools.commands import reset_robot
 
-        with patch(
-            "pylitterbot.mcp.helpers.get_account", return_value=mock_account
-        ):
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await reset_robot(robot="Kitchen")
         mock_account.robots[0].reset.assert_awaited_once()
         assert "Kitchen" in result
@@ -112,9 +108,7 @@ class TestResetRobot:
         """reset_robot calls reset on an LR5."""
         from pylitterbot.mcp.tools.commands import reset_robot
 
-        with patch(
-            "pylitterbot.mcp.helpers.get_account", return_value=mock_account
-        ):
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await reset_robot(robot="Living Room")
         mock_account.robots[2].reset.assert_awaited_once()
         assert "Living Room" in result
@@ -124,9 +118,7 @@ class TestResetRobot:
         """reset_robot returns an error message for LR3 (no remote reset)."""
         from pylitterbot.mcp.tools.commands import reset_robot
 
-        with patch(
-            "pylitterbot.mcp.helpers.get_account", return_value=mock_account
-        ):
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await reset_robot(robot="Basement")
         assert "does not support" in result
 
@@ -139,9 +131,7 @@ class TestGiveSnack:
         """give_snack calls give_snack on the resolved FeederRobot."""
         from pylitterbot.mcp.tools.commands import give_snack
 
-        with patch(
-            "pylitterbot.mcp.helpers.get_account", return_value=mock_account
-        ):
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await give_snack(robot="Feeder")
         mock_account.robots[3].give_snack.assert_awaited_once()
         assert "Feeder" in result
@@ -166,9 +156,7 @@ class TestSetPowerStatus:
         """set_power_status calls set_power_status(False) on the robot."""
         from pylitterbot.mcp.tools.commands import set_power_status
 
-        with patch(
-            "pylitterbot.mcp.helpers.get_account", return_value=mock_account
-        ):
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await set_power_status(robot="Kitchen", enabled=False)
         mock_account.robots[0].set_power_status.assert_awaited_once_with(False)
         assert "off" in result.lower()
@@ -178,9 +166,7 @@ class TestSetPowerStatus:
         """set_power_status calls set_power_status(True) on the robot."""
         from pylitterbot.mcp.tools.commands import set_power_status
 
-        with patch(
-            "pylitterbot.mcp.helpers.get_account", return_value=mock_account
-        ):
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await set_power_status(robot="Kitchen", enabled=True)
         mock_account.robots[0].set_power_status.assert_awaited_once_with(True)
         assert "on" in result.lower()

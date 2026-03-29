@@ -118,9 +118,7 @@ class TestReassignPetVisit:
 
         with (
             patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
-            patch(
-                "pylitterbot.mcp.tools.pets.get_account", return_value=mock_account
-            ),
+            patch("pylitterbot.mcp.tools.pets.get_account", return_value=mock_account),
             pytest.raises(ValueError, match="only supported on Litter-Robot 5"),
         ):
             await reassign_pet_visit(
@@ -137,9 +135,7 @@ class TestReassignPetVisit:
 
         with (
             patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
-            patch(
-                "pylitterbot.mcp.tools.pets.get_account", return_value=mock_account
-            ),
+            patch("pylitterbot.mcp.tools.pets.get_account", return_value=mock_account),
             pytest.raises(ValueError, match="No pet found"),
         ):
             await reassign_pet_visit(
