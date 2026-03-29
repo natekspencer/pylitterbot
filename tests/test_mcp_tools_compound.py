@@ -311,6 +311,6 @@ class TestPetUsageReport:
         with patch(
             "pylitterbot.mcp.tools.compound.get_account", return_value=mock_account
         ):
-            result = await pet_usage_report(days=30)
+            result = await pet_usage_report()
         assert "pets" in result
         assert "robots" in result

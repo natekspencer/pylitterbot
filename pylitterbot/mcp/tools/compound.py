@@ -161,7 +161,12 @@ async def sync_settings(source_robot: str) -> dict[str, Any]:
             )
 
         if robot.sleep_mode_enabled != source.sleep_mode_enabled:
-            await robot.set_sleep_mode(source.sleep_mode_enabled)
+            sleep_time = (
+                source.sleep_mode_start_time.timetz()
+                if source.sleep_mode_start_time
+                else None
+            )
+            await robot.set_sleep_mode(source.sleep_mode_enabled, sleep_time)
             changes.append(
                 f"sleep_mode: {robot.sleep_mode_enabled} -> {source.sleep_mode_enabled}"
             )
@@ -188,16 +193,12 @@ async def sync_settings(source_robot: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def pet_usage_report(days: int = 30) -> dict[str, Any]:
+async def pet_usage_report() -> dict[str, Any]:
     """Generate a per-pet usage report across all robots.
 
-    Aggregates activity data from all Litter-Robots and associates it with
-    pets. Note: direct pet-to-activity attribution may be limited depending
-    on the robot model.
-
-    Args:
-        days: Number of days to look back (default 30).
-
+    Aggregates recent activity data (up to 100 entries) from all Litter-Robots
+    and lists all pets. Note: direct pet-to-activity attribution may be limited
+    depending on the robot model.
     """
     account = await get_account()
     await account.refresh_robots()
@@ -227,7 +228,6 @@ async def pet_usage_report(days: int = 30) -> dict[str, Any]:
     pet_summaries = [format_pet_summary(pet) for pet in account.pets]
 
     return {
-        "period_days": days,
         "pets": pet_summaries,
         "robots": robot_summaries,
     }
@@ -248,7 +248,7 @@ async def maintenance_forecast() -> list[dict[str, Any]]:
         if not isinstance(robot, LitterRobot):
             continue
 
-        cycles_remaining = robot.cycle_capacity - robot.cycle_count
+        cycles_remaining = max(0, robot.cycle_capacity - robot.cycle_count)
 
         try:
             insight = await robot.get_insight(days=7)
@@ -324,7 +324,7 @@ async def household_digest(days: int = 7) -> dict[str, Any]:
                 }
             )
 
-        if isinstance(robot, LitterRobot) and _needs_attention(robot):
+        if _needs_attention(robot):
             alerts.append(
                 {
                     "robot": robot.name,
