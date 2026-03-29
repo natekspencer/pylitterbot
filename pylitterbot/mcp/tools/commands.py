@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from pylitterbot.robot.litterrobot4 import LitterRobot4
-from pylitterbot.robot.litterrobot5 import LitterRobot5
-
 from pylitterbot.mcp.helpers import resolve_feeder_robot, resolve_litter_robot
 from pylitterbot.mcp.server import mcp
+from pylitterbot.robot.litterrobot4 import LitterRobot4
+from pylitterbot.robot.litterrobot5 import LitterRobot5
 
 
 @mcp.tool()
@@ -15,6 +14,7 @@ async def start_cleaning(robot: str) -> str:
 
     Args:
         robot: Robot name (case-insensitive) or ID.
+
     """
     resolved = await resolve_litter_robot(robot)
     await resolved.start_cleaning()
@@ -27,6 +27,7 @@ async def reset_robot(robot: str) -> str:
 
     Args:
         robot: Robot name (case-insensitive) or ID.
+
     """
     resolved = await resolve_litter_robot(robot)
     if not isinstance(resolved, (LitterRobot4, LitterRobot5)):
@@ -44,6 +45,7 @@ async def give_snack(robot: str) -> str:
 
     Args:
         robot: Robot name (case-insensitive) or ID.
+
     """
     resolved = await resolve_feeder_robot(robot)
     await resolved.give_snack()
@@ -57,6 +59,7 @@ async def set_power_status(robot: str, enabled: bool) -> str:
     Args:
         robot: Robot name (case-insensitive) or ID.
         enabled: True to turn on, False to turn off.
+
     """
     resolved = await resolve_litter_robot(robot)
     await resolved.set_power_status(enabled)
