@@ -161,9 +161,7 @@ class TestSetSleepMode:
     """Tests for set_sleep_mode tool."""
 
     @pytest.mark.asyncio()
-    async def test_enables_sleep_mode_with_time(
-        self, mock_account: MagicMock
-    ) -> None:
+    async def test_enables_sleep_mode_with_time(self, mock_account: MagicMock) -> None:
         """set_sleep_mode parses HH:MM and calls robot.set_sleep_mode."""
         from pylitterbot.mcp.tools.settings import set_sleep_mode
 

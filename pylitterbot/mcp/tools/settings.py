@@ -5,10 +5,9 @@ from __future__ import annotations
 from datetime import time
 
 from pylitterbot.enums import NightLightMode
-from pylitterbot.robot.litterrobot4 import LitterRobot4
-
 from pylitterbot.mcp.helpers import resolve_litter_robot, resolve_robot
 from pylitterbot.mcp.server import mcp
+from pylitterbot.robot.litterrobot4 import LitterRobot4
 
 
 @mcp.tool()
@@ -18,6 +17,7 @@ async def set_name(robot: str, name: str) -> str:
     Args:
         robot: Robot name (case-insensitive) or ID.
         name: The new name for the robot.
+
     """
     resolved = await resolve_robot(robot)
     await resolved.set_name(name)
@@ -31,6 +31,7 @@ async def set_night_light(robot: str, enabled: bool) -> str:
     Args:
         robot: Robot name (case-insensitive) or ID.
         enabled: True to enable, False to disable.
+
     """
     resolved = await resolve_robot(robot)
     await resolved.set_night_light(enabled)
@@ -45,6 +46,7 @@ async def set_night_light_brightness(robot: str, brightness: int) -> str:
     Args:
         robot: Robot name (case-insensitive) or ID.
         brightness: Brightness level (25=low, 50=medium, 100=high).
+
     """
     resolved = await resolve_robot(robot)
     if not isinstance(resolved, LitterRobot4):
@@ -63,6 +65,7 @@ async def set_night_light_mode(robot: str, mode: str) -> str:
     Args:
         robot: Robot name (case-insensitive) or ID.
         mode: Night light mode - "off", "on", or "auto" (case-insensitive).
+
     """
     try:
         night_light_mode = NightLightMode(mode.upper())
@@ -88,6 +91,7 @@ async def set_panel_lockout(robot: str, enabled: bool) -> str:
     Args:
         robot: Robot name (case-insensitive) or ID.
         enabled: True to lock buttons, False to unlock.
+
     """
     resolved = await resolve_robot(robot)
     await resolved.set_panel_lockout(enabled)
@@ -102,6 +106,7 @@ async def set_wait_time(robot: str, minutes: int) -> str:
     Args:
         robot: Robot name (case-insensitive) or ID.
         minutes: Wait time in minutes. LR3: 3, 7, 15. LR4/LR5: 3, 7, 15, 25, 30.
+
     """
     resolved = await resolve_litter_robot(robot)
     await resolved.set_wait_time(minutes)
@@ -118,6 +123,7 @@ async def set_sleep_mode(
         robot: Robot name (case-insensitive) or ID.
         enabled: True to enable sleep mode, False to disable.
         start_time: Sleep start time in HH:MM format (24-hour). Required when enabling.
+
     """
     resolved = await resolve_litter_robot(robot)
     sleep_time = None

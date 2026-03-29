@@ -29,6 +29,7 @@ async def get_robot_status(robot: str) -> dict[str, Any]:
 
     Returns a detailed summary including waste level, cycle count, power,
     sleep status, and model-specific details.
+
     """
     resolved = await resolve_robot(robot)
     await resolved.refresh()

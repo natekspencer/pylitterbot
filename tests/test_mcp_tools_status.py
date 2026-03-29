@@ -90,9 +90,7 @@ class TestGetRobotStatus:
         """get_robot_status returns a detailed summary for the specified robot."""
         from pylitterbot.mcp.tools.status import get_robot_status
 
-        with patch(
-            "pylitterbot.mcp.helpers.get_account", return_value=mock_account
-        ):
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await get_robot_status(robot="Kitchen")
         assert result["name"] == "Kitchen"
         assert result["status"] == "Ready"
@@ -105,8 +103,6 @@ class TestGetRobotStatus:
         from pylitterbot.mcp.tools.status import get_robot_status
 
         lr4 = mock_account.robots[0]
-        with patch(
-            "pylitterbot.mcp.helpers.get_account", return_value=mock_account
-        ):
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             await get_robot_status(robot="Kitchen")
         lr4.refresh.assert_awaited_once()
