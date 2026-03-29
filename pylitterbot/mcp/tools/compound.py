@@ -439,6 +439,7 @@ async def robot_comparison() -> dict[str, Any]:
         if len(robots) > 1 and all("cycle_count" in r for r in robots):
             cycle_counts = {r["name"]: r["cycle_count"] for r in robots}
             values = list(cycle_counts.values())
+            # Exclude robots with zero cycles (new/reset) from outlier detection
             if values and max(values) > 2 * min(values) and min(values) > 0:
                 outliers.append({"metric": "cycle_count", "values": cycle_counts})
 

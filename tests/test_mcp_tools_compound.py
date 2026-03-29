@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 
-from pylitterbot import Account, FeederRobot, LitterRobot3, LitterRobot4, Pet
+from pylitterbot import Account, FeederRobot, LitterRobot4, Pet
 from pylitterbot.activity import Activity, Insight
 from pylitterbot.enums import LitterBoxStatus, NightLightMode
 
