@@ -26,6 +26,12 @@ Install using pip
 pip install pylitterbot
 ```
 
+To include the MCP server for AI assistant integration:
+
+```bash
+pip install pylitterbot[mcp]
+```
+
 Alternatively, clone the repository and run
 
 ```bash
@@ -92,6 +98,68 @@ Currently the following methods are available in the Robot class:
 - set_name()
 - get_activity_history()
 - get_insight()
+
+## MCP Server
+
+pylitterbot includes an optional [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that lets AI assistants like Claude monitor and control your robots through natural language.
+
+### Installation
+
+```bash
+pip install pylitterbot[mcp]
+```
+
+### Running
+
+```bash
+pylitterbot-mcp
+```
+
+or
+
+```bash
+python -m pylitterbot.mcp
+```
+
+### Claude Desktop configuration
+
+Add this to your Claude Desktop config (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "litter-robot": {
+      "command": "python",
+      "args": ["-m", "pylitterbot.mcp"],
+      "env": {
+        "LITTER_ROBOT_USERNAME": "your@email.com",
+        "LITTER_ROBOT_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
+
+### Available tools
+
+**Status and info:** `get_robots`, `get_robot_status`, `get_activity_history`, `get_insight`, `get_pets`
+
+**Commands:** `start_cleaning`, `reset_robot`, `give_snack`, `set_power_status`
+
+**Settings:** `set_name`, `set_night_light`, `set_night_light_brightness`, `set_night_light_mode`, `set_panel_lockout`, `set_wait_time`, `set_sleep_mode`
+
+**Compound operations** that combine multiple API calls:
+
+| Tool | Description |
+|------|-------------|
+| `fleet_overview` | Prioritized status across all robots with alerts |
+| `clean_all_ready` | Start cleaning on all robots in READY state |
+| `sync_settings` | Copy one robot's settings to all others of the same model |
+| `pet_usage_report` | Activity data across all robots with pet info |
+| `maintenance_forecast` | Estimate when each robot needs emptying |
+| `household_digest` | Time-bounded summary of all activity |
+| `troubleshooting_report` | Diagnostic bundle for a robot with errors |
+| `robot_comparison` | Compare settings and metrics across robots |
 
 ## Contributing
 
