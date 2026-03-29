@@ -21,6 +21,12 @@ dependencies = [
 ]
 dynamic = ["version"]
 
+[project.optional-dependencies]
+mcp = ["mcp[cli]>=1.0.0"]
+
+[project.scripts]
+pylitterbot-mcp = "pylitterbot.mcp:main"
+
 [project.urls]
 Homepage = "https://github.com/natekspencer/pylitterbot"
 Repository = "https://github.com/natekspencer/pylitterbot"
