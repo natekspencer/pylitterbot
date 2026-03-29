@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import time
+from datetime import datetime
 
 from pylitterbot.enums import NightLightMode
 from pylitterbot.mcp.helpers import resolve_litter_robot, resolve_robot
@@ -113,12 +113,15 @@ async def set_wait_time(robot: str, minutes: int) -> str:
         minutes: Wait time in minutes. LR3: 3, 7, 15. LR4/LR5: 3, 7, 15, 25, 30.
 
     """
-    valid_wait_times = {3, 7, 15, 25, 30}
+    resolved = await resolve_litter_robot(robot)
+    valid_wait_times = (
+        {3, 7, 15} if resolved.model == "Litter-Robot 3" else {3, 7, 15, 25, 30}
+    )
     if minutes not in valid_wait_times:
         raise ValueError(
-            f"Invalid wait time {minutes}. Must be one of: {sorted(valid_wait_times)}"
+            f"Invalid wait time {minutes} for {resolved.model}. "
+            f"Must be one of: {sorted(valid_wait_times)}"
         )
-    resolved = await resolve_litter_robot(robot)
     await resolved.set_wait_time(minutes)
     return f"Wait time set to {minutes} minutes on '{resolved.name}'."
 
@@ -141,9 +144,8 @@ async def set_sleep_mode(
         if not start_time:
             raise ValueError("start_time is required when enabling sleep mode.")
         try:
-            parts = start_time.split(":")
-            sleep_time = time(int(parts[0]), int(parts[1]))
-        except (IndexError, ValueError) as exc:
+            sleep_time = datetime.strptime(start_time, "%H:%M").time()
+        except ValueError as exc:
             raise ValueError(
                 f"Invalid start_time '{start_time}'. Expected HH:MM (24-hour), e.g. '22:30'."
             ) from exc

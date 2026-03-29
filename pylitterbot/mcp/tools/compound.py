@@ -105,8 +105,16 @@ async def clean_all_ready() -> dict[str, Any]:
         if not isinstance(robot, LitterRobot):
             continue
         if robot.status == LitterBoxStatus.READY:
-            await robot.start_cleaning()
-            cleaned.append({"name": robot.name, "status": "cleaning started"})
+            try:
+                await robot.start_cleaning()
+                cleaned.append({"name": robot.name, "status": "cleaning started"})
+            except Exception:
+                logger.debug(
+                    "Failed to start cleaning for %s", robot.name, exc_info=True
+                )
+                skipped.append(
+                    {"name": robot.name, "reason": "failed to start cleaning"}
+                )
         else:
             reason = _STATUS_SKIP_REASONS.get(
                 robot.status, robot.status.text or "unknown"
@@ -145,49 +153,53 @@ async def sync_settings(source_robot: str) -> dict[str, Any]:
 
         changes = []
 
-        if robot.clean_cycle_wait_time_minutes != source.clean_cycle_wait_time_minutes:
+        old_wait = robot.clean_cycle_wait_time_minutes
+        if old_wait != source.clean_cycle_wait_time_minutes:
             await robot.set_wait_time(source.clean_cycle_wait_time_minutes)
             changes.append(
-                f"wait_time: {robot.clean_cycle_wait_time_minutes} -> {source.clean_cycle_wait_time_minutes}"
+                f"wait_time: {old_wait} -> {source.clean_cycle_wait_time_minutes}"
             )
 
-        if robot.night_light_mode_enabled != source.night_light_mode_enabled:
+        old_night_light = robot.night_light_mode_enabled
+        if old_night_light != source.night_light_mode_enabled:
             await robot.set_night_light(source.night_light_mode_enabled)
             changes.append(
-                f"night_light: {robot.night_light_mode_enabled} -> {source.night_light_mode_enabled}"
+                f"night_light: {old_night_light} -> {source.night_light_mode_enabled}"
             )
 
-        if robot.panel_lock_enabled != source.panel_lock_enabled:
+        old_panel_lock = robot.panel_lock_enabled
+        if old_panel_lock != source.panel_lock_enabled:
             await robot.set_panel_lockout(source.panel_lock_enabled)
             changes.append(
-                f"panel_lock: {robot.panel_lock_enabled} -> {source.panel_lock_enabled}"
+                f"panel_lock: {old_panel_lock} -> {source.panel_lock_enabled}"
             )
 
-        if robot.sleep_mode_enabled != source.sleep_mode_enabled:
+        old_sleep = robot.sleep_mode_enabled
+        if old_sleep != source.sleep_mode_enabled:
             sleep_time = (
                 source.sleep_mode_start_time.timetz()
                 if source.sleep_mode_start_time
                 else None
             )
             await robot.set_sleep_mode(source.sleep_mode_enabled, sleep_time)
-            changes.append(
-                f"sleep_mode: {robot.sleep_mode_enabled} -> {source.sleep_mode_enabled}"
-            )
+            changes.append(f"sleep_mode: {old_sleep} -> {source.sleep_mode_enabled}")
 
         if isinstance(source, LitterRobot4) and isinstance(robot, LitterRobot4):
-            if robot.night_light_brightness != source.night_light_brightness:
+            old_brightness = robot.night_light_brightness
+            if old_brightness != source.night_light_brightness:
                 await robot.set_night_light_brightness(source.night_light_brightness)
                 changes.append(
-                    f"night_light_brightness: {robot.night_light_brightness} -> {source.night_light_brightness}"
+                    f"night_light_brightness: {old_brightness} -> {source.night_light_brightness}"
                 )
 
+            old_mode = robot.night_light_mode
             if (
-                robot.night_light_mode != source.night_light_mode
+                old_mode != source.night_light_mode
                 and source.night_light_mode is not None
             ):
                 await robot.set_night_light_mode(source.night_light_mode)
                 changes.append(
-                    f"night_light_mode: {robot.night_light_mode} -> {source.night_light_mode}"
+                    f"night_light_mode: {old_mode} -> {source.night_light_mode}"
                 )
 
         targets.append({"name": robot.name, "changes": changes})
@@ -300,6 +312,8 @@ async def household_digest(days: int = 7) -> dict[str, Any]:
         days: Number of days to cover (default 7).
 
     """
+    if days < 1:
+        raise ValueError("days must be >= 1.")
     account = await get_account()
     await account.refresh_robots()
     await account.load_pets()

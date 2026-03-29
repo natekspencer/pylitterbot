@@ -170,10 +170,13 @@ class TestSetWaitTime:
 
     @pytest.mark.asyncio()
     async def test_rejects_invalid_wait_time(self, mock_account: MagicMock) -> None:
-        """set_wait_time raises ValueError for values outside {3, 7, 15, 25, 30}."""
+        """set_wait_time raises ValueError for values outside valid set."""
         from pylitterbot.mcp.tools.settings import set_wait_time
 
-        with pytest.raises(ValueError, match="Invalid wait time"):
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="Invalid wait time"),
+        ):
             await set_wait_time(robot="Kitchen", minutes=10)
 
 
