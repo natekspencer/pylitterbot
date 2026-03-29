@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from typing import Any
 
@@ -14,6 +15,8 @@ from pylitterbot.mcp.helpers import (
 from pylitterbot.mcp.server import get_account, mcp
 from pylitterbot.robot.litterrobot import LitterRobot
 from pylitterbot.robot.litterrobot4 import LitterRobot4
+
+logger = logging.getLogger(__name__)
 
 _ATTENTION_STATUSES = {
     LitterBoxStatus.DRAWER_FULL,
@@ -217,6 +220,9 @@ async def pet_usage_report() -> dict[str, Any]:
                 }
             )
         except Exception:
+            logger.debug(
+                "Failed to retrieve activity for %s", robot.name, exc_info=True
+            )
             robot_summaries.append(
                 {
                     "name": robot.name,

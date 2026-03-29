@@ -109,7 +109,10 @@ class TestReassignPetVisit:
         lr5.reassign_pet_visit.assert_awaited_once_with(
             "evt-123", from_pet_id="pet-luna-id", to_pet_id="pet-milo-id"
         )
-        assert "reassigned" in result.lower()
+        assert (
+            result
+            == "Reassigned visit 'evt-123' on 'Living Room' from 'Luna' to 'Milo'."
+        )
 
     @pytest.mark.asyncio()
     async def test_rejects_non_lr5(self, mock_account: MagicMock) -> None:

@@ -31,7 +31,7 @@ async def reset_robot(robot: str) -> str:
     """
     resolved = await resolve_litter_robot(robot)
     if not isinstance(resolved, (LitterRobot4, LitterRobot5)):
-        return (
+        raise ValueError(
             f"'{resolved.name}' ({resolved.model}) does not support remote reset. "
             "Only Litter-Robot 4 and 5 support this feature."
         )

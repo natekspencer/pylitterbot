@@ -76,7 +76,7 @@ class TestStartCleaning:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await start_cleaning(robot="Kitchen")
         mock_account.robots[0].start_cleaning.assert_awaited_once()
-        assert "Kitchen" in result
+        assert result == "Started cleaning cycle on 'Kitchen'."
 
     @pytest.mark.asyncio()
     async def test_rejects_feeder_robot(self, mock_account: MagicMock) -> None:
@@ -101,7 +101,7 @@ class TestResetRobot:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await reset_robot(robot="Kitchen")
         mock_account.robots[0].reset.assert_awaited_once()
-        assert "Kitchen" in result
+        assert result == "Reset 'Kitchen' successfully."
 
     @pytest.mark.asyncio()
     async def test_resets_lr5(self, mock_account: MagicMock) -> None:
@@ -111,16 +111,18 @@ class TestResetRobot:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await reset_robot(robot="Living Room")
         mock_account.robots[2].reset.assert_awaited_once()
-        assert "Living Room" in result
+        assert result == "Reset 'Living Room' successfully."
 
     @pytest.mark.asyncio()
     async def test_rejects_lr3(self, mock_account: MagicMock) -> None:
-        """reset_robot returns an error message for LR3 (no remote reset)."""
+        """reset_robot raises ValueError for LR3 (no remote reset)."""
         from pylitterbot.mcp.tools.commands import reset_robot
 
-        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
-            result = await reset_robot(robot="Basement")
-        assert "does not support" in result
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="does not support remote reset"),
+        ):
+            await reset_robot(robot="Basement")
 
 
 class TestGiveSnack:
@@ -134,7 +136,7 @@ class TestGiveSnack:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await give_snack(robot="Feeder")
         mock_account.robots[3].give_snack.assert_awaited_once()
-        assert "Feeder" in result
+        assert result == "Dispensed snack from 'Feeder'."
 
     @pytest.mark.asyncio()
     async def test_rejects_litter_robot(self, mock_account: MagicMock) -> None:
@@ -159,7 +161,7 @@ class TestSetPowerStatus:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await set_power_status(robot="Kitchen", enabled=False)
         mock_account.robots[0].set_power_status.assert_awaited_once_with(False)
-        assert "off" in result.lower()
+        assert result == "Turned 'Kitchen' off."
 
     @pytest.mark.asyncio()
     async def test_turns_on_robot(self, mock_account: MagicMock) -> None:
@@ -169,4 +171,4 @@ class TestSetPowerStatus:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await set_power_status(robot="Kitchen", enabled=True)
         mock_account.robots[0].set_power_status.assert_awaited_once_with(True)
-        assert "on" in result.lower()
+        assert result == "Turned 'Kitchen' on."
