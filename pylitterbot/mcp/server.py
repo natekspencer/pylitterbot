@@ -24,11 +24,17 @@ async def get_account() -> Account:
                 "LITTER_ROBOT_USERNAME and LITTER_ROBOT_PASSWORD environment "
                 "variables are required."
             )
-        _account = Account()
-        await _account.connect(
-            username=username,
-            password=password,
-            load_robots=True,
-            load_pets=True,
-        )
+        account = Account()
+        try:
+            await account.connect(
+                username=username,
+                password=password,
+                load_robots=True,
+                load_pets=True,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "Failed to connect to Litter-Robot account. Check credentials."
+            ) from exc
+        _account = account
     return _account

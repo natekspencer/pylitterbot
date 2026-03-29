@@ -67,6 +67,12 @@ async def set_night_light_mode(robot: str, mode: str) -> str:
         mode: Night light mode - "off", "on", or "auto" (case-insensitive).
 
     """
+    resolved = await resolve_robot(robot)
+    if not isinstance(resolved, LitterRobot4):
+        raise ValueError(
+            f"Night light mode is only supported on Litter-Robot 4, "
+            f"but '{resolved.name}' is a {resolved.model}."
+        )
     try:
         night_light_mode = NightLightMode(mode.upper())
     except ValueError:
@@ -74,12 +80,6 @@ async def set_night_light_mode(robot: str, mode: str) -> str:
         raise ValueError(
             f"Invalid night light mode '{mode}'. Valid modes: {valid}"
         ) from None
-    resolved = await resolve_robot(robot)
-    if not isinstance(resolved, LitterRobot4):
-        raise ValueError(
-            f"Night light mode is only supported on Litter-Robot 4, "
-            f"but '{resolved.name}' is a {resolved.model}."
-        )
     await resolved.set_night_light_mode(night_light_mode)
     return f"Night light mode set to '{mode.lower()}' on '{resolved.name}'."
 
@@ -127,9 +127,16 @@ async def set_sleep_mode(
     """
     resolved = await resolve_litter_robot(robot)
     sleep_time = None
-    if enabled and start_time:
-        parts = start_time.split(":")
-        sleep_time = time(int(parts[0]), int(parts[1]))
+    if enabled:
+        if not start_time:
+            raise ValueError("start_time is required when enabling sleep mode.")
+        try:
+            parts = start_time.split(":")
+            sleep_time = time(int(parts[0]), int(parts[1]))
+        except (IndexError, ValueError) as exc:
+            raise ValueError(
+                f"Invalid start_time '{start_time}'. Expected HH:MM (24-hour), e.g. '22:30'."
+            ) from exc
     await resolved.set_sleep_mode(enabled, sleep_time)
     state = "enabled" if enabled else "disabled"
     return f"Sleep mode {state} on '{resolved.name}'."
