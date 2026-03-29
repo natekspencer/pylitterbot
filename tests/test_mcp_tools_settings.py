@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -170,7 +171,8 @@ class TestSetSleepMode:
                 robot="Kitchen", enabled=True, start_time="22:30"
             )
         call_args = mock_account.robots[0].set_sleep_mode.call_args
-        assert call_args[0][0] is True  # value=True
+        assert call_args[0][0] is True
+        assert call_args[0][1] == time(22, 30)
         assert "enabled" in result.lower()
 
     @pytest.mark.asyncio()
@@ -183,3 +185,29 @@ class TestSetSleepMode:
         call_args = mock_account.robots[0].set_sleep_mode.call_args
         assert call_args[0][0] is False
         assert "disabled" in result.lower()
+
+    @pytest.mark.asyncio()
+    async def test_raises_when_enabling_without_start_time(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_sleep_mode raises ValueError when enabled=True but no start_time."""
+        from pylitterbot.mcp.tools.settings import set_sleep_mode
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="start_time is required"),
+        ):
+            await set_sleep_mode(robot="Kitchen", enabled=True)
+
+    @pytest.mark.asyncio()
+    async def test_raises_for_malformed_start_time(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_sleep_mode raises ValueError for unparseable time strings."""
+        from pylitterbot.mcp.tools.settings import set_sleep_mode
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="Invalid start_time"),
+        ):
+            await set_sleep_mode(robot="Kitchen", enabled=True, start_time="2230")
