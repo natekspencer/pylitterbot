@@ -92,6 +92,17 @@ class TestSetNightLightBrightness:
         assert "50" in result
 
     @pytest.mark.asyncio()
+    async def test_rejects_invalid_brightness(self, mock_account: MagicMock) -> None:
+        """set_night_light_brightness raises ValueError for invalid values."""
+        from pylitterbot.mcp.tools.settings import set_night_light_brightness
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="Invalid brightness"),
+        ):
+            await set_night_light_brightness(robot="Kitchen", brightness=42)
+
+    @pytest.mark.asyncio()
     async def test_rejects_non_lr4(self, mock_account: MagicMock) -> None:
         """set_night_light_brightness raises for non-LR4 robots."""
         from pylitterbot.mcp.tools.settings import set_night_light_brightness
@@ -156,6 +167,14 @@ class TestSetWaitTime:
             result = await set_wait_time(robot="Kitchen", minutes=15)
         mock_account.robots[0].set_wait_time.assert_awaited_once_with(15)
         assert "15" in result
+
+    @pytest.mark.asyncio()
+    async def test_rejects_invalid_wait_time(self, mock_account: MagicMock) -> None:
+        """set_wait_time raises ValueError for values outside {3, 7, 15, 25, 30}."""
+        from pylitterbot.mcp.tools.settings import set_wait_time
+
+        with pytest.raises(ValueError, match="Invalid wait time"):
+            await set_wait_time(robot="Kitchen", minutes=10)
 
 
 class TestSetSleepMode:

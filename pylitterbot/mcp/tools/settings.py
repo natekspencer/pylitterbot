@@ -54,6 +54,11 @@ async def set_night_light_brightness(robot: str, brightness: int) -> str:
             f"Night light brightness is only supported on Litter-Robot 4, "
             f"but '{resolved.name}' is a {resolved.model}."
         )
+    valid_brightness = {25, 50, 100}
+    if brightness not in valid_brightness:
+        raise ValueError(
+            f"Invalid brightness {brightness}. Must be one of: {sorted(valid_brightness)}"
+        )
     await resolved.set_night_light_brightness(brightness)
     return f"Night light brightness set to {brightness} on '{resolved.name}'."
 
@@ -108,6 +113,11 @@ async def set_wait_time(robot: str, minutes: int) -> str:
         minutes: Wait time in minutes. LR3: 3, 7, 15. LR4/LR5: 3, 7, 15, 25, 30.
 
     """
+    valid_wait_times = {3, 7, 15, 25, 30}
+    if minutes not in valid_wait_times:
+        raise ValueError(
+            f"Invalid wait time {minutes}. Must be one of: {sorted(valid_wait_times)}"
+        )
     resolved = await resolve_litter_robot(robot)
     await resolved.set_wait_time(minutes)
     return f"Wait time set to {minutes} minutes on '{resolved.name}'."
