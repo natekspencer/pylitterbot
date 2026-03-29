@@ -61,7 +61,7 @@ class TestSetName:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await set_name(robot="Kitchen", name="New Kitchen")
         mock_account.robots[0].set_name.assert_awaited_once_with("New Kitchen")
-        assert "New Kitchen" in result
+        assert result == "Renamed robot to 'New Kitchen'."
 
 
 class TestSetNightLight:
@@ -75,7 +75,7 @@ class TestSetNightLight:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await set_night_light(robot="Kitchen", enabled=True)
         mock_account.robots[0].set_night_light.assert_awaited_once_with(True)
-        assert "enabled" in result.lower()
+        assert result == "Night light enabled on 'Kitchen'."
 
 
 class TestSetNightLightBrightness:
@@ -89,7 +89,7 @@ class TestSetNightLightBrightness:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await set_night_light_brightness(robot="Kitchen", brightness=50)
         mock_account.robots[0].set_night_light_brightness.assert_awaited_once_with(50)
-        assert "50" in result
+        assert result == "Night light brightness set to 50 on 'Kitchen'."
 
     @pytest.mark.asyncio()
     async def test_rejects_invalid_brightness(self, mock_account: MagicMock) -> None:
@@ -127,7 +127,7 @@ class TestSetNightLightMode:
         mock_account.robots[0].set_night_light_mode.assert_awaited_once_with(
             NightLightMode.AUTO
         )
-        assert "auto" in result.lower()
+        assert result == "Night light mode set to 'auto' on 'Kitchen'."
 
     @pytest.mark.asyncio()
     async def test_rejects_invalid_mode(self, mock_account: MagicMock) -> None:
@@ -152,7 +152,7 @@ class TestSetPanelLockout:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await set_panel_lockout(robot="Kitchen", enabled=True)
         mock_account.robots[0].set_panel_lockout.assert_awaited_once_with(True)
-        assert "enabled" in result.lower()
+        assert result == "Panel lockout enabled on 'Kitchen'."
 
 
 class TestSetWaitTime:
@@ -166,7 +166,7 @@ class TestSetWaitTime:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             result = await set_wait_time(robot="Kitchen", minutes=15)
         mock_account.robots[0].set_wait_time.assert_awaited_once_with(15)
-        assert "15" in result
+        assert result == "Wait time set to 15 minutes on 'Kitchen'."
 
     @pytest.mark.asyncio()
     async def test_rejects_invalid_wait_time(self, mock_account: MagicMock) -> None:
@@ -192,7 +192,7 @@ class TestSetSleepMode:
         call_args = mock_account.robots[0].set_sleep_mode.call_args
         assert call_args[0][0] is True
         assert call_args[0][1] == time(22, 30)
-        assert "enabled" in result.lower()
+        assert result == "Sleep mode enabled on 'Kitchen'."
 
     @pytest.mark.asyncio()
     async def test_disables_sleep_mode(self, mock_account: MagicMock) -> None:
@@ -203,7 +203,7 @@ class TestSetSleepMode:
             result = await set_sleep_mode(robot="Kitchen", enabled=False)
         call_args = mock_account.robots[0].set_sleep_mode.call_args
         assert call_args[0][0] is False
-        assert "disabled" in result.lower()
+        assert result == "Sleep mode disabled on 'Kitchen'."
 
     @pytest.mark.asyncio()
     async def test_raises_when_enabling_without_start_time(
