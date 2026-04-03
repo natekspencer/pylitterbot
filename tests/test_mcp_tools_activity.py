@@ -128,9 +128,7 @@ class TestGetFoodDispensed:
     """Tests for the get_food_dispensed tool."""
 
     @pytest.mark.asyncio()
-    async def test_returns_food_dispensed(
-        self, mock_feeder_account: MagicMock
-    ) -> None:
+    async def test_returns_food_dispensed(self, mock_feeder_account: MagicMock) -> None:
         """get_food_dispensed returns cups dispensed and the time window."""
         from pylitterbot.mcp.tools.activity import get_food_dispensed
 

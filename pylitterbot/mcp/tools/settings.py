@@ -207,9 +207,7 @@ async def set_volume(robot: str, volume: int) -> str:
             f"but '{resolved.name}' is a {resolved.model}."
         )
     if not 0 <= volume <= 100:
-        raise ValueError(
-            f"Invalid volume {volume}. Must be between 0 and 100."
-        )
+        raise ValueError(f"Invalid volume {volume}. Must be between 0 and 100.")
     await resolved.set_volume(volume)
     return f"Volume set to {volume} on '{resolved.name}'."
 

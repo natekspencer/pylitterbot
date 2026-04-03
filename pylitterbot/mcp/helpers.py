@@ -162,9 +162,7 @@ def format_robot_summary(robot: Robot) -> dict[str, Any]:
                 "last_feeding": robot.last_feeding,
                 "gravity_mode_enabled": robot.gravity_mode_enabled,
                 "next_feeding": (
-                    robot.next_feeding.isoformat()
-                    if robot.next_feeding
-                    else None
+                    robot.next_feeding.isoformat() if robot.next_feeding else None
                 ),
             }
         )
