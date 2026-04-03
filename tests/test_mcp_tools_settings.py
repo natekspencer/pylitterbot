@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from pylitterbot import Account, LitterRobot3, LitterRobot4
-from pylitterbot.enums import LitterBoxStatus, NightLightMode
+from pylitterbot import Account, FeederRobot, LitterRobot3, LitterRobot4, LitterRobot5
+from pylitterbot.enums import BrightnessLevel, LitterBoxStatus, NightLightMode
 
 
 @pytest.fixture()
@@ -46,7 +46,31 @@ def mock_account() -> MagicMock:
     lr3.set_wait_time = AsyncMock(return_value=True)
     lr3.set_sleep_mode = AsyncMock(return_value=True)
 
-    account.robots = [lr4, lr3]
+    lr5 = MagicMock(spec=LitterRobot5)
+    lr5.name = "Living Room"
+    lr5.id = "lr5-living-id"
+    lr5.model = "Litter-Robot 5"
+    lr5.serial = "LR5L001"
+    lr5.is_online = True
+    lr5.power_status = "AC"
+    lr5.status = LitterBoxStatus.READY
+    lr5.set_panel_brightness = AsyncMock(return_value=True)
+    lr5.set_volume = AsyncMock(return_value=True)
+    lr5.set_privacy_mode = AsyncMock(return_value=True)
+    lr5.set_camera_audio = AsyncMock(return_value=True)
+    lr5.set_night_light_brightness = AsyncMock(return_value=True)
+    lr5.set_night_light_mode = AsyncMock(return_value=True)
+
+    feeder = MagicMock(spec=FeederRobot)
+    feeder.name = "Feeder"
+    feeder.id = "feeder-id"
+    feeder.model = "Feeder-Robot"
+    feeder.serial = "FR001"
+    feeder.is_online = True
+    feeder.power_status = "AC"
+    feeder.set_gravity_mode = AsyncMock(return_value=True)
+
+    account.robots = [lr4, lr3, lr5, feeder]
     return account
 
 
@@ -103,8 +127,8 @@ class TestSetNightLightBrightness:
             await set_night_light_brightness(robot="Kitchen", brightness=42)
 
     @pytest.mark.asyncio()
-    async def test_rejects_non_lr4(self, mock_account: MagicMock) -> None:
-        """set_night_light_brightness raises for non-LR4 robots."""
+    async def test_rejects_non_lr4_or_lr5(self, mock_account: MagicMock) -> None:
+        """set_night_light_brightness raises for non-LR4/LR5 robots."""
         from pylitterbot.mcp.tools.settings import set_night_light_brightness
 
         with (
@@ -112,6 +136,31 @@ class TestSetNightLightBrightness:
             pytest.raises(ValueError, match="only supported on Litter-Robot 4"),
         ):
             await set_night_light_brightness(robot="Basement", brightness=50)
+
+    @pytest.mark.asyncio()
+    async def test_sets_brightness_on_lr5(self, mock_account: MagicMock) -> None:
+        """set_night_light_brightness accepts 0-100 range on LR5."""
+        from pylitterbot.mcp.tools.settings import set_night_light_brightness
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_night_light_brightness(
+                robot="Living Room", brightness=75
+            )
+        mock_account.robots[2].set_night_light_brightness.assert_awaited_once_with(75)
+        assert result == "Night light brightness set to 75 on 'Living Room'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_lr5_brightness_out_of_range(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_night_light_brightness rejects values outside 0-100 for LR5."""
+        from pylitterbot.mcp.tools.settings import set_night_light_brightness
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="Invalid brightness"),
+        ):
+            await set_night_light_brightness(robot="Living Room", brightness=150)
 
 
 class TestSetNightLightMode:
@@ -139,6 +188,190 @@ class TestSetNightLightMode:
             pytest.raises(ValueError, match="Invalid night light mode"),
         ):
             await set_night_light_mode(robot="Kitchen", mode="blink")
+
+    @pytest.mark.asyncio()
+    async def test_sets_mode_on_lr5(self, mock_account: MagicMock) -> None:
+        """set_night_light_mode works on LR5."""
+        from pylitterbot.mcp.tools.settings import set_night_light_mode
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_night_light_mode(robot="Living Room", mode="on")
+        mock_account.robots[2].set_night_light_mode.assert_awaited_once_with(
+            NightLightMode.ON
+        )
+        assert result == "Night light mode set to 'on' on 'Living Room'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_lr3_for_mode(self, mock_account: MagicMock) -> None:
+        """set_night_light_mode raises for LR3 (no night light mode support)."""
+        from pylitterbot.mcp.tools.settings import set_night_light_mode
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 4"),
+        ):
+            await set_night_light_mode(robot="Basement", mode="auto")
+
+
+class TestSetPanelBrightness:
+    """Tests for set_panel_brightness tool."""
+
+    @pytest.mark.asyncio()
+    async def test_sets_brightness_on_lr4(self, mock_account: MagicMock) -> None:
+        """set_panel_brightness calls LR4 set_panel_brightness with BrightnessLevel."""
+        from pylitterbot.mcp.tools.settings import set_panel_brightness
+
+        lr4 = mock_account.robots[0]
+        lr4.set_panel_brightness = AsyncMock(return_value=True)
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_panel_brightness(robot="Kitchen", brightness=50)
+        lr4.set_panel_brightness.assert_awaited_once_with(BrightnessLevel.MEDIUM)
+        assert result == "Panel brightness set to 50 on 'Kitchen'."
+
+    @pytest.mark.asyncio()
+    async def test_sets_brightness_on_lr5(self, mock_account: MagicMock) -> None:
+        """set_panel_brightness calls LR5 set_panel_brightness with BrightnessLevel."""
+        from pylitterbot.mcp.tools.settings import set_panel_brightness
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_panel_brightness(robot="Living Room", brightness=100)
+        mock_account.robots[2].set_panel_brightness.assert_awaited_once_with(
+            BrightnessLevel.HIGH
+        )
+        assert result == "Panel brightness set to 100 on 'Living Room'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_invalid_brightness(self, mock_account: MagicMock) -> None:
+        """set_panel_brightness raises for invalid brightness values."""
+        from pylitterbot.mcp.tools.settings import set_panel_brightness
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="Invalid brightness"),
+        ):
+            await set_panel_brightness(robot="Kitchen", brightness=42)
+
+    @pytest.mark.asyncio()
+    async def test_rejects_lr3(self, mock_account: MagicMock) -> None:
+        """set_panel_brightness raises for LR3."""
+        from pylitterbot.mcp.tools.settings import set_panel_brightness
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 4"),
+        ):
+            await set_panel_brightness(robot="Basement", brightness=50)
+
+
+class TestSetVolume:
+    """Tests for set_volume tool."""
+
+    @pytest.mark.asyncio()
+    async def test_sets_volume_on_lr5(self, mock_account: MagicMock) -> None:
+        """set_volume calls LR5 set_volume with the given value."""
+        from pylitterbot.mcp.tools.settings import set_volume
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_volume(robot="Living Room", volume=75)
+        mock_account.robots[2].set_volume.assert_awaited_once_with(75)
+        assert result == "Volume set to 75 on 'Living Room'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_non_lr5(self, mock_account: MagicMock) -> None:
+        """set_volume raises ValueError for non-LR5 robots."""
+        from pylitterbot.mcp.tools.settings import set_volume
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 5"),
+        ):
+            await set_volume(robot="Kitchen", volume=50)
+
+    @pytest.mark.asyncio()
+    async def test_rejects_out_of_range(self, mock_account: MagicMock) -> None:
+        """set_volume raises ValueError for volume outside 0-100."""
+        from pylitterbot.mcp.tools.settings import set_volume
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="Invalid volume"),
+        ):
+            await set_volume(robot="Living Room", volume=101)
+
+
+class TestSetPrivacyMode:
+    """Tests for set_privacy_mode tool."""
+
+    @pytest.mark.asyncio()
+    async def test_enables_privacy_mode(self, mock_account: MagicMock) -> None:
+        """set_privacy_mode calls LR5 set_privacy_mode(True)."""
+        from pylitterbot.mcp.tools.settings import set_privacy_mode
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_privacy_mode(robot="Living Room", enabled=True)
+        mock_account.robots[2].set_privacy_mode.assert_awaited_once_with(True)
+        assert result == "Privacy mode enabled on 'Living Room'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_non_lr5(self, mock_account: MagicMock) -> None:
+        """set_privacy_mode raises ValueError for non-LR5 robots."""
+        from pylitterbot.mcp.tools.settings import set_privacy_mode
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 5"),
+        ):
+            await set_privacy_mode(robot="Kitchen", enabled=True)
+
+
+class TestSetCameraAudio:
+    """Tests for set_camera_audio tool."""
+
+    @pytest.mark.asyncio()
+    async def test_enables_camera_audio(self, mock_account: MagicMock) -> None:
+        """set_camera_audio calls LR5 set_camera_audio(True)."""
+        from pylitterbot.mcp.tools.settings import set_camera_audio
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_camera_audio(robot="Living Room", enabled=True)
+        mock_account.robots[2].set_camera_audio.assert_awaited_once_with(True)
+        assert result == "Camera audio enabled on 'Living Room'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_non_lr5(self, mock_account: MagicMock) -> None:
+        """set_camera_audio raises ValueError for non-LR5 robots."""
+        from pylitterbot.mcp.tools.settings import set_camera_audio
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 5"),
+        ):
+            await set_camera_audio(robot="Kitchen", enabled=False)
+
+
+class TestSetGravityMode:
+    """Tests for set_gravity_mode tool."""
+
+    @pytest.mark.asyncio()
+    async def test_enables_gravity_mode(self, mock_account: MagicMock) -> None:
+        """set_gravity_mode calls FeederRobot set_gravity_mode(True)."""
+        from pylitterbot.mcp.tools.settings import set_gravity_mode
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_gravity_mode(robot="Feeder", enabled=True)
+        mock_account.robots[3].set_gravity_mode.assert_awaited_once_with(True)
+        assert result == "Gravity mode enabled on 'Feeder'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_litter_robot(self, mock_account: MagicMock) -> None:
+        """set_gravity_mode raises ValueError for non-Feeder robots."""
+        from pylitterbot.mcp.tools.settings import set_gravity_mode
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="not a Feeder-Robot"),
+        ):
+            await set_gravity_mode(robot="Kitchen", enabled=True)
 
 
 class TestSetPanelLockout:

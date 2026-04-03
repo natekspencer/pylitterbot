@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pylitterbot.enums import LitterBoxStatus
-from pylitterbot.mcp.helpers import resolve_litter_robot
+from pylitterbot.mcp.helpers import resolve_feeder_robot, resolve_litter_robot
 from pylitterbot.mcp.server import mcp
 
 
@@ -49,4 +50,23 @@ async def get_insight(robot: str, days: int = 30) -> dict[str, Any]:
         "cycle_history": [
             {"date": str(d), "cycles": c} for d, c in insight.cycle_history
         ],
+    }
+
+
+@mcp.tool()
+async def get_food_dispensed(robot: str, hours: int = 24) -> dict[str, Any]:
+    """Get the amount of food dispensed by a Feeder-Robot over a time period.
+
+    Args:
+        robot: Robot name (case-insensitive) or ID.
+        hours: Number of hours to look back (default 24).
+
+    """
+    resolved = await resolve_feeder_robot(robot)
+    since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+    cups = await resolved.get_food_dispensed_since(since)
+    return {
+        "robot": resolved.name,
+        "cups_dispensed": cups,
+        "hours": hours,
     }

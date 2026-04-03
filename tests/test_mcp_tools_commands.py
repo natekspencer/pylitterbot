@@ -26,6 +26,20 @@ def mock_account() -> MagicMock:
     lr4.start_cleaning = AsyncMock(return_value=True)
     lr4.reset = AsyncMock(return_value=True)
     lr4.set_power_status = AsyncMock(return_value=True)
+    lr4.toggle_hopper = AsyncMock(return_value=True)
+    lr4.update_firmware = AsyncMock(return_value=True)
+    lr4.get_firmware_details = AsyncMock(
+        return_value={
+            "isEspFirmwareUpdateNeeded": True,
+            "isPicFirmwareUpdateNeeded": False,
+            "isLaserboardFirmwareUpdateNeeded": False,
+            "latestFirmware": {
+                "espFirmwareVersion": "2.0.0",
+                "picFirmwareVersion": "1.5.0",
+                "laserBoardFirmwareVersion": "1.0.0",
+            },
+        }
+    )
 
     lr3 = MagicMock(spec=LitterRobot3)
     lr3.name = "Basement"
@@ -37,6 +51,8 @@ def mock_account() -> MagicMock:
     lr3.status = LitterBoxStatus.READY
     lr3.start_cleaning = AsyncMock(return_value=True)
     lr3.set_power_status = AsyncMock(return_value=True)
+    lr3.reset_waste_drawer = AsyncMock(return_value=True)
+    lr3.reset_settings = AsyncMock(return_value=True)
 
     lr5 = MagicMock(spec=LitterRobot5)
     lr5.name = "Living Room"
@@ -49,6 +65,19 @@ def mock_account() -> MagicMock:
     lr5.start_cleaning = AsyncMock(return_value=True)
     lr5.reset = AsyncMock(return_value=True)
     lr5.set_power_status = AsyncMock(return_value=True)
+    lr5.reset_waste_drawer = AsyncMock(return_value=True)
+    lr5.change_filter = AsyncMock(return_value=True)
+    lr5.update_firmware = AsyncMock(side_effect=NotImplementedError(
+        "Firmware updates cannot be triggered via the LR5 REST API."
+    ))
+    lr5.get_firmware_details = AsyncMock(
+        return_value={
+            "latestFirmware": {
+                "espFirmwareVersion": "3.0.0",
+                "mcuFirmwareVersion": "2.0.0",
+            },
+        }
+    )
 
     feeder = MagicMock(spec=FeederRobot)
     feeder.name = "Feeder"
@@ -172,3 +201,184 @@ class TestSetPowerStatus:
             result = await set_power_status(robot="Kitchen", enabled=True)
         mock_account.robots[0].set_power_status.assert_awaited_once_with(True)
         assert result == "Turned 'Kitchen' on."
+
+
+class TestToggleHopper:
+    """Tests for the toggle_hopper tool."""
+
+    @pytest.mark.asyncio()
+    async def test_removes_hopper(self, mock_account: MagicMock) -> None:
+        """toggle_hopper calls LR4 toggle_hopper(True) to remove."""
+        from pylitterbot.mcp.tools.commands import toggle_hopper
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await toggle_hopper(robot="Kitchen", is_removed=True)
+        mock_account.robots[0].toggle_hopper.assert_awaited_once_with(True)
+        assert result == "Hopper removed on 'Kitchen'."
+
+    @pytest.mark.asyncio()
+    async def test_installs_hopper(self, mock_account: MagicMock) -> None:
+        """toggle_hopper calls LR4 toggle_hopper(False) to install."""
+        from pylitterbot.mcp.tools.commands import toggle_hopper
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await toggle_hopper(robot="Kitchen", is_removed=False)
+        mock_account.robots[0].toggle_hopper.assert_awaited_once_with(False)
+        assert result == "Hopper installed on 'Kitchen'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_non_lr4(self, mock_account: MagicMock) -> None:
+        """toggle_hopper raises ValueError for non-LR4 robots."""
+        from pylitterbot.mcp.tools.commands import toggle_hopper
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="not a Litter-Robot 4"),
+        ):
+            await toggle_hopper(robot="Living Room", is_removed=True)
+
+
+class TestResetWasteDrawer:
+    """Tests for the reset_waste_drawer tool."""
+
+    @pytest.mark.asyncio()
+    async def test_resets_lr3(self, mock_account: MagicMock) -> None:
+        """reset_waste_drawer calls LR3 reset_waste_drawer."""
+        from pylitterbot.mcp.tools.commands import reset_waste_drawer
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await reset_waste_drawer(robot="Basement")
+        mock_account.robots[1].reset_waste_drawer.assert_awaited_once()
+        assert result == "Waste drawer reset on 'Basement'."
+
+    @pytest.mark.asyncio()
+    async def test_resets_lr5(self, mock_account: MagicMock) -> None:
+        """reset_waste_drawer calls LR5 reset_waste_drawer."""
+        from pylitterbot.mcp.tools.commands import reset_waste_drawer
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await reset_waste_drawer(robot="Living Room")
+        mock_account.robots[2].reset_waste_drawer.assert_awaited_once()
+        assert result == "Waste drawer reset on 'Living Room'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_lr4(self, mock_account: MagicMock) -> None:
+        """reset_waste_drawer raises ValueError for LR4."""
+        from pylitterbot.mcp.tools.commands import reset_waste_drawer
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 3 and 5"),
+        ):
+            await reset_waste_drawer(robot="Kitchen")
+
+
+class TestResetSettings:
+    """Tests for the reset_settings tool."""
+
+    @pytest.mark.asyncio()
+    async def test_resets_lr3(self, mock_account: MagicMock) -> None:
+        """reset_settings calls LR3 reset_settings."""
+        from pylitterbot.mcp.tools.commands import reset_settings
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await reset_settings(robot="Basement")
+        mock_account.robots[1].reset_settings.assert_awaited_once()
+        assert result == "Settings reset on 'Basement'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_non_lr3(self, mock_account: MagicMock) -> None:
+        """reset_settings raises ValueError for non-LR3 robots."""
+        from pylitterbot.mcp.tools.commands import reset_settings
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 3"),
+        ):
+            await reset_settings(robot="Kitchen")
+
+
+class TestChangeFilter:
+    """Tests for the change_filter tool."""
+
+    @pytest.mark.asyncio()
+    async def test_changes_filter_lr5(self, mock_account: MagicMock) -> None:
+        """change_filter calls LR5 change_filter."""
+        from pylitterbot.mcp.tools.commands import change_filter
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await change_filter(robot="Living Room")
+        mock_account.robots[2].change_filter.assert_awaited_once()
+        assert result == "Filter replacement counter reset on 'Living Room'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_non_lr5(self, mock_account: MagicMock) -> None:
+        """change_filter raises ValueError for non-LR5 robots."""
+        from pylitterbot.mcp.tools.commands import change_filter
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="is not a Litter-Robot 5"),
+        ):
+            await change_filter(robot="Kitchen")
+
+
+class TestUpdateFirmware:
+    """Tests for the update_firmware tool."""
+
+    @pytest.mark.asyncio()
+    async def test_updates_firmware_lr4(self, mock_account: MagicMock) -> None:
+        """update_firmware calls LR4 update_firmware."""
+        from pylitterbot.mcp.tools.commands import update_firmware
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await update_firmware(robot="Kitchen")
+        mock_account.robots[0].update_firmware.assert_awaited_once()
+        assert result == "Firmware update triggered on 'Kitchen'."
+
+    @pytest.mark.asyncio()
+    async def test_rejects_lr3(self, mock_account: MagicMock) -> None:
+        """update_firmware raises ValueError for LR3."""
+        from pylitterbot.mcp.tools.commands import update_firmware
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 4 and 5"),
+        ):
+            await update_firmware(robot="Basement")
+
+
+class TestGetFirmwareDetails:
+    """Tests for the get_firmware_details tool."""
+
+    @pytest.mark.asyncio()
+    async def test_gets_lr4_firmware_details(self, mock_account: MagicMock) -> None:
+        """get_firmware_details returns firmware dict for LR4."""
+        from pylitterbot.mcp.tools.commands import get_firmware_details
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await get_firmware_details(robot="Kitchen")
+        mock_account.robots[0].get_firmware_details.assert_awaited_once()
+        assert result["isEspFirmwareUpdateNeeded"] is True
+        assert "latestFirmware" in result
+
+    @pytest.mark.asyncio()
+    async def test_gets_lr5_firmware_details(self, mock_account: MagicMock) -> None:
+        """get_firmware_details returns firmware dict for LR5."""
+        from pylitterbot.mcp.tools.commands import get_firmware_details
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await get_firmware_details(robot="Living Room")
+        mock_account.robots[2].get_firmware_details.assert_awaited_once()
+        assert "latestFirmware" in result
+
+    @pytest.mark.asyncio()
+    async def test_rejects_lr3(self, mock_account: MagicMock) -> None:
+        """get_firmware_details raises ValueError for LR3."""
+        from pylitterbot.mcp.tools.commands import get_firmware_details
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 4 and 5"),
+        ):
+            await get_firmware_details(robot="Basement")
