@@ -378,9 +378,7 @@ class TestFormatRobotSummaryExpandedFields:
         assert summary["hopper_status"] == "ENABLED"
         assert summary["litter_level_state"] == "OPTIMAL"
 
-    def test_lr5_includes_pro_and_sensor_fields(
-        self, mock_account: MagicMock
-    ) -> None:
+    def test_lr5_includes_pro_and_sensor_fields(self, mock_account: MagicMock) -> None:
         """format_robot_summary includes LR5-specific fields."""
         from pylitterbot.mcp.helpers import format_robot_summary
 
@@ -399,7 +397,6 @@ class TestFormatRobotSummaryExpandedFields:
         assert summary["odometer_empty_cycles"] == 100
         assert summary["odometer_filter_cycles"] == 50
         assert summary["odometer_power_cycles"] == 200
-
 
     def test_lr4_handles_none_enums(self, mock_account: MagicMock) -> None:
         """format_robot_summary handles None enum values gracefully."""

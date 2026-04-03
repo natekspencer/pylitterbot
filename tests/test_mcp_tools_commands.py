@@ -67,9 +67,11 @@ def mock_account() -> MagicMock:
     lr5.set_power_status = AsyncMock(return_value=True)
     lr5.reset_waste_drawer = AsyncMock(return_value=True)
     lr5.change_filter = AsyncMock(return_value=True)
-    lr5.update_firmware = AsyncMock(side_effect=NotImplementedError(
-        "Firmware updates cannot be triggered via the LR5 REST API."
-    ))
+    lr5.update_firmware = AsyncMock(
+        side_effect=NotImplementedError(
+            "Firmware updates cannot be triggered via the LR5 REST API."
+        )
+    )
     lr5.get_firmware_details = AsyncMock(
         return_value={
             "latestFirmware": {
