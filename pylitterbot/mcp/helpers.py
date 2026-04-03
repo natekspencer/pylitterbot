@@ -7,6 +7,7 @@ from typing import Any
 from pylitterbot import FeederRobot, LitterRobot, Pet
 from pylitterbot.robot import Robot
 from pylitterbot.robot.litterrobot4 import LitterRobot4
+from pylitterbot.robot.litterrobot5 import LitterRobot5
 
 from .server import get_account
 
@@ -27,6 +28,26 @@ async def resolve_litter_robot(identifier: str) -> LitterRobot:
     if not isinstance(robot, LitterRobot):
         raise ValueError(
             f"'{robot.name}' is not a Litter-Robot (it is a {robot.model})."
+        )
+    return robot
+
+
+async def resolve_litter_robot_4(identifier: str) -> LitterRobot4:
+    """Find a LitterRobot4 by name or ID. Raises if the robot is not a Litter-Robot 4."""
+    robot = await resolve_robot(identifier)
+    if not isinstance(robot, LitterRobot4):
+        raise ValueError(
+            f"'{robot.name}' is not a Litter-Robot 4 (it is a {robot.model})."
+        )
+    return robot
+
+
+async def resolve_litter_robot_5(identifier: str) -> LitterRobot5:
+    """Find a LitterRobot5 by name or ID. Raises if the robot is not a Litter-Robot 5."""
+    robot = await resolve_robot(identifier)
+    if not isinstance(robot, LitterRobot5):
+        raise ValueError(
+            f"'{robot.name}' is not a Litter-Robot 5 (it is a {robot.model})."
         )
     return robot
 
@@ -61,6 +82,21 @@ def format_robot_summary(robot: Robot) -> dict[str, Any]:
                 "cycle_capacity": robot.cycle_capacity,
                 "is_sleeping": robot.is_sleeping,
                 "clean_cycle_wait_time_minutes": robot.clean_cycle_wait_time_minutes,
+                "firmware": robot.firmware,
+                "sleep_mode_enabled": robot.sleep_mode_enabled,
+                "sleep_schedule": (
+                    [
+                        {
+                            "day": day.day.name,
+                            "is_enabled": day.is_enabled,
+                            "sleep_time": day.sleep_time.isoformat(),
+                            "wake_time": day.wake_time.isoformat(),
+                        }
+                        for day in robot.sleep_schedule.days
+                    ]
+                    if robot.sleep_schedule
+                    else None
+                ),
             }
         )
 
@@ -72,6 +108,49 @@ def format_robot_summary(robot: Robot) -> dict[str, Any]:
                 if robot.night_light_mode
                 else None,
                 "pet_weight": robot.pet_weight,
+                "panel_brightness": robot.panel_brightness.name
+                if robot.panel_brightness
+                else None,
+                "night_light_brightness": robot.night_light_brightness,
+                "globe_motor_fault_status": robot.globe_motor_fault_status.name
+                if robot.globe_motor_fault_status
+                else None,
+                "hopper_status": robot.hopper_status.name
+                if robot.hopper_status
+                else None,
+                "litter_level_state": robot.litter_level_state.name
+                if robot.litter_level_state
+                else None,
+            }
+        )
+
+    if isinstance(robot, LitterRobot5):
+        summary.update(
+            {
+                "litter_level": robot.litter_level,
+                "night_light_mode": robot.night_light_mode.name
+                if robot.night_light_mode
+                else None,
+                "pet_weight": robot.pet_weight,
+                "panel_brightness": robot.panel_brightness.name
+                if robot.panel_brightness
+                else None,
+                "is_pro": robot.is_pro,
+                "privacy_mode": robot.privacy_mode,
+                "sound_volume": robot.sound_volume,
+                "camera_audio_enabled": robot.camera_audio_enabled,
+                "wifi_rssi": robot.wifi_rssi,
+                "is_laser_dirty": robot.is_laser_dirty,
+                "is_gas_sensor_fault_detected": robot.is_gas_sensor_fault_detected,
+                "night_light_color": robot.night_light_color,
+                "next_filter_replacement_date": (
+                    robot.next_filter_replacement_date.isoformat()
+                    if robot.next_filter_replacement_date
+                    else None
+                ),
+                "odometer_empty_cycles": robot.odometer_empty_cycles,
+                "odometer_filter_cycles": robot.odometer_filter_cycles,
+                "odometer_power_cycles": robot.odometer_power_cycles,
             }
         )
 
@@ -81,6 +160,12 @@ def format_robot_summary(robot: Robot) -> dict[str, Any]:
                 "food_level": robot.food_level,
                 "meal_insert_size": robot.meal_insert_size,
                 "last_feeding": robot.last_feeding,
+                "gravity_mode_enabled": robot.gravity_mode_enabled,
+                "next_feeding": (
+                    robot.next_feeding.isoformat()
+                    if robot.next_feeding
+                    else None
+                ),
             }
         )
 

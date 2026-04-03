@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from pylitterbot import Account, LitterRobot4
+from pylitterbot import Account, FeederRobot, LitterRobot4
 from pylitterbot.activity import Activity, Insight
 from pylitterbot.enums import LitterBoxStatus
 
@@ -103,3 +103,53 @@ class TestGetInsight:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             await get_insight(robot="Kitchen", days=7)
         mock_account.robots[0].get_insight.assert_awaited_once_with(days=7)
+
+
+@pytest.fixture()
+def mock_feeder_account() -> MagicMock:
+    """Create a mock Account with a Feeder-Robot."""
+    account = MagicMock(spec=Account)
+
+    feeder = MagicMock(spec=FeederRobot)
+    feeder.name = "Cat Feeder"
+    feeder.id = "feeder-001"
+    feeder.model = "Feeder-Robot"
+    feeder.serial = "FR001"
+    feeder.is_online = True
+    feeder.power_status = "AC"
+
+    feeder.get_food_dispensed_since = AsyncMock(return_value=2.5)
+
+    account.robots = [feeder]
+    return account
+
+
+class TestGetFoodDispensed:
+    """Tests for the get_food_dispensed tool."""
+
+    @pytest.mark.asyncio()
+    async def test_returns_food_dispensed(
+        self, mock_feeder_account: MagicMock
+    ) -> None:
+        """get_food_dispensed returns cups dispensed and the time window."""
+        from pylitterbot.mcp.tools.activity import get_food_dispensed
+
+        with patch(
+            "pylitterbot.mcp.helpers.get_account", return_value=mock_feeder_account
+        ):
+            result = await get_food_dispensed(robot="Cat Feeder", hours=24)
+        assert result["cups_dispensed"] == 2.5
+        assert result["hours"] == 24
+        assert result["robot"] == "Cat Feeder"
+        mock_feeder_account.robots[0].get_food_dispensed_since.assert_awaited_once()
+
+    @pytest.mark.asyncio()
+    async def test_rejects_non_feeder(self, mock_account: MagicMock) -> None:
+        """get_food_dispensed raises ValueError for non-Feeder robots."""
+        from pylitterbot.mcp.tools.activity import get_food_dispensed
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="is not a Feeder-Robot"),
+        ):
+            await get_food_dispensed(robot="Kitchen", hours=24)
