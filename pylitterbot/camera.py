@@ -264,9 +264,10 @@ class CameraClient:
             return []
         if not isinstance(data, list):
             return []
-        return [
+        clips = [
             VideoClip.from_response(item) for item in data if isinstance(item, dict)
         ]
+        return clips[:limit] if limit is not None else clips
 
     async def get_events(self, *, limit: int | None = None) -> list[dict[str, Any]]:
         """Fetch camera events (AI detections, etc.).
@@ -488,41 +489,44 @@ class CameraSignalingRelay:
         closes the WebSocket.  Browser ICE candidates that arrive after closure are
         buffered here and delivered via a fresh connection to the same session URL,
         allowing the camera to complete ICE negotiation.
+
+        Loops until the pending queue is empty, so candidates arriving during an
+        in-flight flush are not stranded.
         """
-        if not self._session or not self._pending_candidates:
-            return
-        _LOGGER.debug(
-            "Signaling relay: reconnecting to forward %d late ICE candidate(s)",
-            len(self._pending_candidates),
-        )
-        try:
-            websession = self._client.websession
-            ws_url = (
-                f"{self._session.signaling_url}"
-                f"?accessToken={self._session.session_token}"
+        while self._pending_candidates and not self._closed and self._session:
+            _LOGGER.debug(
+                "Signaling relay: reconnecting to forward %d late ICE candidate(s)",
+                len(self._pending_candidates),
             )
-            ws = await websession.ws_connect(ws_url)
-            pending, self._pending_candidates = self._pending_candidates, []
-            sent = 0
             try:
-                for msg in pending:
-                    if self._closed:
-                        break
-                    await ws.send_json(msg)
-                    sent += 1
-                    _LOGGER.debug(
-                        "Signaling relay: forwarded late ICE candidate via reconnect"
-                    )
-            finally:
-                if sent < len(pending):
-                    self._pending_candidates = pending[sent:] + self._pending_candidates
-                await ws.close()
-        except Exception:
-            if not self._closed:
-                _LOGGER.debug(
-                    "Signaling relay: late ICE candidate reconnect failed",
-                    exc_info=True,
+                websession = self._client.websession
+                ws_url = (
+                    f"{self._session.signaling_url}"
+                    f"?accessToken={self._session.session_token}"
                 )
+                ws = await websession.ws_connect(ws_url)
+                pending, self._pending_candidates = self._pending_candidates, []
+                sent = 0
+                try:
+                    for msg in pending:
+                        await ws.send_json(msg)
+                        sent += 1
+                        _LOGGER.debug(
+                            "Signaling relay: forwarded late ICE candidate via reconnect"
+                        )
+                finally:
+                    if sent < len(pending):
+                        self._pending_candidates = (
+                            pending[sent:] + self._pending_candidates
+                        )
+                    await ws.close()
+            except Exception:
+                if not self._closed:
+                    _LOGGER.debug(
+                        "Signaling relay: late ICE candidate reconnect failed",
+                        exc_info=True,
+                    )
+                break
 
     async def _ping_loop(self) -> None:
         """Send periodic pings to keep the signaling connection alive."""
@@ -617,6 +621,8 @@ class CameraStream:
         """Start the WebRTC streaming session."""
         if self._stopped:
             raise CameraStreamException("Stream has been stopped")
+        if self._pc is not None:
+            raise CameraStreamException("Stream already started")
 
         self._session = await self._client.generate_session()
 
@@ -651,26 +657,36 @@ class CameraStream:
         self._pc.addTransceiver("video", direction="recvonly")
         self._pc.addTransceiver("audio", direction="recvonly")
 
-        websession = self._client.websession
-        ws_url = (
-            f"{self._session.signaling_url}?accessToken={self._session.session_token}"
-        )
-        self._ws = await websession.ws_connect(ws_url)
+        try:
+            websession = self._client.websession
+            ws_url = (
+                f"{self._session.signaling_url}"
+                f"?accessToken={self._session.session_token}"
+            )
+            self._ws = await websession.ws_connect(ws_url)
 
-        # setLocalDescription gathers ICE candidates internally.
-        # We must send localDescription.sdp (which includes all gathered
-        # candidates) rather than offer.sdp (which has none).
-        offer = await self._pc.createOffer()
-        await self._pc.setLocalDescription(offer)
+            # setLocalDescription gathers ICE candidates internally.
+            # We must send localDescription.sdp (which includes all gathered
+            # candidates) rather than offer.sdp (which has none).
+            offer = await self._pc.createOffer()
+            await self._pc.setLocalDescription(offer)
 
-        local_sdp = self._pc.localDescription.sdp
-        encoded_sdp = b64encode(local_sdp.encode()).decode()
-        await self._ws.send_json(
-            {
-                "type": "offer",
-                "sdp": encoded_sdp,
-            }
-        )
+            local_sdp = self._pc.localDescription.sdp
+            encoded_sdp = b64encode(local_sdp.encode()).decode()
+            await self._ws.send_json(
+                {
+                    "type": "offer",
+                    "sdp": encoded_sdp,
+                }
+            )
+        except Exception:
+            if self._ws and not self._ws.closed:
+                await self._ws.close()
+            if self._pc:
+                await self._pc.close()
+            self._ws = None
+            self._pc = None
+            raise
 
         self._receive_task = asyncio.ensure_future(self._receive_loop())
         self._ping_task = asyncio.ensure_future(self._ping_loop())
