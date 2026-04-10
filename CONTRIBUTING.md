@@ -12,8 +12,8 @@ Or individual pieces:
 
 ```bash
 uv run mypy pylitterbot tests
-uv run ruff check
-uv run ruff format
+uv run ruff check .
+uv run ruff format .
 uv run pytest
 ```
 
