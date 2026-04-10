@@ -43,7 +43,7 @@ async def test_account(
 
     await account.connect(username=USERNAME, password=PASSWORD, load_robots=True)
     assert account.user_id == USER_ID
-    assert len(account.robots) == ROBOT_COUNT
+    assert len(account.robots) == ROBOT_COUNT  # type: ignore[unreachable]
 
     assert len(account.get_robots(LitterRobot3)) == 2
     assert len(account.get_robots(LitterRobot4)) == 1
