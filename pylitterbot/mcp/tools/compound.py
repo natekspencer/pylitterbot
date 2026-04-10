@@ -265,8 +265,8 @@ async def pet_usage_report() -> dict[str, Any]:
 async def maintenance_forecast() -> list[dict[str, Any]]:
     """Estimate when each Litter-Robot's waste drawer will be full.
 
-    Uses current cycle count, capacity, and recent cycle rate from insights
-    to estimate days remaining. Sorted by urgency (fewest days first).
+    Uses the current drawer fill level, capacity, and recent cycle rate from
+    insights to estimate days remaining. Sorted by urgency (fewest days first).
     """
     account = await get_account()
     await account.refresh_robots()
@@ -276,7 +276,15 @@ async def maintenance_forecast() -> list[dict[str, Any]]:
         if not isinstance(robot, LitterRobot):
             continue
 
-        cycles_remaining = max(0, robot.cycle_capacity - robot.cycle_count)
+        # Use waste_drawer_level (0-100% DFI sensor reading) rather than
+        # cycle_count: on LR4/LR5, cycle_count is a lifetime odometer
+        # ("odometerCleanCycles"), so cycle_capacity - cycle_count would
+        # pin to zero once the robot has more lifetime cycles than its
+        # drawer capacity.
+        drawer_level_fraction = max(0.0, min(100.0, robot.waste_drawer_level)) / 100.0
+        cycles_remaining = max(
+            0, round(robot.cycle_capacity * (1.0 - drawer_level_fraction))
+        )
 
         try:
             insight = await robot.get_insight(days=7)
