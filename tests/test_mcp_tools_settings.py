@@ -31,6 +31,7 @@ def mock_account() -> MagicMock:
     lr4.set_panel_lockout = AsyncMock(return_value=True)
     lr4.set_wait_time = AsyncMock(return_value=True)
     lr4.set_sleep_mode = AsyncMock(return_value=True)
+    lr4.VALID_WAIT_TIMES = [3, 7, 15, 25, 30]
 
     lr3 = MagicMock(spec=LitterRobot3)
     lr3.name = "Basement"
@@ -45,6 +46,7 @@ def mock_account() -> MagicMock:
     lr3.set_panel_lockout = AsyncMock(return_value=True)
     lr3.set_wait_time = AsyncMock(return_value=True)
     lr3.set_sleep_mode = AsyncMock(return_value=True)
+    lr3.VALID_WAIT_TIMES = [3, 7, 15]
 
     lr5 = MagicMock(spec=LitterRobot5)
     lr5.name = "Living Room"
@@ -411,6 +413,37 @@ class TestSetWaitTime:
             pytest.raises(ValueError, match="Invalid wait time"),
         ):
             await set_wait_time(robot="Kitchen", minutes=10)
+
+    @pytest.mark.asyncio()
+    async def test_lr3_rejects_lr4_only_wait_time(
+        self, mock_account: MagicMock
+    ) -> None:
+        """LR3 rejects 25 (valid on LR4/LR5 but not LR3) via VALID_WAIT_TIMES.
+
+        Regression: the tool used to hardcode the valid set with a model
+        string comparison. It now reads resolved.VALID_WAIT_TIMES so rules
+        stay in sync with the robot classes.
+        """
+        from pylitterbot.mcp.tools.settings import set_wait_time
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match=r"Invalid wait time 25 for Litter-Robot 3"),
+        ):
+            await set_wait_time(robot="Basement", minutes=25)
+        mock_account.robots[1].set_wait_time.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_lr4_accepts_lr4_only_wait_time(
+        self, mock_account: MagicMock
+    ) -> None:
+        """LR4 accepts 25 because it is in LR4.VALID_WAIT_TIMES."""
+        from pylitterbot.mcp.tools.settings import set_wait_time
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_wait_time(robot="Kitchen", minutes=25)
+        mock_account.robots[0].set_wait_time.assert_awaited_once_with(25)
+        assert result == "Wait time set to 25 minutes on 'Kitchen'."
 
 
 class TestSetSleepMode:

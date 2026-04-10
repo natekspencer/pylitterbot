@@ -125,9 +125,7 @@ async def set_wait_time(robot: str, minutes: int) -> str:
 
     """
     resolved = await resolve_litter_robot(robot)
-    valid_wait_times = (
-        {3, 7, 15} if resolved.model == "Litter-Robot 3" else {3, 7, 15, 25, 30}
-    )
+    valid_wait_times = set(resolved.VALID_WAIT_TIMES)
     if minutes not in valid_wait_times:
         raise ValueError(
             f"Invalid wait time {minutes} for {resolved.model}. "
