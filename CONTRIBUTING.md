@@ -4,12 +4,13 @@ Follow these steps to set up your environment and ensure your changes meet the p
 
 ### Setup
 
-1. Clone this repository:
+1. Install `uv` by Astral - https://docs.astral.sh/uv/getting-started/installation/
+2. Clone this repository:
    ```bash
    git clone https://github.com/natekspencer/pylitterbot.git
    cd pylitterbot
    ```
-2. Install dependencies and pre-commit hooks:
+3. Install dependencies and pre-commit hooks:
    ```bash
    uv sync
    uv run pre-commit install
