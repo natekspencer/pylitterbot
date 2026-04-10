@@ -20,7 +20,7 @@ Follow these steps to set up your environment and ensure your changes meet the p
 - **Code Formatting:** Ensure your code is properly formatted. This project uses `ruff` for linting and formatting.
 - **Typing:** All code must be fully typed. Use `mypy` to check for type issues:
   ```bash
-  uv run ruff check .
+  uv run mypy pylitterbot tests
   ```
 - **Testing:** Add tests for any new features or changes. Run the test suite with:
   ```bash
