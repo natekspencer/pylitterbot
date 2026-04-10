@@ -77,6 +77,8 @@ to query when you create the account or when you load robots:
 ```python
 from pylitterbot import Account, LitterRobot4, LitterRobot5
 
+...
+
 account = Account(robot_types=[LitterRobot4, LitterRobot5])
 
 await account.connect(
@@ -116,7 +118,6 @@ Thank you for your interest in contributing! Please see [CONTRIBUTING.md](CONTRI
 
 ## TODO
 
-- Validate Litter-Robot EVO model data/endpoints if it differs from Litter-Robot 5
 - Add support for Litter-Robot 5 cameras
 
 ---
@@ -131,7 +132,7 @@ I maintain this python project in my spare time. If you find it useful, consider
 - ⭐ [Star this project](https://github.com/natekspencer/pylitterbot)
 - 📦 If you’d like to support in other ways, such as donating hardware for testing, feel free to [reach out to me](https://github.com/natekspencer)
 
-If you don't already own a Litter-Robot, please consider using [my referral link](https://share.litter-robot.com/x/XJAY1D) to purchase your own robot and save $50!
+If you don't already own a Litter-Robot, please consider using [my referral link](https://share.litter-robot.com/x/xQ4Wnm) to purchase your own robot and save $50!
 
 ## 📈 Star History
 
