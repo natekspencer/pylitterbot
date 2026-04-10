@@ -102,6 +102,29 @@ async def test_account_get_robots(mock_aioresponse: aioresponses) -> None:
     await account.disconnect()
 
 
+async def test_account_robot_type_filter(mock_aioresponse: aioresponses) -> None:
+    """Tests that robot discovery can be limited to specific robot classes."""
+    account = await get_account(
+        token_update_callback=lambda token: None,
+        robot_types=[LitterRobot4, LitterRobot5],
+    )
+
+    await account.connect(username=USERNAME, password=PASSWORD, load_robots=True)
+
+    assert len(account.robots) == 3
+    assert len(account.get_robots(LitterRobot3)) == 0
+    assert len(account.get_robots(LitterRobot4)) == 1
+    assert len(account.get_robots(LitterRobot5)) == 2
+    assert len(account.get_robots(FeederRobot)) == 0
+
+    await account.load_robots(robot_types=[FeederRobot])
+
+    assert len(account.robots) == 1
+    assert len(account.get_robots(FeederRobot)) == 1
+
+    await account.disconnect()
+
+
 # @pytest.mark.parametrize(
 #     "side_effect,exception",
 #     [

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import TypeVar, cast
 
 from aiohttp import (
@@ -30,6 +30,12 @@ from .utils import decode, urljoin
 
 _LOGGER = logging.getLogger(__name__)
 _RobotT = TypeVar("_RobotT", bound=Robot)
+DEFAULT_ROBOT_TYPES: tuple[type[Robot], ...] = (
+    LitterRobot3,
+    LitterRobot4,
+    LitterRobot5,
+    FeederRobot,
+)
 
 
 class Account:
@@ -40,6 +46,7 @@ class Account:
         token: dict | None = None,
         websession: ClientSession | None = None,
         token_update_callback: Callable[[dict | None], None] | None = None,
+        robot_types: Iterable[type[Robot]] | None = None,
     ) -> None:
         """Initialize the account data."""
         self._session = LitterRobotSession(token=token, websession=websession)
@@ -53,6 +60,9 @@ class Account:
         self._user: dict = {}
         self._robots: list[Robot] = []
         self._pets: list[Pet] = []
+        self._robot_types = (
+            tuple(robot_types) if robot_types is not None else DEFAULT_ROBOT_TYPES
+        )
         self._monitors: dict[type[Robot], WebSocketMonitor] = {}
 
         if token_update_callback:
@@ -115,6 +125,7 @@ class Account:
         load_robots: bool = False,
         subscribe_for_updates: bool = False,
         load_pets: bool = False,
+        robot_types: Iterable[type[Robot]] | None = None,
     ) -> None:
         """Connect to the Litter-Robot API."""
         try:
@@ -129,7 +140,10 @@ class Account:
                     )
 
             if load_robots:
-                await self.load_robots(subscribe_for_updates)
+                await self.load_robots(
+                    subscribe_for_updates=subscribe_for_updates,
+                    robot_types=robot_types,
+                )
 
             if load_pets:
                 await self.load_pets()
@@ -181,18 +195,22 @@ class Account:
                 else:
                     self._pets.append(pet)
 
-    async def load_robots(self, subscribe_for_updates: bool = False) -> None:
+    async def load_robots(
+        self,
+        subscribe_for_updates: bool = False,
+        robot_types: Iterable[type[Robot]] | None = None,
+    ) -> None:
         """Get information about robots connected to the account."""
         robots: list[Robot] = []
-        robot_types: list[type[Robot]] = [
-            LitterRobot3,
-            LitterRobot4,
-            LitterRobot5,
-            FeederRobot,
-        ]
+        robot_types_to_load = (
+            tuple(robot_types) if robot_types is not None else self._robot_types
+        )
         try:
             resp = await asyncio.gather(
-                *(robot_cls.fetch_for_account(self) for robot_cls in robot_types),
+                *(
+                    robot_cls.fetch_for_account(self)
+                    for robot_cls in robot_types_to_load
+                ),
                 return_exceptions=True,
             )
 
@@ -215,7 +233,7 @@ class Account:
                         await robot.subscribe()
                 robots.append(robot)
 
-            for robot_cls, result in zip(robot_types, resp):
+            for robot_cls, result in zip(robot_types_to_load, resp):
                 if isinstance(result, BaseException):
                     _LOGGER.error("Failed to fetch %s: %s", robot_cls.__name__, result)
                     # Preserve previously-known robots of this type rather than dropping them

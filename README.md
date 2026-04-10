@@ -71,6 +71,21 @@ which will output something like:
 Name: Litter-Robot Name, Serial: LR3C012345, id: a0123b4567cd8e
 ```
 
+If you only want to discover specific robot families, pass the classes you want
+to query when you create the account or when you load robots:
+
+```python
+from pylitterbot import Account, LitterRobot4, LitterRobot5
+
+account = Account(robot_types=[LitterRobot4, LitterRobot5])
+
+await account.connect(
+  username=username,
+  password=password,
+  load_robots=True,
+)
+```
+
 To start a clean cycle
 
 ```python

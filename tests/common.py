@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 from aiohttp import ClientConnectorError, ClientResponseError, ClientWebSocketResponse
 
-from pylitterbot import Account, LitterRobot, Pet
+from pylitterbot import Account, LitterRobot, Pet, Robot
 from pylitterbot.robot.litterrobot3 import DEFAULT_ENDPOINT
 
 USERNAME = "username@username.com"
@@ -486,6 +486,7 @@ async def get_account(
     load_robots: bool = False,
     load_pets: bool = False,
     token_update_callback: Callable[[dict | None], None] | None = None,
+    robot_types: list[type[Robot]] | None = None,
 ) -> Account:
     """Get an account that has the underlying API patched."""
     with patch(
@@ -494,7 +495,10 @@ async def get_account(
             Mock(), Mock(), Mock(), Mock(), Mock(), Mock(), Mock(), Mock()
         ),
     ):
-        account = Account(token_update_callback=token_update_callback)
+        account = Account(
+            token_update_callback=token_update_callback,
+            robot_types=robot_types,
+        )
         if logged_in:
             await account.connect(
                 username=USERNAME,
