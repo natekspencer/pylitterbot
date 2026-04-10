@@ -175,14 +175,24 @@ async def sync_settings(source_robot: str) -> dict[str, Any]:
             )
 
         old_sleep = robot.sleep_mode_enabled
-        if old_sleep != source.sleep_mode_enabled:
-            sleep_time = (
-                source.sleep_mode_start_time.timetz()
-                if source.sleep_mode_start_time
-                else None
+        old_sleep_time = (
+            robot.sleep_mode_start_time.timetz()
+            if robot.sleep_mode_start_time
+            else None
+        )
+        source_sleep_time = (
+            source.sleep_mode_start_time.timetz()
+            if source.sleep_mode_start_time
+            else None
+        )
+        if old_sleep != source.sleep_mode_enabled or (
+            source.sleep_mode_enabled and old_sleep_time != source_sleep_time
+        ):
+            await robot.set_sleep_mode(source.sleep_mode_enabled, source_sleep_time)
+            changes.append(
+                f"sleep_mode: {(old_sleep, old_sleep_time)} -> "
+                f"{(source.sleep_mode_enabled, source_sleep_time)}"
             )
-            await robot.set_sleep_mode(source.sleep_mode_enabled, sleep_time)
-            changes.append(f"sleep_mode: {old_sleep} -> {source.sleep_mode_enabled}")
 
         if isinstance(source, LitterRobot4) and isinstance(robot, LitterRobot4):
             old_brightness = robot.night_light_brightness
