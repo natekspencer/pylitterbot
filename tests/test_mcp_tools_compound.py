@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time, timezone
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
@@ -221,6 +221,44 @@ class TestSyncSettings:
         assert result["source"] == "Kitchen"
         assert len(result["targets"]) >= 1
         assert result["targets"][0]["name"] == "Bedroom"
+
+    @pytest.mark.asyncio()
+    async def test_syncs_sleep_time_when_both_enabled_but_times_differ(
+        self, mock_account: MagicMock
+    ) -> None:
+        """Sync sleep_mode_start_time differences even when both are enabled.
+
+        Regression for a bug where the sleep-mode branch only fired on an
+        enabled-flag mismatch, so two robots that were both enabled but had
+        different sleep start times stayed out of sync.
+        """
+        from pylitterbot.mcp.tools.compound import sync_settings
+
+        kitchen = mock_account.robots[0]
+        bedroom = mock_account.robots[1]
+
+        # Both enabled, but different start times.
+        kitchen.sleep_mode_enabled = True
+        bedroom.sleep_mode_enabled = True
+        kitchen.sleep_mode_start_time = datetime(2026, 1, 1, 22, 0, tzinfo=timezone.utc)
+        bedroom.sleep_mode_start_time = datetime(
+            2026, 1, 1, 23, 30, tzinfo=timezone.utc
+        )
+
+        with (
+            patch(
+                "pylitterbot.mcp.tools.compound.get_account",
+                return_value=mock_account,
+            ),
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+        ):
+            result = await sync_settings(source_robot="Kitchen")
+
+        bedroom.set_sleep_mode.assert_awaited_once_with(
+            True, time(22, 0, tzinfo=timezone.utc)
+        )
+        bedroom_changes = result["targets"][0]["changes"]
+        assert any("sleep_mode" in change for change in bedroom_changes)
 
 
 class TestMaintenanceForecast:
