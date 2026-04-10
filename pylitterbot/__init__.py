@@ -1,7 +1,6 @@
 """pylitterbot module."""
 
-__version__ = "0.0.0"
-
+from ._version import __version__  # noqa: F401
 from .account import Account
 from .pet import Pet
 from .robot import Robot

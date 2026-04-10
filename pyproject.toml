@@ -44,7 +44,7 @@ requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.hooks.version]
-path = "pylitterbot/__init__.py"
+path = "pylitterbot/_version.py"
 pattern = true
 
 [tool.hatch.build.targets.sdist]

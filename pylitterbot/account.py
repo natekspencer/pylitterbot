@@ -15,6 +15,7 @@ from aiohttp import (
 )
 from botocore.exceptions import ClientError
 
+from ._version import __version__
 from .event import EVENT_UPDATE
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .pet import Pet
@@ -43,7 +44,10 @@ class Account:
         """Initialize the account data."""
         self._session = LitterRobotSession(token=token, websession=websession)
         self._session._custom_args[DEFAULT_ENDPOINT] = {
-            "headers": {"x-api-key": decode(DEFAULT_ENDPOINT_KEY)}
+            "headers": {
+                "User-Agent": f"pylitterbot/{__version__}",
+                "x-api-key": decode(DEFAULT_ENDPOINT_KEY),
+            }
         }
         self._user_id = self._session.get_user_id() if token else None
         self._user: dict = {}
