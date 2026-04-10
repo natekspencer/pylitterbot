@@ -274,9 +274,40 @@ class TestMaintenanceForecast:
         ):
             result = await maintenance_forecast()
         assert len(result) >= 2
-        # Kitchen has fewer cycles remaining (25/30) than Bedroom (5/30)
+        # Kitchen is 80% full, Bedroom is 20% full, so Kitchen is more urgent.
         assert result[0]["name"] == "Kitchen"
         assert "estimated_days_remaining" in result[0]
+
+    @pytest.mark.asyncio()
+    async def test_uses_drawer_level_not_lifetime_odometer(
+        self, mock_account: MagicMock
+    ) -> None:
+        """cycles_remaining is derived from waste_drawer_level, not cycle_count.
+
+        Regression: on LR4/LR5, cycle_count maps to odometerCleanCycles (a
+        lifetime odometer). Subtracting it from cycle_capacity pins the
+        forecast to 0 for any real-world robot that has done more cycles in
+        its lifetime than the drawer capacity. The forecast must derive
+        cycles_remaining from the DFI fill level instead.
+        """
+        from pylitterbot.mcp.tools.compound import maintenance_forecast
+
+        # Bedroom: 20% full with cycle_capacity=30 should have ~24 cycles left,
+        # but with a huge lifetime cycle_count (simulating a well-used robot)
+        # the old code would compute max(0, 30 - 500) = 0.
+        bedroom = mock_account.robots[1]
+        bedroom.cycle_count = 500
+        bedroom.cycle_capacity = 30
+        bedroom.waste_drawer_level = 20.0
+
+        with patch(
+            "pylitterbot.mcp.tools.compound.get_account", return_value=mock_account
+        ):
+            result = await maintenance_forecast()
+
+        bedroom_forecast = next(f for f in result if f["name"] == "Bedroom")
+        # 30 * (1 - 0.20) = 24
+        assert bedroom_forecast["cycles_remaining"] == 24
 
 
 class TestHouseholdDigest:
