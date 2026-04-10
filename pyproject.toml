@@ -33,6 +33,7 @@ dev = [
     "aioresponses==0.7.8",
     "mypy==1.20.0",
     "tox==4.52.1",
+    "tox-uv>=1.25.0",
     "pytest-timeout==2.4.0",
     "ruff==0.15.10",
     "pytest-freezer==0.4.9",
@@ -52,6 +53,10 @@ include = ["pylitterbot"]
 
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
+
+[tool.pytest.ini_options]
+addopts = "--timeout=10 --cov=pylitterbot --cov-report=term-missing -vv"
+asyncio_mode = "auto"
 
 [tool.ruff.lint]
 select = [
