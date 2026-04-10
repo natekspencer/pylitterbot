@@ -2,7 +2,7 @@
 
 Follow these steps to set up your environment and ensure your changes meet the project's standards.
 
-### Setup
+## Setup
 
 1. Install `uv` by Astral - https://docs.astral.sh/uv/getting-started/installation/
 2. Clone this repository:
@@ -16,7 +16,7 @@ Follow these steps to set up your environment and ensure your changes meet the p
    uv run pre-commit install
    ```
 
-### Guidelines
+## Guidelines
 
 - **Code Formatting:** Ensure your code is properly formatted. This project uses `ruff` for linting and formatting.
 - **Typing:** All code must be fully typed. Use `mypy` to check for type issues:
@@ -29,7 +29,7 @@ Follow these steps to set up your environment and ensure your changes meet the p
   ```
 - **Commit Messages:** Follow conventional commit messages, e.g., feat: add new feature or fix: resolve issue with X
 
-### Testing Your Branch
+## Testing Your Branch
 
 You can run the full suite through all the supported Python versions:
 
@@ -37,7 +37,7 @@ You can run the full suite through all the supported Python versions:
 uv run tox
 ```
 
-Or just focus on individual tests:
+Or just focus on individual checks:
 
 ```bash
 uv run mypy pylitterbot tests
@@ -46,7 +46,7 @@ uv run ruff format .
 uv run pytest
 ```
 
-### Submitting Changes
+## Submitting Changes
 
 1. Create a new branch for your feature or fix:
    ```bash
