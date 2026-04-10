@@ -345,9 +345,27 @@ class TestUpdateFirmware:
 
         with (
             patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
-            pytest.raises(ValueError, match="only supported on Litter-Robot 4 and 5"),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 4"),
         ):
             await update_firmware(robot="Basement")
+
+    @pytest.mark.asyncio()
+    async def test_rejects_lr5(self, mock_account: MagicMock) -> None:
+        """update_firmware raises ValueError for LR5.
+
+        The Litter-Robot 5 REST API does not expose a firmware update trigger
+        endpoint (LitterRobot5.update_firmware raises NotImplementedError), so
+        the MCP tool must reject LR5 up-front with a clear error rather than
+        letting the underlying NotImplementedError surface.
+        """
+        from pylitterbot.mcp.tools.commands import update_firmware
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported on Litter-Robot 4"),
+        ):
+            await update_firmware(robot="Living Room")
+        mock_account.robots[2].update_firmware.assert_not_awaited()
 
 
 class TestGetFirmwareDetails:

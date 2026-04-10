@@ -142,16 +142,19 @@ async def change_filter(robot: str) -> str:
 
 @mcp.tool()
 async def update_firmware(robot: str) -> str:
-    """Trigger a firmware update on a Litter-Robot 4 or 5.
+    """Trigger a firmware update on a Litter-Robot 4.
+
+    Note: The Litter-Robot 5 REST API does not expose a firmware update
+    trigger endpoint, so this tool is restricted to Litter-Robot 4.
 
     Args:
         robot: Robot name (case-insensitive) or ID.
 
     """
     resolved = await resolve_robot(robot)
-    if not isinstance(resolved, (LitterRobot4, LitterRobot5)):
+    if not isinstance(resolved, LitterRobot4):
         raise ValueError(
-            f"Firmware update is only supported on Litter-Robot 4 and 5, "
+            f"Firmware update is only supported on Litter-Robot 4, "
             f"but '{resolved.name}' is a {resolved.model}."
         )
     await resolved.update_firmware()
