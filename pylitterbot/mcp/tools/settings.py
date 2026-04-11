@@ -29,6 +29,8 @@ async def set_name(robot: str, name: str) -> str:
     if not name:
         raise ValueError("name must be a non-empty string.")
     resolved = await resolve_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot rename.")
     ok = await resolved.set_name(name)
     if not ok:
         raise RuntimeError(f"Failed to rename '{resolved.name}'.")
@@ -45,6 +47,8 @@ async def set_night_light(robot: str, enabled: bool) -> str:
 
     """
     resolved = await resolve_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set night light.")
     ok = await resolved.set_night_light(enabled)
     if not ok:
         raise RuntimeError(f"Failed to set night light on '{resolved.name}'.")
@@ -62,6 +66,8 @@ async def set_night_light_brightness(robot: str, brightness: int) -> str:
 
     """
     resolved = await resolve_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set night light brightness.")
     if not isinstance(resolved, (LitterRobot4, LitterRobot5)):
         raise ValueError(
             f"Night light brightness is only supported on Litter-Robot 4 and 5, "
@@ -94,6 +100,8 @@ async def set_night_light_mode(robot: str, mode: str) -> str:
 
     """
     resolved = await resolve_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set night light mode.")
     if not isinstance(resolved, (LitterRobot4, LitterRobot5)):
         raise ValueError(
             f"Night light mode is only supported on Litter-Robot 4 and 5, "
@@ -122,6 +130,8 @@ async def set_panel_lockout(robot: str, enabled: bool) -> str:
 
     """
     resolved = await resolve_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set panel lockout.")
     ok = await resolved.set_panel_lockout(enabled)
     if not ok:
         raise RuntimeError(f"Failed to set panel lockout on '{resolved.name}'.")
@@ -139,6 +149,8 @@ async def set_wait_time(robot: str, minutes: int) -> str:
 
     """
     resolved = await resolve_litter_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set wait time.")
     valid_wait_times = set(resolved.VALID_WAIT_TIMES)
     if minutes not in valid_wait_times:
         raise ValueError(
@@ -164,6 +176,8 @@ async def set_sleep_mode(
 
     """
     resolved = await resolve_litter_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set sleep mode.")
     if not isinstance(resolved, (LitterRobot3, LitterRobot5)):
         raise ValueError(
             f"Sleep mode cannot be set via the API on "
@@ -197,6 +211,8 @@ async def set_panel_brightness(robot: str, brightness: int) -> str:
 
     """
     resolved = await resolve_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set panel brightness.")
     if not isinstance(resolved, (LitterRobot4, LitterRobot5)):
         raise ValueError(
             f"Panel brightness is only supported on Litter-Robot 4 and 5, "
@@ -225,6 +241,8 @@ async def set_volume(robot: str, volume: int) -> str:
 
     """
     resolved = await resolve_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set volume.")
     if not isinstance(resolved, LitterRobot5):
         raise ValueError(
             f"Volume is only supported on Litter-Robot 5, "
@@ -248,6 +266,8 @@ async def set_privacy_mode(robot: str, enabled: bool) -> str:
 
     """
     resolved = await resolve_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set privacy mode.")
     if not isinstance(resolved, LitterRobot5):
         raise ValueError(
             f"Privacy mode is only supported on Litter-Robot 5, "
@@ -270,6 +290,8 @@ async def set_camera_audio(robot: str, enabled: bool) -> str:
 
     """
     resolved = await resolve_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set camera audio.")
     if not isinstance(resolved, LitterRobot5):
         raise ValueError(
             f"Camera audio is only supported on Litter-Robot 5, "
@@ -297,6 +319,8 @@ async def set_gravity_mode(robot: str, enabled: bool) -> str:
 
     """
     resolved = await resolve_feeder_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set gravity mode.")
     ok = await resolved.set_gravity_mode(enabled)
     if not ok:
         raise RuntimeError(f"Failed to set gravity mode on '{resolved.name}'.")

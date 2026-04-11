@@ -77,6 +77,187 @@ def mock_account() -> MagicMock:
     return account
 
 
+class TestOfflineRejection:
+    """Regression tests: settings tools raise ValueError for offline robots."""
+
+    @pytest.mark.asyncio()
+    async def test_set_name_rejects_offline(self, mock_account: MagicMock) -> None:
+        """set_name raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_name
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_name(robot="Kitchen", name="New Name")
+        mock_account.robots[0].set_name.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_night_light_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_night_light raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_night_light
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_night_light(robot="Kitchen", enabled=True)
+        mock_account.robots[0].set_night_light.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_panel_lockout_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_panel_lockout raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_panel_lockout
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_panel_lockout(robot="Kitchen", enabled=True)
+        mock_account.robots[0].set_panel_lockout.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_wait_time_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_wait_time raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_wait_time
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_wait_time(robot="Kitchen", minutes=15)
+        mock_account.robots[0].set_wait_time.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_sleep_mode_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_sleep_mode raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_sleep_mode
+
+        mock_account.robots[1].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_sleep_mode(robot="Basement", enabled=True, start_time="22:30")
+        mock_account.robots[1].set_sleep_mode.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_panel_brightness_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_panel_brightness raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_panel_brightness
+
+        mock_account.robots[0].set_panel_brightness = AsyncMock(return_value=True)
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_panel_brightness(robot="Kitchen", brightness=50)
+        mock_account.robots[0].set_panel_brightness.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_volume_rejects_offline(self, mock_account: MagicMock) -> None:
+        """set_volume raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_volume
+
+        mock_account.robots[2].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_volume(robot="Living Room", volume=50)
+        mock_account.robots[2].set_volume.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_privacy_mode_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_privacy_mode raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_privacy_mode
+
+        mock_account.robots[2].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_privacy_mode(robot="Living Room", enabled=True)
+        mock_account.robots[2].set_privacy_mode.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_camera_audio_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_camera_audio raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_camera_audio
+
+        mock_account.robots[2].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_camera_audio(robot="Living Room", enabled=True)
+        mock_account.robots[2].set_camera_audio.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_gravity_mode_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_gravity_mode raises ValueError when feeder is offline."""
+        from pylitterbot.mcp.tools.settings import set_gravity_mode
+
+        mock_account.robots[3].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_gravity_mode(robot="Feeder", enabled=True)
+        mock_account.robots[3].set_gravity_mode.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_night_light_brightness_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_night_light_brightness raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_night_light_brightness
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_night_light_brightness(robot="Kitchen", brightness=50)
+        mock_account.robots[0].set_night_light_brightness.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_night_light_mode_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_night_light_mode raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.settings import set_night_light_mode
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_night_light_mode(robot="Kitchen", mode="auto")
+        mock_account.robots[0].set_night_light_mode.assert_not_awaited()
+
+
 class TestSetName:
     """Tests for set_name tool."""
 

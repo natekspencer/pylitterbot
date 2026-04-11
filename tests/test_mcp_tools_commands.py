@@ -494,6 +494,141 @@ class TestUpdateFirmware:
         mock_account.robots[2].update_firmware.assert_not_awaited()
 
 
+class TestOfflineRejection:
+    """Regression tests: state-changing commands raise ValueError for offline robots."""
+
+    @pytest.mark.asyncio()
+    async def test_start_cleaning_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """start_cleaning raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.commands import start_cleaning
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await start_cleaning(robot="Kitchen")
+        mock_account.robots[0].start_cleaning.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_set_power_status_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_power_status raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.commands import set_power_status
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await set_power_status(robot="Kitchen", enabled=True)
+        mock_account.robots[0].set_power_status.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_give_snack_rejects_offline(self, mock_account: MagicMock) -> None:
+        """give_snack raises ValueError when feeder is offline."""
+        from pylitterbot.mcp.tools.commands import give_snack
+
+        mock_account.robots[3].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await give_snack(robot="Feeder")
+        mock_account.robots[3].give_snack.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_reset_robot_rejects_offline(self, mock_account: MagicMock) -> None:
+        """reset_robot raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.commands import reset_robot
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await reset_robot(robot="Kitchen")
+        mock_account.robots[0].reset.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_toggle_hopper_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """toggle_hopper raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.commands import toggle_hopper
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await toggle_hopper(robot="Kitchen", is_removed=True)
+        mock_account.robots[0].toggle_hopper.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_reset_waste_drawer_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """reset_waste_drawer raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.commands import reset_waste_drawer
+
+        mock_account.robots[1].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await reset_waste_drawer(robot="Basement")
+        mock_account.robots[1].reset_waste_drawer.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_reset_settings_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """reset_settings raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.commands import reset_settings
+
+        mock_account.robots[1].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await reset_settings(robot="Basement")
+        mock_account.robots[1].reset_settings.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_change_filter_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """change_filter raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.commands import change_filter
+
+        mock_account.robots[2].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await change_filter(robot="Living Room")
+        mock_account.robots[2].change_filter.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_update_firmware_rejects_offline(
+        self, mock_account: MagicMock
+    ) -> None:
+        """update_firmware raises ValueError when robot is offline."""
+        from pylitterbot.mcp.tools.commands import update_firmware
+
+        mock_account.robots[0].is_online = False
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="offline"),
+        ):
+            await update_firmware(robot="Kitchen")
+        mock_account.robots[0].update_firmware.assert_not_awaited()
+
+
 class TestGetFirmwareDetails:
     """Tests for the get_firmware_details tool."""
 
