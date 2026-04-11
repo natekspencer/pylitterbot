@@ -26,7 +26,9 @@ async def start_cleaning(robot: str) -> str:
 
     """
     resolved = await resolve_litter_robot(robot)
-    await resolved.start_cleaning()
+    ok = await resolved.start_cleaning()
+    if not ok:
+        raise RuntimeError(f"Failed to start cleaning cycle on '{resolved.name}'.")
     return f"Started cleaning cycle on '{resolved.name}'."
 
 
@@ -44,7 +46,9 @@ async def reset_robot(robot: str) -> str:
             f"'{resolved.name}' ({resolved.model}) does not support remote reset. "
             "Only Litter-Robot 4 and 5 support this feature."
         )
-    await resolved.reset()
+    ok = await resolved.reset()
+    if not ok:
+        raise RuntimeError(f"Failed to reset '{resolved.name}'.")
     return f"Reset '{resolved.name}' successfully."
 
 
@@ -57,7 +61,9 @@ async def give_snack(robot: str) -> str:
 
     """
     resolved = await resolve_feeder_robot(robot)
-    await resolved.give_snack()
+    ok = await resolved.give_snack()
+    if not ok:
+        raise RuntimeError(f"Failed to dispense snack from '{resolved.name}'.")
     return f"Dispensed snack from '{resolved.name}'."
 
 
@@ -71,7 +77,9 @@ async def set_power_status(robot: str, enabled: bool) -> str:
 
     """
     resolved = await resolve_litter_robot(robot)
-    await resolved.set_power_status(enabled)
+    ok = await resolved.set_power_status(enabled)
+    if not ok:
+        raise RuntimeError(f"Failed to set power status on '{resolved.name}'.")
     state = "on" if enabled else "off"
     return f"Turned '{resolved.name}' {state}."
 
@@ -86,7 +94,9 @@ async def toggle_hopper(robot: str, is_removed: bool) -> str:
 
     """
     resolved = await resolve_litter_robot_4(robot)
-    await resolved.toggle_hopper(is_removed)
+    ok = await resolved.toggle_hopper(is_removed)
+    if not ok:
+        raise RuntimeError(f"Failed to toggle hopper on '{resolved.name}'.")
     state = "removed" if is_removed else "installed"
     return f"Hopper {state} on '{resolved.name}'."
 
@@ -105,7 +115,9 @@ async def reset_waste_drawer(robot: str) -> str:
             f"Waste drawer reset is only supported on Litter-Robot 3 and 5, "
             f"but '{resolved.name}' is a {resolved.model}."
         )
-    await resolved.reset_waste_drawer()
+    ok = await resolved.reset_waste_drawer()
+    if not ok:
+        raise RuntimeError(f"Failed to reset waste drawer on '{resolved.name}'.")
     return f"Waste drawer reset on '{resolved.name}'."
 
 
@@ -123,7 +135,9 @@ async def reset_settings(robot: str) -> str:
             f"Settings reset is only supported on Litter-Robot 3, "
             f"but '{resolved.name}' is a {resolved.model}."
         )
-    await resolved.reset_settings()
+    ok = await resolved.reset_settings()
+    if not ok:
+        raise RuntimeError(f"Failed to reset settings on '{resolved.name}'.")
     return f"Settings reset on '{resolved.name}'."
 
 
@@ -136,7 +150,9 @@ async def change_filter(robot: str) -> str:
 
     """
     resolved = await resolve_litter_robot_5(robot)
-    await resolved.change_filter()
+    ok = await resolved.change_filter()
+    if not ok:
+        raise RuntimeError(f"Failed to reset filter counter on '{resolved.name}'.")
     return f"Filter replacement counter reset on '{resolved.name}'."
 
 
@@ -151,13 +167,15 @@ async def update_firmware(robot: str) -> str:
         robot: Robot name (case-insensitive) or ID.
 
     """
-    resolved = await resolve_robot(robot)
+    resolved = await resolve_litter_robot(robot)
     if not isinstance(resolved, LitterRobot4):
         raise ValueError(
             f"Firmware update is only supported on Litter-Robot 4, "
             f"but '{resolved.name}' is a {resolved.model}."
         )
-    await resolved.update_firmware()
+    ok = await resolved.update_firmware()
+    if not ok:
+        raise RuntimeError(f"Failed to trigger firmware update on '{resolved.name}'.")
     return f"Firmware update triggered on '{resolved.name}'."
 
 

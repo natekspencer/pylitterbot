@@ -120,9 +120,37 @@ class TestStartCleaning:
         ):
             await start_cleaning(robot="Feeder")
 
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """start_cleaning raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.commands import start_cleaning
+
+        mock_account.robots[0].start_cleaning = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await start_cleaning(robot="Kitchen")
+
 
 class TestResetRobot:
     """Tests for the reset_robot tool."""
+
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """reset_robot raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.commands import reset_robot
+
+        mock_account.robots[0].reset = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await reset_robot(robot="Kitchen")
 
     @pytest.mark.asyncio()
     async def test_resets_lr4(self, mock_account: MagicMock) -> None:
@@ -160,6 +188,20 @@ class TestGiveSnack:
     """Tests for the give_snack tool."""
 
     @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """give_snack raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.commands import give_snack
+
+        mock_account.robots[3].give_snack = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await give_snack(robot="Feeder")
+
+    @pytest.mark.asyncio()
     async def test_gives_snack(self, mock_account: MagicMock) -> None:
         """give_snack calls give_snack on the resolved FeederRobot."""
         from pylitterbot.mcp.tools.commands import give_snack
@@ -185,6 +227,20 @@ class TestSetPowerStatus:
     """Tests for the set_power_status tool."""
 
     @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_power_status raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.commands import set_power_status
+
+        mock_account.robots[0].set_power_status = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_power_status(robot="Kitchen", enabled=True)
+
+    @pytest.mark.asyncio()
     async def test_turns_off_robot(self, mock_account: MagicMock) -> None:
         """set_power_status calls set_power_status(False) on the robot."""
         from pylitterbot.mcp.tools.commands import set_power_status
@@ -207,6 +263,20 @@ class TestSetPowerStatus:
 
 class TestToggleHopper:
     """Tests for the toggle_hopper tool."""
+
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """toggle_hopper raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.commands import toggle_hopper
+
+        mock_account.robots[0].toggle_hopper = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await toggle_hopper(robot="Kitchen", is_removed=True)
 
     @pytest.mark.asyncio()
     async def test_removes_hopper(self, mock_account: MagicMock) -> None:
@@ -244,6 +314,20 @@ class TestResetWasteDrawer:
     """Tests for the reset_waste_drawer tool."""
 
     @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """reset_waste_drawer raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.commands import reset_waste_drawer
+
+        mock_account.robots[1].reset_waste_drawer = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await reset_waste_drawer(robot="Basement")
+
+    @pytest.mark.asyncio()
     async def test_resets_lr3(self, mock_account: MagicMock) -> None:
         """reset_waste_drawer calls LR3 reset_waste_drawer."""
         from pylitterbot.mcp.tools.commands import reset_waste_drawer
@@ -279,6 +363,20 @@ class TestResetSettings:
     """Tests for the reset_settings tool."""
 
     @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """reset_settings raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.commands import reset_settings
+
+        mock_account.robots[1].reset_settings = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await reset_settings(robot="Basement")
+
+    @pytest.mark.asyncio()
     async def test_resets_lr3(self, mock_account: MagicMock) -> None:
         """reset_settings calls LR3 reset_settings."""
         from pylitterbot.mcp.tools.commands import reset_settings
@@ -304,6 +402,20 @@ class TestChangeFilter:
     """Tests for the change_filter tool."""
 
     @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """change_filter raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.commands import change_filter
+
+        mock_account.robots[2].change_filter = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await change_filter(robot="Living Room")
+
+    @pytest.mark.asyncio()
     async def test_changes_filter_lr5(self, mock_account: MagicMock) -> None:
         """change_filter calls LR5 change_filter."""
         from pylitterbot.mcp.tools.commands import change_filter
@@ -327,6 +439,20 @@ class TestChangeFilter:
 
 class TestUpdateFirmware:
     """Tests for the update_firmware tool."""
+
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """update_firmware raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.commands import update_firmware
+
+        mock_account.robots[0].update_firmware = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await update_firmware(robot="Kitchen")
 
     @pytest.mark.asyncio()
     async def test_updates_firmware_lr4(self, mock_account: MagicMock) -> None:
