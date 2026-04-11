@@ -1,4 +1,12 @@
-"""FastMCP server instance and Account lifecycle management."""
+"""FastMCP server instance and Account lifecycle management.
+
+Note:
+    This server does not re-authenticate on session expiry. For long-running
+    MCP sessions, if credentials expire or the upstream token becomes invalid,
+    all tool calls will fail until the process is restarted. Restart the MCP
+    server process to re-auth.
+
+"""
 
 from __future__ import annotations
 
