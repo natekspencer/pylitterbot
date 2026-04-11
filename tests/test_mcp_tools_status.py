@@ -82,6 +82,38 @@ class TestGetRobots:
         mock_account.refresh_robots.assert_awaited_once()
 
 
+class TestGetRobotsRefreshStale:
+    """Tests for get_robots refresh_stale flag."""
+
+    @pytest.mark.asyncio()
+    async def test_refresh_stale_true_when_refresh_fails(
+        self, mock_account: MagicMock
+    ) -> None:
+        """get_robots sets refresh_stale=True in each summary when refresh_robots raises."""
+        from pylitterbot.mcp.tools.status import get_robots
+
+        mock_account.refresh_robots = AsyncMock(side_effect=Exception("network error"))
+        with patch(
+            "pylitterbot.mcp.tools.status.get_account", return_value=mock_account
+        ):
+            result = await get_robots()
+        assert result[0]["refresh_stale"] is True
+        assert result[0]["name"] == "Kitchen"
+
+    @pytest.mark.asyncio()
+    async def test_refresh_stale_false_when_refresh_succeeds(
+        self, mock_account: MagicMock
+    ) -> None:
+        """get_robots sets refresh_stale=False when refresh_robots succeeds."""
+        from pylitterbot.mcp.tools.status import get_robots
+
+        with patch(
+            "pylitterbot.mcp.tools.status.get_account", return_value=mock_account
+        ):
+            result = await get_robots()
+        assert result[0]["refresh_stale"] is False
+
+
 class TestGetRobotStatus:
     """Tests for the get_robot_status tool."""
 
