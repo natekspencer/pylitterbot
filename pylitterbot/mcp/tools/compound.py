@@ -15,6 +15,7 @@ from pylitterbot.mcp.helpers import (
 from pylitterbot.mcp.server import get_account, mcp
 from pylitterbot.robot.litterrobot import LitterRobot
 from pylitterbot.robot.litterrobot4 import LitterRobot4
+from pylitterbot.robot.litterrobot5 import LitterRobot5
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +107,15 @@ async def clean_all_ready() -> dict[str, Any]:
             continue
         if robot.status == LitterBoxStatus.READY:
             try:
-                await robot.start_cleaning()
-                cleaned.append({"name": robot.name, "status": "cleaning started"})
+                if not await robot.start_cleaning():
+                    skipped.append(
+                        {
+                            "name": robot.name,
+                            "reason": "start_cleaning returned false",
+                        }
+                    )
+                else:
+                    cleaned.append({"name": robot.name, "status": "cleaning started"})
             except Exception:
                 logger.debug(
                     "Failed to start cleaning for %s", robot.name, exc_info=True
@@ -142,13 +150,19 @@ async def sync_settings(source_robot: str) -> dict[str, Any]:
 
     account = await get_account()
     targets = []
+    skipped = []
 
     for robot in account.robots:
         if robot.id == source.id:
             continue
         if not isinstance(robot, LitterRobot):
             continue
-        if robot.model != source.model:
+        # Use isinstance checks against known concrete classes rather than the
+        # model string to avoid firmware string drift (e.g. "Litter-Robot 4" vs
+        # "Litter-Robot 4 Pro") silently filtering out valid same-class targets.
+        if isinstance(source, LitterRobot5) != isinstance(robot, LitterRobot5):
+            continue
+        if isinstance(source, LitterRobot4) != isinstance(robot, LitterRobot4):
             continue
 
         changes = []
@@ -188,11 +202,19 @@ async def sync_settings(source_robot: str) -> dict[str, Any]:
         if old_sleep != source.sleep_mode_enabled or (
             source.sleep_mode_enabled and old_sleep_time != source_sleep_time
         ):
-            await robot.set_sleep_mode(source.sleep_mode_enabled, source_sleep_time)
-            changes.append(
-                f"sleep_mode: {(old_sleep, old_sleep_time)} -> "
-                f"{(source.sleep_mode_enabled, source_sleep_time)}"
-            )
+            try:
+                await robot.set_sleep_mode(source.sleep_mode_enabled, source_sleep_time)
+                changes.append(
+                    f"sleep_mode: {(old_sleep, old_sleep_time)} -> "
+                    f"{(source.sleep_mode_enabled, source_sleep_time)}"
+                )
+            except NotImplementedError:
+                skipped.append(
+                    {
+                        "target": robot.name,
+                        "skipped": "sleep_mode not supported on this model",
+                    }
+                )
 
         if isinstance(source, LitterRobot4) and isinstance(robot, LitterRobot4):
             old_brightness = robot.night_light_brightness
@@ -214,7 +236,7 @@ async def sync_settings(source_robot: str) -> dict[str, Any]:
 
         targets.append({"name": robot.name, "changes": changes})
 
-    return {"source": source.name, "targets": targets}
+    return {"source": source.name, "targets": targets, "skipped": skipped}
 
 
 @mcp.tool()
@@ -353,6 +375,14 @@ async def household_digest(days: int = 7) -> dict[str, Any]:
                     "average_per_day": insight.average_cycles,
                 }
             )
+        except NotImplementedError:
+            robot_data.append(
+                {
+                    "name": robot.name,
+                    "cycles": 0,
+                    "error": "Insight data not supported on this model",
+                }
+            )
         except Exception:
             robot_data.append(
                 {
@@ -366,7 +396,7 @@ async def household_digest(days: int = 7) -> dict[str, Any]:
             alerts.append(
                 {
                     "robot": robot.name,
-                    "status": robot.status.text,
+                    "status": getattr(robot.status, "text", str(robot.status)),
                 }
             )
 
@@ -412,13 +442,14 @@ async def troubleshooting_report(robot: str) -> dict[str, Any]:
         except Exception:
             report["recent_activity"] = []
 
-    if isinstance(resolved, LitterRobot4):
+    if isinstance(resolved, (LitterRobot4, LitterRobot5)):
         report["firmware"] = resolved.firmware
         report["status_code"] = resolved.status_code
         report["globe_motor_fault"] = resolved.globe_motor_fault_status.name
-        report["usb_fault"] = (
-            resolved.usb_fault_status.name if resolved.usb_fault_status else None
-        )
+        if isinstance(resolved, LitterRobot4):
+            report["usb_fault"] = (
+                resolved.usb_fault_status.name if resolved.usb_fault_status else None
+            )
         try:
             report["firmware_details"] = await resolved.get_firmware_details()
         except Exception:
@@ -438,9 +469,15 @@ async def robot_comparison() -> dict[str, Any]:
     await account.refresh_robots()
 
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    # Track which model strings correspond to lifetime-odometer robots (LR4/LR5).
+    # cycle_count on these models is odometerCleanCycles (lifetime total), not a
+    # per-drawer counter, so outlier detection on it is meaningless.
+    lifetime_odometer_models: set[str] = set()
     for robot in account.robots:
         summary = format_robot_summary(robot)
         groups[robot.model].append(summary)
+        if isinstance(robot, (LitterRobot4, LitterRobot5)):
+            lifetime_odometer_models.add(robot.model)
 
     result_groups = []
     for model, robots in groups.items():
@@ -454,7 +491,15 @@ async def robot_comparison() -> dict[str, Any]:
             if len(set(wait_times.values())) > 1:
                 inconsistencies.append({"setting": "wait_time", "values": wait_times})
 
-        if len(robots) > 1 and all("cycle_count" in r for r in robots):
+        # Skip cycle_count outlier detection for LR4/LR5: their cycle_count maps
+        # to odometerCleanCycles (a lifetime odometer), so two robots at different
+        # lifecycle stages would be flagged as outliers just because one is older.
+        # The check is only meaningful for LR3 where cycle_count is per-drawer.
+        if (
+            model not in lifetime_odometer_models
+            and len(robots) > 1
+            and all("cycle_count" in r for r in robots)
+        ):
             cycle_counts = {r["name"]: r["cycle_count"] for r in robots}
             values = list(cycle_counts.values())
             # Exclude robots with zero cycles (new/reset) from outlier detection
