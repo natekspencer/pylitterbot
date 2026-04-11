@@ -42,7 +42,15 @@ async def reassign_pet_visit(
         from_pet: Name or ID of the pet currently assigned to the visit.
         to_pet: Name or ID of the pet to reassign the visit to.
 
+    Note:
+        Both from_pet and to_pet are required. Unassigning a visit (leaving
+        to_pet empty) is not supported by this tool; use the library directly
+        if needed.
+
     """
+    event_id = event_id.strip()
+    if not event_id:
+        raise ValueError("event_id must be a non-empty string.")
     resolved = await resolve_robot(robot)
     if not isinstance(resolved, LitterRobot5):
         raise ValueError(
