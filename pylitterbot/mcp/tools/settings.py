@@ -248,6 +248,11 @@ async def set_camera_audio(robot: str, enabled: bool) -> str:
             f"Camera audio is only supported on Litter-Robot 5, "
             f"but '{resolved.name}' is a {resolved.model}."
         )
+    if not resolved.is_pro:
+        raise ValueError(
+            f"Camera audio is only available on Litter-Robot 5 Pro devices, "
+            f"but '{resolved.name}' is a {resolved.model}."
+        )
     await resolved.set_camera_audio(enabled)
     state = "enabled" if enabled else "disabled"
     return f"Camera audio {state} on '{resolved.name}'."
