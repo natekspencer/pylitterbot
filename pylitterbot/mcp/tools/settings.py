@@ -29,7 +29,9 @@ async def set_name(robot: str, name: str) -> str:
     if not name:
         raise ValueError("name must be a non-empty string.")
     resolved = await resolve_robot(robot)
-    await resolved.set_name(name)
+    ok = await resolved.set_name(name)
+    if not ok:
+        raise RuntimeError(f"Failed to rename '{resolved.name}'.")
     return f"Renamed robot to '{name}'."
 
 
@@ -43,7 +45,9 @@ async def set_night_light(robot: str, enabled: bool) -> str:
 
     """
     resolved = await resolve_robot(robot)
-    await resolved.set_night_light(enabled)
+    ok = await resolved.set_night_light(enabled)
+    if not ok:
+        raise RuntimeError(f"Failed to set night light on '{resolved.name}'.")
     state = "enabled" if enabled else "disabled"
     return f"Night light {state} on '{resolved.name}'."
 
@@ -74,7 +78,9 @@ async def set_night_light_brightness(robot: str, brightness: int) -> str:
             raise ValueError(
                 f"Invalid brightness {brightness}. Must be one of: {sorted(valid_brightness)}"
             )
-    await resolved.set_night_light_brightness(brightness)
+    ok = await resolved.set_night_light_brightness(brightness)
+    if not ok:
+        raise RuntimeError(f"Failed to set night light brightness on '{resolved.name}'.")
     return f"Night light brightness set to {brightness} on '{resolved.name}'."
 
 
@@ -100,7 +106,9 @@ async def set_night_light_mode(robot: str, mode: str) -> str:
         raise ValueError(
             f"Invalid night light mode '{mode}'. Valid modes: {valid}"
         ) from None
-    await resolved.set_night_light_mode(night_light_mode)
+    ok = await resolved.set_night_light_mode(night_light_mode)
+    if not ok:
+        raise RuntimeError(f"Failed to set night light mode on '{resolved.name}'.")
     return f"Night light mode set to '{mode.lower()}' on '{resolved.name}'."
 
 
@@ -114,7 +122,9 @@ async def set_panel_lockout(robot: str, enabled: bool) -> str:
 
     """
     resolved = await resolve_robot(robot)
-    await resolved.set_panel_lockout(enabled)
+    ok = await resolved.set_panel_lockout(enabled)
+    if not ok:
+        raise RuntimeError(f"Failed to set panel lockout on '{resolved.name}'.")
     state = "enabled" if enabled else "disabled"
     return f"Panel lockout {state} on '{resolved.name}'."
 
@@ -135,7 +145,9 @@ async def set_wait_time(robot: str, minutes: int) -> str:
             f"Invalid wait time {minutes} for {resolved.model}. "
             f"Must be one of: {sorted(valid_wait_times)}"
         )
-    await resolved.set_wait_time(minutes)
+    ok = await resolved.set_wait_time(minutes)
+    if not ok:
+        raise RuntimeError(f"Failed to set wait time on '{resolved.name}'.")
     return f"Wait time set to {minutes} minutes on '{resolved.name}'."
 
 
@@ -168,7 +180,9 @@ async def set_sleep_mode(
             raise ValueError(
                 f"Invalid start_time '{start_time}'. Expected HH:MM (24-hour), e.g. '22:30'."
             ) from exc
-    await resolved.set_sleep_mode(enabled, sleep_time)
+    ok = await resolved.set_sleep_mode(enabled, sleep_time)
+    if not ok:
+        raise RuntimeError(f"Failed to set sleep mode on '{resolved.name}'.")
     state = "enabled" if enabled else "disabled"
     return f"Sleep mode {state} on '{resolved.name}'."
 
@@ -195,7 +209,9 @@ async def set_panel_brightness(robot: str, brightness: int) -> str:
         raise ValueError(
             f"Invalid brightness {brightness}. Must be one of: {valid}"
         ) from None
-    await resolved.set_panel_brightness(level)
+    ok = await resolved.set_panel_brightness(level)
+    if not ok:
+        raise RuntimeError(f"Failed to set panel brightness on '{resolved.name}'.")
     return f"Panel brightness set to {brightness} on '{resolved.name}'."
 
 
@@ -216,7 +232,9 @@ async def set_volume(robot: str, volume: int) -> str:
         )
     if not 0 <= volume <= 100:
         raise ValueError(f"Invalid volume {volume}. Must be between 0 and 100.")
-    await resolved.set_volume(volume)
+    ok = await resolved.set_volume(volume)
+    if not ok:
+        raise RuntimeError(f"Failed to set volume on '{resolved.name}'.")
     return f"Volume set to {volume} on '{resolved.name}'."
 
 
@@ -235,7 +253,9 @@ async def set_privacy_mode(robot: str, enabled: bool) -> str:
             f"Privacy mode is only supported on Litter-Robot 5, "
             f"but '{resolved.name}' is a {resolved.model}."
         )
-    await resolved.set_privacy_mode(enabled)
+    ok = await resolved.set_privacy_mode(enabled)
+    if not ok:
+        raise RuntimeError(f"Failed to set privacy mode on '{resolved.name}'.")
     state = "enabled" if enabled else "disabled"
     return f"Privacy mode {state} on '{resolved.name}'."
 
@@ -260,7 +280,9 @@ async def set_camera_audio(robot: str, enabled: bool) -> str:
             f"Camera audio is only available on Litter-Robot 5 Pro devices, "
             f"but '{resolved.name}' is a {resolved.model}."
         )
-    await resolved.set_camera_audio(enabled)
+    ok = await resolved.set_camera_audio(enabled)
+    if not ok:
+        raise RuntimeError(f"Failed to set camera audio on '{resolved.name}'.")
     state = "enabled" if enabled else "disabled"
     return f"Camera audio {state} on '{resolved.name}'."
 
@@ -275,6 +297,8 @@ async def set_gravity_mode(robot: str, enabled: bool) -> str:
 
     """
     resolved = await resolve_feeder_robot(robot)
-    await resolved.set_gravity_mode(enabled)
+    ok = await resolved.set_gravity_mode(enabled)
+    if not ok:
+        raise RuntimeError(f"Failed to set gravity mode on '{resolved.name}'.")
     state = "enabled" if enabled else "disabled"
     return f"Gravity mode {state} on '{resolved.name}'."
