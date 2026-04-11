@@ -439,6 +439,44 @@ class TestFormatRobotSummaryExpandedFields:
         assert summary["next_feeding"] == "2024-06-15T08:30:00"
 
 
+class TestResolveRobotCasefoldAndNone:
+    """Tests for casefold and None-name safety in resolve_robot."""
+
+    @pytest.mark.asyncio()
+    async def test_resolve_robot_casefold(self, mock_account: MagicMock) -> None:
+        """resolve_robot matches names using casefold for Unicode correctness.
+
+        German ß casefolded is 'ss'; lower() leaves ß unchanged so 'straße'
+        would not match 'strasse' with lower() but does with casefold().
+        """
+        from pylitterbot.mcp.helpers import resolve_robot
+
+        german_robot = MagicMock(spec=LitterRobot4)
+        german_robot.name = "Straße"
+        german_robot.id = "de-robot-id"
+        mock_account.robots = [german_robot]
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            robot = await resolve_robot("strasse")
+        assert robot.id == "de-robot-id"
+
+    @pytest.mark.asyncio()
+    async def test_resolve_robot_handles_none_name(
+        self, mock_account: MagicMock
+    ) -> None:
+        """resolve_robot does not crash when a robot has name=None."""
+        from pylitterbot.mcp.helpers import resolve_robot
+
+        nameless_robot = MagicMock(spec=LitterRobot4)
+        nameless_robot.name = None
+        nameless_robot.id = "nameless-id"
+        mock_account.robots = [nameless_robot]
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            robot = await resolve_robot("nameless-id")
+        assert robot.id == "nameless-id"
+
+
 class TestFeederRobotLastFeedingJsonSafe:
     """Tests that format_robot_summary serializes FeederRobot.last_feeding to JSON."""
 
