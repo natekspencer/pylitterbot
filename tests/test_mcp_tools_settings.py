@@ -102,9 +102,7 @@ class TestSetName:
         mock_account.robots[0].set_name.assert_not_awaited()
 
     @pytest.mark.asyncio()
-    async def test_rejects_whitespace_only_name(
-        self, mock_account: MagicMock
-    ) -> None:
+    async def test_rejects_whitespace_only_name(self, mock_account: MagicMock) -> None:
         """set_name raises ValueError for whitespace-only names."""
         from pylitterbot.mcp.tools.settings import set_name
 
@@ -116,9 +114,7 @@ class TestSetName:
         mock_account.robots[0].set_name.assert_not_awaited()
 
     @pytest.mark.asyncio()
-    async def test_strips_surrounding_whitespace(
-        self, mock_account: MagicMock
-    ) -> None:
+    async def test_strips_surrounding_whitespace(self, mock_account: MagicMock) -> None:
         """set_name strips whitespace before sending to the device."""
         from pylitterbot.mcp.tools.settings import set_name
 
