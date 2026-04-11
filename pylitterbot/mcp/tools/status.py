@@ -14,10 +14,19 @@ async def get_robots() -> list[dict[str, Any]]:
 
     Returns a list of robot summaries including name, model, online status,
     and model-specific details like waste drawer level or food level.
+    The ``refresh_stale`` field in each entry is True when the live refresh
+    failed and the data may be cached from a previous poll.
     """
     account = await get_account()
-    await account.refresh_robots()
-    return [format_robot_summary(robot) for robot in account.robots]
+    refresh_failed = False
+    try:
+        await account.refresh_robots()
+    except Exception:
+        refresh_failed = True
+    summaries = [format_robot_summary(robot) for robot in account.robots]
+    for summary in summaries:
+        summary["refresh_stale"] = refresh_failed
+    return summaries
 
 
 @mcp.tool()
