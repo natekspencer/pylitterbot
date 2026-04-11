@@ -89,6 +89,44 @@ class TestSetName:
         mock_account.robots[0].set_name.assert_awaited_once_with("New Kitchen")
         assert result == "Renamed robot to 'New Kitchen'."
 
+    @pytest.mark.asyncio()
+    async def test_rejects_empty_name(self, mock_account: MagicMock) -> None:
+        """set_name raises ValueError for empty string."""
+        from pylitterbot.mcp.tools.settings import set_name
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="name must be a non-empty string"),
+        ):
+            await set_name(robot="Kitchen", name="")
+        mock_account.robots[0].set_name.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_rejects_whitespace_only_name(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_name raises ValueError for whitespace-only names."""
+        from pylitterbot.mcp.tools.settings import set_name
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="name must be a non-empty string"),
+        ):
+            await set_name(robot="Kitchen", name="   \t\n  ")
+        mock_account.robots[0].set_name.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_strips_surrounding_whitespace(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_name strips whitespace before sending to the device."""
+        from pylitterbot.mcp.tools.settings import set_name
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_name(robot="Kitchen", name="  New Kitchen  ")
+        mock_account.robots[0].set_name.assert_awaited_once_with("New Kitchen")
+        assert result == "Renamed robot to 'New Kitchen'."
+
 
 class TestSetNightLight:
     """Tests for set_night_light tool."""

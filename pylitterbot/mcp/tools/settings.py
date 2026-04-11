@@ -24,6 +24,9 @@ async def set_name(robot: str, name: str) -> str:
         name: The new name for the robot.
 
     """
+    name = name.strip()
+    if not name:
+        raise ValueError("name must be a non-empty string.")
     resolved = await resolve_robot(robot)
     await resolved.set_name(name)
     return f"Renamed robot to '{name}'."
