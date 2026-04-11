@@ -26,6 +26,8 @@ async def start_cleaning(robot: str) -> str:
 
     """
     resolved = await resolve_litter_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot start cleaning.")
     ok = await resolved.start_cleaning()
     if not ok:
         raise RuntimeError(f"Failed to start cleaning cycle on '{resolved.name}'.")
@@ -41,6 +43,8 @@ async def reset_robot(robot: str) -> str:
 
     """
     resolved = await resolve_litter_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot reset.")
     if not isinstance(resolved, (LitterRobot4, LitterRobot5)):
         raise ValueError(
             f"'{resolved.name}' ({resolved.model}) does not support remote reset. "
@@ -61,6 +65,8 @@ async def give_snack(robot: str) -> str:
 
     """
     resolved = await resolve_feeder_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot dispense snack.")
     ok = await resolved.give_snack()
     if not ok:
         raise RuntimeError(f"Failed to dispense snack from '{resolved.name}'.")
@@ -77,6 +83,8 @@ async def set_power_status(robot: str, enabled: bool) -> str:
 
     """
     resolved = await resolve_litter_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot set power status.")
     ok = await resolved.set_power_status(enabled)
     if not ok:
         raise RuntimeError(f"Failed to set power status on '{resolved.name}'.")
@@ -94,6 +102,8 @@ async def toggle_hopper(robot: str, is_removed: bool) -> str:
 
     """
     resolved = await resolve_litter_robot_4(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot toggle hopper.")
     ok = await resolved.toggle_hopper(is_removed)
     if not ok:
         raise RuntimeError(f"Failed to toggle hopper on '{resolved.name}'.")
@@ -110,6 +120,8 @@ async def reset_waste_drawer(robot: str) -> str:
 
     """
     resolved = await resolve_litter_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot reset waste drawer.")
     if not isinstance(resolved, (LitterRobot3, LitterRobot5)):
         raise ValueError(
             f"Waste drawer reset is only supported on Litter-Robot 3 and 5, "
@@ -130,6 +142,8 @@ async def reset_settings(robot: str) -> str:
 
     """
     resolved = await resolve_litter_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot reset settings.")
     if not isinstance(resolved, LitterRobot3):
         raise ValueError(
             f"Settings reset is only supported on Litter-Robot 3, "
@@ -150,6 +164,8 @@ async def change_filter(robot: str) -> str:
 
     """
     resolved = await resolve_litter_robot_5(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot change filter.")
     ok = await resolved.change_filter()
     if not ok:
         raise RuntimeError(f"Failed to reset filter counter on '{resolved.name}'.")
@@ -168,6 +184,8 @@ async def update_firmware(robot: str) -> str:
 
     """
     resolved = await resolve_litter_robot(robot)
+    if not resolved.is_online:
+        raise ValueError(f"'{resolved.name}' is offline; cannot update firmware.")
     if not isinstance(resolved, LitterRobot4):
         raise ValueError(
             f"Firmware update is only supported on Litter-Robot 4, "
