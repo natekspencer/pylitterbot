@@ -461,9 +461,7 @@ class TestSyncSettingsModelComparison:
         account.robots = [source, target_standard, target_pro]
 
         with (
-            patch(
-                "pylitterbot.mcp.tools.compound.get_account", return_value=account
-            ),
+            patch("pylitterbot.mcp.tools.compound.get_account", return_value=account),
             patch("pylitterbot.mcp.helpers.get_account", return_value=account),
         ):
             result = await sync_settings(source_robot="Source")
@@ -587,9 +585,9 @@ class TestTroubleshootingReportLR5:
 
         assert "firmware" in result, "LR5 report should include firmware"
         assert "status_code" in result, "LR5 report should include status_code"
-        assert (
-            "globe_motor_fault" in result
-        ), "LR5 report should include globe_motor_fault"
+        assert "globe_motor_fault" in result, (
+            "LR5 report should include globe_motor_fault"
+        )
         # usb_fault is LR4-only, must NOT appear for LR5
         assert "usb_fault" not in result, "LR5 report must not include usb_fault"
 
@@ -621,7 +619,10 @@ class TestCleanAllReadyFalseReturn:
         assert "Bedroom" not in cleaned_names, "Bedroom must not be in cleaned list"
         assert "Bedroom" in skipped_names, "Bedroom must be reported as skipped"
         bedroom_skip = next(s for s in result["skipped"] if s["name"] == "Bedroom")
-        assert "false" in bedroom_skip["reason"].lower() or "failed" in bedroom_skip["reason"].lower()
+        assert (
+            "false" in bedroom_skip["reason"].lower()
+            or "failed" in bedroom_skip["reason"].lower()
+        )
 
 
 class TestRobotComparisonLR4LifetimeOdometer:
@@ -644,9 +645,7 @@ class TestRobotComparisonLR4LifetimeOdometer:
         account.refresh_robots = AsyncMock()
         account.robots = [lr4_old, lr4_new]
 
-        with patch(
-            "pylitterbot.mcp.tools.compound.get_account", return_value=account
-        ):
+        with patch("pylitterbot.mcp.tools.compound.get_account", return_value=account):
             result = await robot_comparison()
 
         lr4_group = next(

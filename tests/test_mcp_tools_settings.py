@@ -124,9 +124,7 @@ class TestOfflineRejection:
         mock_account.robots[0].set_panel_lockout.assert_not_awaited()
 
     @pytest.mark.asyncio()
-    async def test_set_wait_time_rejects_offline(
-        self, mock_account: MagicMock
-    ) -> None:
+    async def test_set_wait_time_rejects_offline(self, mock_account: MagicMock) -> None:
         """set_wait_time raises ValueError when robot is offline."""
         from pylitterbot.mcp.tools.settings import set_wait_time
 
@@ -362,7 +360,9 @@ class TestSetNightLightBrightness:
         """set_night_light_brightness raises RuntimeError when device returns False."""
         from pylitterbot.mcp.tools.settings import set_night_light_brightness
 
-        mock_account.robots[0].set_night_light_brightness = AsyncMock(return_value=False)
+        mock_account.robots[0].set_night_light_brightness = AsyncMock(
+            return_value=False
+        )
         with (
             patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
             pytest.raises(RuntimeError, match="Failed"),
