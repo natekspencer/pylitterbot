@@ -401,9 +401,7 @@ class TestSetCameraAudio:
 
         with (
             patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
-            pytest.raises(
-                ValueError, match="only available on Litter-Robot 5 Pro"
-            ),
+            pytest.raises(ValueError, match="only available on Litter-Robot 5 Pro"),
         ):
             await set_camera_audio(robot="Living Room", enabled=True)
         lr5.set_camera_audio.assert_not_awaited()
