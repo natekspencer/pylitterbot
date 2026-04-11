@@ -11,6 +11,7 @@ from pylitterbot.mcp.helpers import (
     resolve_robot,
 )
 from pylitterbot.mcp.server import mcp
+from pylitterbot.robot.litterrobot3 import LitterRobot3
 from pylitterbot.robot.litterrobot4 import LitterRobot4
 from pylitterbot.robot.litterrobot5 import LitterRobot5
 
@@ -151,6 +152,12 @@ async def set_sleep_mode(
 
     """
     resolved = await resolve_litter_robot(robot)
+    if not isinstance(resolved, (LitterRobot3, LitterRobot5)):
+        raise ValueError(
+            f"Sleep mode cannot be set via the API on "
+            f"'{resolved.name}' ({resolved.model}). "
+            f"Supported models: Litter-Robot 3, Litter-Robot 5."
+        )
     sleep_time = None
     if enabled:
         if not start_time:
