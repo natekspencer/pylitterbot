@@ -353,6 +353,82 @@ LITTER_ROBOT_5_PRO_DATA: dict[str, Any] = {
     },
 }
 
+CAMERA_DEVICE_ID = "68f5f44bba1544a7cc8697c2"
+
+CAMERA_SESSION_RESPONSE: dict[str, Any] = {
+    "sessionId": "test-session-id-1234",
+    "sessionToken": "test-session-token-abcdef",
+    "sessionExpiration": "2025-12-31T23:59:59.000000Z",
+    "autoStart": False,
+    "signalingURL": "wss://watford.ienso-dev.com/api/signaling",
+    "turnServer": {
+        "username": "test-session-id-1234",
+        "password": "test-turn-password",
+        "stunUrl": "stun:coturn.watford-prod.ienso-dev.com:3478",
+        "turnUrl": ["turn:coturn.watford-prod.ienso-dev.com:443?transport=tcp"],
+    },
+}
+
+CAMERA_VIDEO_SETTINGS_RESPONSE: dict[str, Any] = {
+    "reportedSettings": [
+        {
+            "data": {
+                "streams": {
+                    "live-view": {
+                        "canvas": "sensor_0_1080p",
+                    }
+                }
+            }
+        }
+    ]
+}
+
+CAMERA_VIDEOS_RESPONSE: list[dict[str, Any]] = [
+    {
+        "id": 12345,
+        "videoThumbnail": "https://example.com/thumb1.jpg",
+        "eventType": "PET_VISIT",
+        "createdAt": 1735689600.0,
+        "hlsDuration": "00:19",
+        "allowForward": True,
+        "forwardingCountdownEndsAt": 1736000000.0,
+        "petDetections": [],
+    },
+    {
+        "id": 12346,
+        "videoThumbnail": "https://example.com/thumb2.jpg",
+        "eventType": "cat_detected",
+        "createdAt": 1735686000.0,
+        "hlsDuration": "01:05",
+        "allowForward": True,
+        "forwardingCountdownEndsAt": 1736000000.0,
+        "petDetections": ["pet-001"],
+    },
+]
+
+CAMERA_INFO_RESPONSE: dict[str, Any] = {
+    "deviceId": CAMERA_DEVICE_ID,
+    "serialNumber": "E0510076020EBFV",
+    "model": "LR5_PRO_CAMERA",
+    "status": "online",
+    "firmwareVersion": "1.2.2-1233",
+}
+
+CAMERA_EVENTS_RESPONSE: list[dict[str, Any]] = [
+    {
+        "eventId": "evt-001",
+        "type": "PET_VISIT",
+        "timestamp": "2025-12-01T12:00:00.000000Z",
+        "cameraId": CAMERA_DEVICE_ID,
+    },
+    {
+        "eventId": "evt-002",
+        "type": "MOTION",
+        "timestamp": "2025-12-01T11:00:00.000000Z",
+        "cameraId": CAMERA_DEVICE_ID,
+    },
+]
+
 FEEDER_ROBOT_DATA: dict[str, Any] = {
     "id": 1,
     "name": "Feeder-Robot",
