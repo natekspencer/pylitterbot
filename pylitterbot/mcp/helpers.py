@@ -159,7 +159,14 @@ def format_robot_summary(robot: Robot) -> dict[str, Any]:
             {
                 "food_level": robot.food_level,
                 "meal_insert_size": robot.meal_insert_size,
-                "last_feeding": robot.last_feeding,
+                "last_feeding": (
+                    {
+                        **robot.last_feeding,
+                        "timestamp": robot.last_feeding["timestamp"].isoformat(),
+                    }
+                    if robot.last_feeding
+                    else None
+                ),
                 "gravity_mode_enabled": robot.gravity_mode_enabled,
                 "next_feeding": (
                     robot.next_feeding.isoformat() if robot.next_feeding else None
