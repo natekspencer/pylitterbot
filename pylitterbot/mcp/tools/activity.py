@@ -64,7 +64,7 @@ async def get_food_dispensed(robot: str, hours: int = 24) -> dict[str, Any]:
     """
     resolved = await resolve_feeder_robot(robot)
     since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
-    cups = await resolved.get_food_dispensed_since(since)
+    cups = resolved.get_food_dispensed_since(since)
     return {
         "robot": resolved.name,
         "cups_dispensed": cups,
