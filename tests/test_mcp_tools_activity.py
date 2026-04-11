@@ -105,6 +105,25 @@ class TestGetInsight:
             await get_insight(robot="Kitchen", days=7)
         mock_account.robots[0].get_insight.assert_awaited_once_with(days=7)
 
+    @pytest.mark.asyncio()
+    async def test_rejects_lr5(self) -> None:
+        """get_insight raises ValueError for LR5 before calling get_insight on the robot."""
+        from pylitterbot.mcp.tools.activity import get_insight
+
+        account = MagicMock(spec=Account)
+        lr5 = MagicMock(spec=LitterRobot5)
+        lr5.name = "Laundry Room"
+        lr5.id = "lr5-laundry-id"
+        account.robots = [lr5]
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=account),
+            pytest.raises(ValueError, match="not available"),
+        ):
+            await get_insight(robot="Laundry Room")
+
+        lr5.get_insight.assert_not_awaited()
+
 
 @pytest.fixture()
 def mock_feeder_account() -> MagicMock:

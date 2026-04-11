@@ -8,6 +8,7 @@ from typing import Any
 from pylitterbot.enums import LitterBoxStatus
 from pylitterbot.mcp.helpers import resolve_feeder_robot, resolve_litter_robot
 from pylitterbot.mcp.server import mcp
+from pylitterbot.robot.litterrobot5 import LitterRobot5
 
 
 @mcp.tool()
@@ -42,6 +43,11 @@ async def get_insight(robot: str, days: int = 30) -> dict[str, Any]:
 
     """
     resolved = await resolve_litter_robot(robot)
+    if isinstance(resolved, LitterRobot5):
+        raise ValueError(
+            f"Insight data is not available on Litter-Robot 5 "
+            f"('{resolved.name}'). Use get_activity_history instead."
+        )
     insight = await resolved.get_insight(days=days)
     return {
         "total_cycles": insight.total_cycles,
