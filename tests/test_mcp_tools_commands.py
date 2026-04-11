@@ -554,9 +554,7 @@ class TestOfflineRejection:
         mock_account.robots[0].reset.assert_not_awaited()
 
     @pytest.mark.asyncio()
-    async def test_toggle_hopper_rejects_offline(
-        self, mock_account: MagicMock
-    ) -> None:
+    async def test_toggle_hopper_rejects_offline(self, mock_account: MagicMock) -> None:
         """toggle_hopper raises ValueError when robot is offline."""
         from pylitterbot.mcp.tools.commands import toggle_hopper
 
@@ -599,9 +597,7 @@ class TestOfflineRejection:
         mock_account.robots[1].reset_settings.assert_not_awaited()
 
     @pytest.mark.asyncio()
-    async def test_change_filter_rejects_offline(
-        self, mock_account: MagicMock
-    ) -> None:
+    async def test_change_filter_rejects_offline(self, mock_account: MagicMock) -> None:
         """change_filter raises ValueError when robot is offline."""
         from pylitterbot.mcp.tools.commands import change_filter
 

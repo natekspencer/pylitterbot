@@ -230,7 +230,9 @@ class TestGetFoodDispensed:
         assert result["cups_dispensed"] == 2.5
         assert result["robot"] == "Cat Feeder"
         # The method must have been called (not awaited) exactly once
-        mock_feeder_account_autospec.robots[0].get_food_dispensed_since.assert_called_once()
+        mock_feeder_account_autospec.robots[
+            0
+        ].get_food_dispensed_since.assert_called_once()
 
     @pytest.mark.asyncio()
     @pytest.mark.parametrize("bad_hours", [0, -1, -24])

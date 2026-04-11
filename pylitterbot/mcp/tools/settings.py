@@ -67,7 +67,9 @@ async def set_night_light_brightness(robot: str, brightness: int) -> str:
     """
     resolved = await resolve_robot(robot)
     if not resolved.is_online:
-        raise ValueError(f"'{resolved.name}' is offline; cannot set night light brightness.")
+        raise ValueError(
+            f"'{resolved.name}' is offline; cannot set night light brightness."
+        )
     if not isinstance(resolved, (LitterRobot4, LitterRobot5)):
         raise ValueError(
             f"Night light brightness is only supported on Litter-Robot 4 and 5, "
@@ -86,7 +88,9 @@ async def set_night_light_brightness(robot: str, brightness: int) -> str:
             )
     ok = await resolved.set_night_light_brightness(brightness)
     if not ok:
-        raise RuntimeError(f"Failed to set night light brightness on '{resolved.name}'.")
+        raise RuntimeError(
+            f"Failed to set night light brightness on '{resolved.name}'."
+        )
     return f"Night light brightness set to {brightness} on '{resolved.name}'."
 
 
