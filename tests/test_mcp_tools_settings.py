@@ -51,11 +51,12 @@ def mock_account() -> MagicMock:
     lr5 = MagicMock(spec=LitterRobot5)
     lr5.name = "Living Room"
     lr5.id = "lr5-living-id"
-    lr5.model = "Litter-Robot 5"
+    lr5.model = "Litter-Robot 5 Pro"
     lr5.serial = "LR5L001"
     lr5.is_online = True
     lr5.power_status = "AC"
     lr5.status = LitterBoxStatus.READY
+    lr5.is_pro = True
     lr5.set_panel_brightness = AsyncMock(return_value=True)
     lr5.set_volume = AsyncMock(return_value=True)
     lr5.set_privacy_mode = AsyncMock(return_value=True)
@@ -383,6 +384,29 @@ class TestSetCameraAudio:
             pytest.raises(ValueError, match="only supported on Litter-Robot 5"),
         ):
             await set_camera_audio(robot="Kitchen", enabled=False)
+
+    @pytest.mark.asyncio()
+    async def test_rejects_non_pro_lr5(self, mock_account: MagicMock) -> None:
+        """set_camera_audio rejects a standard (non-Pro) Litter-Robot 5.
+
+        Camera audio is a Pro-only feature. Without this guard, standard LR5
+        units pass the isinstance check and fail deeper in the device layer
+        with a less useful error.
+        """
+        from pylitterbot.mcp.tools.settings import set_camera_audio
+
+        lr5 = mock_account.robots[2]
+        lr5.is_pro = False
+        lr5.model = "Litter-Robot 5"
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(
+                ValueError, match="only available on Litter-Robot 5 Pro"
+            ),
+        ):
+            await set_camera_audio(robot="Living Room", enabled=True)
+        lr5.set_camera_audio.assert_not_awaited()
 
 
 class TestSetGravityMode:
