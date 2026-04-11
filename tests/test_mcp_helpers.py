@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -139,7 +140,7 @@ def mock_account() -> MagicMock:
     feeder.food_level = 70
     feeder.meal_insert_size = 0.25
     feeder.last_feeding = {
-        "timestamp": "2024-01-01T12:00:00",
+        "timestamp": datetime(2024, 1, 1, 12, 0, 0),
         "amount": 0.25,
         "name": "snack",
     }
@@ -436,6 +437,48 @@ class TestFormatRobotSummaryExpandedFields:
         feeder.next_feeding = datetime(2024, 6, 15, 8, 30)
         summary = format_robot_summary(feeder)
         assert summary["next_feeding"] == "2024-06-15T08:30:00"
+
+
+class TestFeederRobotLastFeedingJsonSafe:
+    """Tests that format_robot_summary serializes FeederRobot.last_feeding to JSON."""
+
+    def test_last_feeding_with_datetime_is_json_serializable(
+        self, mock_account: MagicMock
+    ) -> None:
+        """format_robot_summary serializes last_feeding timestamp to ISO string."""
+        import json
+        from datetime import datetime
+
+        from pylitterbot.mcp.helpers import format_robot_summary
+
+        feeder = mock_account.robots[4]
+        feeder.last_feeding = {
+            "timestamp": datetime(2024, 1, 1, 12, 0, 0),
+            "amount": 1.5,
+            "name": "Morning",
+        }
+        summary = format_robot_summary(feeder)
+        # Must not raise TypeError
+        result = json.dumps(summary)
+        loaded = json.loads(result)
+        assert loaded["last_feeding"]["timestamp"] == "2024-01-01T12:00:00"
+        assert loaded["last_feeding"]["amount"] == 1.5
+        assert loaded["last_feeding"]["name"] == "Morning"
+
+    def test_last_feeding_none_is_json_serializable(
+        self, mock_account: MagicMock
+    ) -> None:
+        """format_robot_summary serializes last_feeding=None to null."""
+        import json
+
+        from pylitterbot.mcp.helpers import format_robot_summary
+
+        feeder = mock_account.robots[4]
+        feeder.last_feeding = None
+        summary = format_robot_summary(feeder)
+        result = json.dumps(summary)
+        loaded = json.loads(result)
+        assert loaded["last_feeding"] is None
 
 
 class TestFormatPetSummary:
