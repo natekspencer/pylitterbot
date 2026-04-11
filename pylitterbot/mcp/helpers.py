@@ -15,8 +15,10 @@ from .server import get_account
 async def resolve_robot(identifier: str) -> Robot:
     """Find a robot by name (case-insensitive) or ID."""
     account = await get_account()
+    normalized = identifier.casefold()
     for robot in account.robots:
-        if robot.name.lower() == identifier.lower() or robot.id == identifier:
+        name = robot.name or ""
+        if name.casefold() == normalized or str(robot.id) == identifier:
             return robot
     available = ", ".join(r.name for r in account.robots)
     raise ValueError(f"No robot found matching '{identifier}'. Available: {available}")

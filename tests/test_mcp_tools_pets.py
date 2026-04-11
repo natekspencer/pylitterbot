@@ -63,6 +63,36 @@ def mock_account() -> MagicMock:
     return account
 
 
+class TestResolvePetIdCasefoldAndNone:
+    """Tests for casefold and None-name safety in _resolve_pet_id."""
+
+    def test_resolve_pet_id_casefold(self, mock_account: MagicMock) -> None:
+        """_resolve_pet_id matches pet names using casefold for Unicode correctness.
+
+        German ß casefolded is 'ss'; lower() leaves ß unchanged so 'straße'
+        would not match 'strasse' with lower() but does with casefold().
+        """
+        from pylitterbot.mcp.tools.pets import _resolve_pet_id
+
+        german_pet = MagicMock(spec=Pet)
+        german_pet.name = "Straße"
+        german_pet.id = "de-pet-id"
+
+        result = _resolve_pet_id([german_pet], "strasse")
+        assert result == "de-pet-id"
+
+    def test_resolve_pet_id_handles_none_name(self, mock_account: MagicMock) -> None:
+        """_resolve_pet_id does not crash when a pet has name=None."""
+        from pylitterbot.mcp.tools.pets import _resolve_pet_id
+
+        nameless_pet = MagicMock(spec=Pet)
+        nameless_pet.name = None
+        nameless_pet.id = "nameless-pet-id"
+
+        result = _resolve_pet_id([nameless_pet], "nameless-pet-id")
+        assert result == "nameless-pet-id"
+
+
 class TestGetPets:
     """Tests for the get_pets tool."""
 

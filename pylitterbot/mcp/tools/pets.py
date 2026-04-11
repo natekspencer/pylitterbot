@@ -11,8 +11,10 @@ from pylitterbot.robot.litterrobot5 import LitterRobot5
 
 def _resolve_pet_id(pets: list, identifier: str) -> str:
     """Find a pet by name (case-insensitive) or ID and return its ID."""
+    normalized = identifier.casefold()
     for pet in pets:
-        if pet.name.lower() == identifier.lower() or pet.id == identifier:
+        name = pet.name or ""
+        if name.casefold() == normalized or str(pet.id) == identifier:
             return pet.id
     available = ", ".join(p.name for p in pets)
     raise ValueError(f"No pet found matching '{identifier}'. Available: {available}")
