@@ -80,6 +80,21 @@ class TestGetActivityHistory:
             await get_activity_history(robot="Kitchen", limit=50)
         mock_account.robots[0].get_activity_history.assert_awaited_once_with(limit=50)
 
+    @pytest.mark.asyncio()
+    @pytest.mark.parametrize("bad_limit", [0, -1, 501, 10_000_000])
+    async def test_rejects_out_of_range_limit(
+        self, mock_account: MagicMock, bad_limit: int
+    ) -> None:
+        """get_activity_history raises ValueError for limit outside [1, 500]."""
+        from pylitterbot.mcp.tools.activity import get_activity_history
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="limit must be between 1 and 500"),
+        ):
+            await get_activity_history(robot="Kitchen", limit=bad_limit)
+        mock_account.robots[0].get_activity_history.assert_not_awaited()
+
 
 class TestGetInsight:
     """Tests for the get_insight tool."""
@@ -104,6 +119,21 @@ class TestGetInsight:
         with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
             await get_insight(robot="Kitchen", days=7)
         mock_account.robots[0].get_insight.assert_awaited_once_with(days=7)
+
+    @pytest.mark.asyncio()
+    @pytest.mark.parametrize("bad_days", [0, -1, -30])
+    async def test_rejects_non_positive_days(
+        self, mock_account: MagicMock, bad_days: int
+    ) -> None:
+        """get_insight raises ValueError for days < 1."""
+        from pylitterbot.mcp.tools.activity import get_insight
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="days must be >= 1"),
+        ):
+            await get_insight(robot="Kitchen", days=bad_days)
+        mock_account.robots[0].get_insight.assert_not_awaited()
 
     @pytest.mark.asyncio()
     async def test_rejects_lr5(self) -> None:
@@ -201,6 +231,24 @@ class TestGetFoodDispensed:
         assert result["robot"] == "Cat Feeder"
         # The method must have been called (not awaited) exactly once
         mock_feeder_account_autospec.robots[0].get_food_dispensed_since.assert_called_once()
+
+    @pytest.mark.asyncio()
+    @pytest.mark.parametrize("bad_hours", [0, -1, -24])
+    async def test_rejects_non_positive_hours(
+        self, mock_feeder_account: MagicMock, bad_hours: int
+    ) -> None:
+        """get_food_dispensed raises ValueError for hours < 1."""
+        from pylitterbot.mcp.tools.activity import get_food_dispensed
+
+        with (
+            patch(
+                "pylitterbot.mcp.helpers.get_account",
+                return_value=mock_feeder_account,
+            ),
+            pytest.raises(ValueError, match="hours must be >= 1"),
+        ):
+            await get_food_dispensed(robot="Cat Feeder", hours=bad_hours)
+        mock_feeder_account.robots[0].get_food_dispensed_since.assert_not_called()
 
     @pytest.mark.asyncio()
     async def test_rejects_non_feeder(self, mock_account: MagicMock) -> None:

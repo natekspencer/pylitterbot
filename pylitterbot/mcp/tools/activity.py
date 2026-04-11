@@ -20,6 +20,8 @@ async def get_activity_history(robot: str, limit: int = 100) -> list[dict[str, s
         limit: Maximum number of activity entries to return (default 100).
 
     """
+    if limit < 1 or limit > 500:
+        raise ValueError("limit must be between 1 and 500.")
     resolved = await resolve_litter_robot(robot)
     activities = await resolved.get_activity_history(limit=limit)
     return [
@@ -42,6 +44,8 @@ async def get_insight(robot: str, days: int = 30) -> dict[str, Any]:
         days: Number of days to look back (default 30).
 
     """
+    if days < 1:
+        raise ValueError("days must be >= 1.")
     resolved = await resolve_litter_robot(robot)
     if isinstance(resolved, LitterRobot5):
         raise ValueError(
@@ -68,6 +72,8 @@ async def get_food_dispensed(robot: str, hours: int = 24) -> dict[str, Any]:
         hours: Number of hours to look back (default 24).
 
     """
+    if hours < 1:
+        raise ValueError("hours must be >= 1.")
     resolved = await resolve_feeder_robot(robot)
     since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
     cups = resolved.get_food_dispensed_since(since)
