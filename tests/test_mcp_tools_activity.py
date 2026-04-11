@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
 
 import pytest
 
 from pylitterbot import Account, FeederRobot, LitterRobot4
 from pylitterbot.activity import Activity, Insight
 from pylitterbot.enums import LitterBoxStatus
+from pylitterbot.robot.litterrobot5 import LitterRobot5
 
 
 @pytest.fixture()
@@ -118,7 +119,25 @@ def mock_feeder_account() -> MagicMock:
     feeder.is_online = True
     feeder.power_status = "AC"
 
-    feeder.get_food_dispensed_since = AsyncMock(return_value=2.5)
+    feeder.get_food_dispensed_since.return_value = 2.5
+
+    account.robots = [feeder]
+    return account
+
+
+@pytest.fixture()
+def mock_feeder_account_autospec() -> MagicMock:
+    """Create a mock Account with a Feeder-Robot using create_autospec.
+
+    Using create_autospec ensures the mock binds to the real signature of
+    FeederRobot, so sync methods remain sync and won't silently accept await.
+    """
+    account = MagicMock(spec=Account)
+
+    feeder = create_autospec(FeederRobot, instance=True)
+    feeder.name = "Cat Feeder"
+    feeder.id = "feeder-001"
+    feeder.get_food_dispensed_since.return_value = 2.5
 
     account.robots = [feeder]
     return account
@@ -139,7 +158,30 @@ class TestGetFoodDispensed:
         assert result["cups_dispensed"] == 2.5
         assert result["hours"] == 24
         assert result["robot"] == "Cat Feeder"
-        mock_feeder_account.robots[0].get_food_dispensed_since.assert_awaited_once()
+        mock_feeder_account.robots[0].get_food_dispensed_since.assert_called_once()
+
+    @pytest.mark.asyncio()
+    async def test_get_food_dispensed_calls_sync_method_not_coroutine(
+        self, mock_feeder_account_autospec: MagicMock
+    ) -> None:
+        """get_food_dispensed does not await get_food_dispensed_since (it is sync).
+
+        Using create_autospec means get_food_dispensed_since retains its real
+        sync signature. If the production code does `await resolved.get_food_dispensed_since(...)`,
+        it will get back a MagicMock (the return value of the sync call) and try
+        to iterate it as a coroutine, raising TypeError. This test catches that bug.
+        """
+        from pylitterbot.mcp.tools.activity import get_food_dispensed
+
+        with patch(
+            "pylitterbot.mcp.helpers.get_account",
+            return_value=mock_feeder_account_autospec,
+        ):
+            result = await get_food_dispensed(robot="Cat Feeder", hours=24)
+        assert result["cups_dispensed"] == 2.5
+        assert result["robot"] == "Cat Feeder"
+        # The method must have been called (not awaited) exactly once
+        mock_feeder_account_autospec.robots[0].get_food_dispensed_since.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_rejects_non_feeder(self, mock_account: MagicMock) -> None:
