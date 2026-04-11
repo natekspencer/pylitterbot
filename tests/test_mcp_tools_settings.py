@@ -125,6 +125,24 @@ class TestSetName:
         assert result == "Renamed robot to 'New Kitchen'."
 
 
+class TestSetNameFailure:
+    """Regression tests for set_name bool-return check."""
+
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_name raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_name
+
+        mock_account.robots[0].set_name = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_name(robot="Kitchen", name="New Name")
+
+
 class TestSetNightLight:
     """Tests for set_night_light tool."""
 
@@ -138,9 +156,37 @@ class TestSetNightLight:
         mock_account.robots[0].set_night_light.assert_awaited_once_with(True)
         assert result == "Night light enabled on 'Kitchen'."
 
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_night_light raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_night_light
+
+        mock_account.robots[0].set_night_light = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_night_light(robot="Kitchen", enabled=True)
+
 
 class TestSetNightLightBrightness:
     """Tests for set_night_light_brightness tool."""
+
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_night_light_brightness raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_night_light_brightness
+
+        mock_account.robots[0].set_night_light_brightness = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_night_light_brightness(robot="Kitchen", brightness=50)
 
     @pytest.mark.asyncio()
     async def test_sets_brightness(self, mock_account: MagicMock) -> None:
@@ -204,6 +250,20 @@ class TestSetNightLightMode:
     """Tests for set_night_light_mode tool."""
 
     @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_night_light_mode raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_night_light_mode
+
+        mock_account.robots[0].set_night_light_mode = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_night_light_mode(robot="Kitchen", mode="auto")
+
+    @pytest.mark.asyncio()
     async def test_sets_mode_auto(self, mock_account: MagicMock) -> None:
         """set_night_light_mode converts string to NightLightMode enum."""
         from pylitterbot.mcp.tools.settings import set_night_light_mode
@@ -252,6 +312,20 @@ class TestSetNightLightMode:
 
 class TestSetPanelBrightness:
     """Tests for set_panel_brightness tool."""
+
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_panel_brightness raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_panel_brightness
+
+        mock_account.robots[0].set_panel_brightness = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_panel_brightness(robot="Kitchen", brightness=50)
 
     @pytest.mark.asyncio()
     async def test_sets_brightness_on_lr4(self, mock_account: MagicMock) -> None:
@@ -304,6 +378,20 @@ class TestSetVolume:
     """Tests for set_volume tool."""
 
     @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_volume raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_volume
+
+        mock_account.robots[2].set_volume = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_volume(robot="Living Room", volume=50)
+
+    @pytest.mark.asyncio()
     async def test_sets_volume_on_lr5(self, mock_account: MagicMock) -> None:
         """set_volume calls LR5 set_volume with the given value."""
         from pylitterbot.mcp.tools.settings import set_volume
@@ -340,6 +428,20 @@ class TestSetPrivacyMode:
     """Tests for set_privacy_mode tool."""
 
     @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_privacy_mode raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_privacy_mode
+
+        mock_account.robots[2].set_privacy_mode = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_privacy_mode(robot="Living Room", enabled=True)
+
+    @pytest.mark.asyncio()
     async def test_enables_privacy_mode(self, mock_account: MagicMock) -> None:
         """set_privacy_mode calls LR5 set_privacy_mode(True)."""
         from pylitterbot.mcp.tools.settings import set_privacy_mode
@@ -363,6 +465,20 @@ class TestSetPrivacyMode:
 
 class TestSetCameraAudio:
     """Tests for set_camera_audio tool."""
+
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_camera_audio raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_camera_audio
+
+        mock_account.robots[2].set_camera_audio = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_camera_audio(robot="Living Room", enabled=True)
 
     @pytest.mark.asyncio()
     async def test_enables_camera_audio(self, mock_account: MagicMock) -> None:
@@ -411,6 +527,20 @@ class TestSetGravityMode:
     """Tests for set_gravity_mode tool."""
 
     @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_gravity_mode raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_gravity_mode
+
+        mock_account.robots[3].set_gravity_mode = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_gravity_mode(robot="Feeder", enabled=True)
+
+    @pytest.mark.asyncio()
     async def test_enables_gravity_mode(self, mock_account: MagicMock) -> None:
         """set_gravity_mode calls FeederRobot set_gravity_mode(True)."""
         from pylitterbot.mcp.tools.settings import set_gravity_mode
@@ -436,6 +566,20 @@ class TestSetPanelLockout:
     """Tests for set_panel_lockout tool."""
 
     @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_panel_lockout raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_panel_lockout
+
+        mock_account.robots[0].set_panel_lockout = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_panel_lockout(robot="Kitchen", enabled=True)
+
+    @pytest.mark.asyncio()
     async def test_locks_panel(self, mock_account: MagicMock) -> None:
         """set_panel_lockout calls robot.set_panel_lockout(True)."""
         from pylitterbot.mcp.tools.settings import set_panel_lockout
@@ -448,6 +592,20 @@ class TestSetPanelLockout:
 
 class TestSetWaitTime:
     """Tests for set_wait_time tool."""
+
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_wait_time raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_wait_time
+
+        mock_account.robots[0].set_wait_time = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_wait_time(robot="Kitchen", minutes=15)
 
     @pytest.mark.asyncio()
     async def test_sets_wait_time(self, mock_account: MagicMock) -> None:
@@ -504,6 +662,20 @@ class TestSetWaitTime:
 
 class TestSetSleepMode:
     """Tests for set_sleep_mode tool."""
+
+    @pytest.mark.asyncio()
+    async def test_raises_runtime_error_on_device_failure(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_sleep_mode raises RuntimeError when device returns False."""
+        from pylitterbot.mcp.tools.settings import set_sleep_mode
+
+        mock_account.robots[1].set_sleep_mode = AsyncMock(return_value=False)
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(RuntimeError, match="Failed"),
+        ):
+            await set_sleep_mode(robot="Basement", enabled=True, start_time="22:30")
 
     @pytest.mark.asyncio()
     async def test_enables_sleep_mode_with_time(self, mock_account: MagicMock) -> None:
