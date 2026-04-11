@@ -132,6 +132,62 @@ class TestReassignPetVisit:
             )
 
     @pytest.mark.asyncio()
+    async def test_rejects_empty_event_id(self, mock_account: MagicMock) -> None:
+        """reassign_pet_visit raises ValueError for an empty event_id."""
+        from pylitterbot.mcp.tools.pets import reassign_pet_visit
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            patch("pylitterbot.mcp.tools.pets.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="event_id must be a non-empty string"),
+        ):
+            await reassign_pet_visit(
+                robot="Living Room",
+                event_id="",
+                from_pet="Luna",
+                to_pet="Milo",
+            )
+        mock_account.robots[0].reassign_pet_visit.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_rejects_whitespace_event_id(self, mock_account: MagicMock) -> None:
+        """reassign_pet_visit raises ValueError for a whitespace-only event_id."""
+        from pylitterbot.mcp.tools.pets import reassign_pet_visit
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            patch("pylitterbot.mcp.tools.pets.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="event_id must be a non-empty string"),
+        ):
+            await reassign_pet_visit(
+                robot="Living Room",
+                event_id="   ",
+                from_pet="Luna",
+                to_pet="Milo",
+            )
+        mock_account.robots[0].reassign_pet_visit.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_strips_event_id(self, mock_account: MagicMock) -> None:
+        """reassign_pet_visit strips leading/trailing whitespace from event_id."""
+        from pylitterbot.mcp.tools.pets import reassign_pet_visit
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            patch("pylitterbot.mcp.tools.pets.get_account", return_value=mock_account),
+        ):
+            await reassign_pet_visit(
+                robot="Living Room",
+                event_id="  evt-123  ",
+                from_pet="Luna",
+                to_pet="Milo",
+            )
+        lr5 = mock_account.robots[0]
+        lr5.reassign_pet_visit.assert_awaited_once_with(
+            "evt-123", from_pet_id="pet-luna-id", to_pet_id="pet-milo-id"
+        )
+
+    @pytest.mark.asyncio()
     async def test_raises_for_unknown_pet(self, mock_account: MagicMock) -> None:
         """reassign_pet_visit raises ValueError for an unknown pet name."""
         from pylitterbot.mcp.tools.pets import reassign_pet_visit
