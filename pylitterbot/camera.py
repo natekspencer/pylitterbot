@@ -290,7 +290,8 @@ class CameraClient:
             return []
         if not isinstance(data, list):
             return []
-        return [item for item in data if isinstance(item, dict)]
+        events = [item for item in data if isinstance(item, dict)]
+        return events[:limit] if limit is not None else events
 
 
 class CameraSignalingRelay:
@@ -343,6 +344,8 @@ class CameraSignalingRelay:
         """
         if self._closed:
             raise CameraStreamException("Relay has been closed")
+        if self._session is not None:
+            raise CameraStreamException("Relay already started")
 
         self._session = await self._client.generate_session()
 
@@ -773,7 +776,8 @@ class CameraStream:
                 )
             stun_url = cred.get("stunUrl")
             if stun_url and not any(
-                stun_url == s.urls or stun_url in s.urls for s in servers
+                stun_url == s.urls or (isinstance(s.urls, list) and stun_url in s.urls)
+                for s in servers
             ):
                 servers.append(RTCIceServer(urls=stun_url))
         return servers
