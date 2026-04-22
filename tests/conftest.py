@@ -126,7 +126,9 @@ def mock_aioresponse() -> aioresponses:
         )
         mock.post(PET_PROFILE_ENDPOINT, payload={"data": {"getPetsByUser": [PET_DATA]}})
         mock.get(
-            re.compile(rf"{WATFORD_API}/api/device-manager/client/generate-session/.*"),
+            re.compile(
+                rf"{re.escape(WATFORD_API)}/api/device-manager/client/generate-session/.*"
+            ),
             payload=CAMERA_SESSION_RESPONSE,
             repeat=True,
         )

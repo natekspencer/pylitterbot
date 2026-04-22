@@ -354,29 +354,34 @@ class CameraSignalingRelay:
 
         self._session = await self._client.generate_session()
 
-        websession = self._client.websession
-        ws_url = (
-            f"{self._session.signaling_url}?accessToken={self._session.session_token}"
-        )
-        self._ws = await websession.ws_connect(ws_url)
+        try:
+            websession = self._client.websession
+            ws_url = f"{self._session.signaling_url}?accessToken={self._session.session_token}"
+            self._ws = await websession.ws_connect(ws_url)
 
-        encoded_sdp = b64encode(offer_sdp.encode()).decode()
-        _LOGGER.debug("Signaling relay: sending offer (%d bytes)", len(offer_sdp))
-        await self._ws.send_json({"type": "offer", "sdp": encoded_sdp})
+            encoded_sdp = b64encode(offer_sdp.encode()).decode()
+            _LOGGER.debug("Signaling relay: sending offer (%d bytes)", len(offer_sdp))
+            await self._ws.send_json({"type": "offer", "sdp": encoded_sdp})
 
-        if self._pending_candidates:
-            _LOGGER.debug(
-                "Signaling relay: flushing %d buffered ICE candidates",
-                len(self._pending_candidates),
+            if self._pending_candidates:
+                _LOGGER.debug(
+                    "Signaling relay: flushing %d buffered ICE candidates",
+                    len(self._pending_candidates),
+                )
+                for msg in self._pending_candidates:
+                    await self._ws.send_json(msg)
+                self._pending_candidates.clear()
+
+            self._receive_task = asyncio.ensure_future(
+                self._receive_loop(on_answer, on_candidate)
             )
-            for msg in self._pending_candidates:
-                await self._ws.send_json(msg)
-            self._pending_candidates.clear()
-
-        self._receive_task = asyncio.ensure_future(
-            self._receive_loop(on_answer, on_candidate)
-        )
-        self._ping_task = asyncio.ensure_future(self._ping_loop())
+            self._ping_task = asyncio.ensure_future(self._ping_loop())
+        except Exception:
+            if self._ws is not None and not self._ws.closed:
+                await self._ws.close()
+            self._ws = None
+            self._session = None
+            raise
 
         return self._session
 
@@ -459,7 +464,10 @@ class CameraSignalingRelay:
                     if msg_type == "answer":
                         raw_sdp = data.get("payload") or data.get("sdp", "")
                         try:
-                            sdp = b64decode(raw_sdp).decode()
+                            decoded = b64decode(raw_sdp).decode()
+                            sdp = (
+                                decoded if decoded.strip().startswith("v=") else raw_sdp
+                            )
                         except Exception:
                             _LOGGER.debug(
                                 "Signaling relay: SDP not base64-encoded, using raw"
@@ -824,7 +832,8 @@ class CameraStream:
         if msg_type == "answer":
             raw_sdp = data.get("payload") or data.get("sdp", "")
             try:
-                sdp = b64decode(raw_sdp).decode()
+                decoded = b64decode(raw_sdp).decode()
+                sdp = decoded if decoded.strip().startswith("v=") else raw_sdp
             except Exception:
                 _LOGGER.debug("CameraStream: SDP not base64-encoded, using raw")
                 sdp = raw_sdp
