@@ -17,7 +17,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable
 
-from aiohttp import ClientResponseError, ClientSession, WSMsgType
+from aiohttp import (
+    ClientResponseError,
+    ClientSession,
+    ClientWebSocketResponse,
+    WSMsgType,
+)
 
 from .exceptions import CameraStreamException
 from .utils import to_timestamp, utcnow
@@ -318,7 +323,7 @@ class CameraSignalingRelay:
         """
         self._client = client
         self._session: CameraSession | None = None
-        self._ws: Any | None = None  # aiohttp ClientWebSocketResponse
+        self._ws: ClientWebSocketResponse | None = None
         self._ping_task: asyncio.Task[None] | None = None
         self._receive_task: asyncio.Task[None] | None = None
         self._closed = False
@@ -610,7 +615,7 @@ class CameraStream:
 
         self._session: CameraSession | None = None
         self._pc: RTCPeerConnection | None = None
-        self._ws: Any | None = None  # aiohttp ClientWebSocketResponse
+        self._ws: ClientWebSocketResponse | None = None
         self._ping_task: asyncio.Task[None] | None = None
         self._receive_task: asyncio.Task[None] | None = None
         self._media_tasks: list[asyncio.Task[None]] = []
@@ -682,9 +687,7 @@ class CameraStream:
             )
             self._ws = await websession.ws_connect(ws_url)
 
-            # setLocalDescription gathers ICE candidates internally.
-            # We must send localDescription.sdp (which includes all gathered
-            # candidates) rather than offer.sdp (which has none).
+            # localDescription.sdp includes gathered ICE candidates; offer.sdp has none
             offer = await self._pc.createOffer()
             await self._pc.setLocalDescription(offer)
 
