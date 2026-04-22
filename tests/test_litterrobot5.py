@@ -1018,6 +1018,8 @@ async def test_litter_robot_5_set_camera_audio(
     assert result
     assert not robot.camera_audio_enabled
 
+    await robot._account.disconnect()
+
 
 async def test_litter_robot_5_set_camera_audio_no_camera(
     mock_account: Account,

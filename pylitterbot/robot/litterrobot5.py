@@ -1076,7 +1076,7 @@ class LitterRobot5(LitterRobot):
 
         """
         client = self.get_camera_client()
-        return list(await client.get_videos(date=date, limit=limit))
+        return await client.get_videos(date=date, limit=limit)
 
     async def get_camera_video_settings(self) -> dict[str, Any] | None:
         """Fetch the camera's reported video settings."""
