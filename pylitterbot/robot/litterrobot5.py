@@ -1108,7 +1108,7 @@ class LitterRobot5(LitterRobot):
         client = self.get_camera_client()
         return await client.set_camera_canvas(canvas)
 
-    def create_camera_stream(self, **kwargs: Any) -> CameraStream:
+    def create_camera_stream(self) -> CameraStream:
         """Create a ``CameraStream`` for live WebRTC streaming.
 
         Requires the ``aiortc`` optional dependency.
@@ -1121,7 +1121,7 @@ class LitterRobot5(LitterRobot):
         from ..camera import CameraStream
 
         client = self.get_camera_client()
-        return CameraStream(client, **kwargs)
+        return CameraStream(client)
 
     @classmethod
     async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:

@@ -22,7 +22,6 @@ from pylitterbot.robot.litterrobot5 import LitterRobot5
 from .common import (
     CAMERA_DEVICE_ID,
     CAMERA_EVENTS_RESPONSE,
-    CAMERA_INFO_RESPONSE,
     CAMERA_SESSION_RESPONSE,
     CAMERA_VIDEO_SETTINGS_RESPONSE,
     CAMERA_VIDEOS_RESPONSE,
@@ -140,6 +139,8 @@ class TestCameraClient:
         assert session.session_id == "test-session-id-1234"
         assert session.session_token == "test-session-token-abcdef"
 
+        await mock_account.disconnect()
+
     async def test_get_video_settings(
         self,
         mock_account: Account,
@@ -152,8 +153,26 @@ class TestCameraClient:
             api_key="test-key",
         )
         settings = await client.get_video_settings()
+        assert settings == CAMERA_VIDEO_SETTINGS_RESPONSE
+
+        await mock_account.disconnect()
+
+    async def test_get_audio_settings(
+        self,
+        mock_account: Account,
+        mock_aioresponse: aioresponses,
+    ) -> None:
+        """Test fetching audio settings."""
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        settings = await client.get_audio_settings()
         assert settings is not None
-        assert "reportedSettings" in settings
+        assert "audioEnabled" in settings
+
+        await mock_account.disconnect()
 
     async def test_set_camera_canvas(
         self,
@@ -169,6 +188,8 @@ class TestCameraClient:
         result = await client.set_camera_canvas(CAMERA_CANVAS_FRONT)
         assert result is True
 
+        await mock_account.disconnect()
+
     async def test_set_audio_enabled(
         self,
         mock_account: Account,
@@ -182,6 +203,8 @@ class TestCameraClient:
         )
         result = await client.set_audio_enabled(True)
         assert result is True
+
+        await mock_account.disconnect()
 
     async def test_get_camera_info(
         self,
@@ -197,6 +220,8 @@ class TestCameraClient:
         info = await client.get_camera_info()
         assert info is not None
         assert info["deviceId"] == CAMERA_DEVICE_ID
+
+        await mock_account.disconnect()
 
     async def test_get_videos(
         self,
@@ -214,6 +239,25 @@ class TestCameraClient:
         assert isinstance(videos[0], VideoClip)
         assert videos[0].id == "12345"
 
+        await mock_account.disconnect()
+
+    async def test_get_videos_with_limit(
+        self,
+        mock_account: Account,
+        mock_aioresponse: aioresponses,
+    ) -> None:
+        """Test that get_videos enforces limit client-side."""
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        videos = await client.get_videos(limit=1)
+        assert len(videos) == 1
+        assert videos[0].id == str(CAMERA_VIDEOS_RESPONSE[0]["id"])
+
+        await mock_account.disconnect()
+
     async def test_get_events(
         self,
         mock_account: Account,
@@ -229,6 +273,25 @@ class TestCameraClient:
         assert len(events) == 2
         assert events[0]["eventId"] == "evt-001"
 
+        await mock_account.disconnect()
+
+    async def test_get_events_with_limit(
+        self,
+        mock_account: Account,
+        mock_aioresponse: aioresponses,
+    ) -> None:
+        """Test that get_events enforces limit client-side."""
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        events = await client.get_events(limit=1)
+        assert len(events) == 1
+        assert events[0]["eventId"] == CAMERA_EVENTS_RESPONSE[0]["eventId"]
+
+        await mock_account.disconnect()
+
     async def test_device_id_property(
         self,
         mock_account: Account,
@@ -239,6 +302,8 @@ class TestCameraClient:
             device_id=CAMERA_DEVICE_ID,
         )
         assert client.device_id == CAMERA_DEVICE_ID
+
+        await mock_account.disconnect()
 
     async def test_settings_headers_with_api_key(
         self,
@@ -253,6 +318,8 @@ class TestCameraClient:
         headers = client._settings_headers()
         assert headers["x-api-key"] == "my-secret-key"
 
+        await mock_account.disconnect()
+
     async def test_settings_headers_without_api_key(
         self,
         mock_account: Account,
@@ -264,6 +331,8 @@ class TestCameraClient:
         )
         headers = client._settings_headers()
         assert "x-api-key" not in headers
+
+        await mock_account.disconnect()
 
 
 class TestLitterRobot5Camera:
@@ -277,6 +346,8 @@ class TestLitterRobot5Camera:
         robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
         assert robot.has_camera is True
 
+        await robot._account.disconnect()
+
     async def test_has_camera_standard(
         self,
         mock_account: Account,
@@ -284,6 +355,8 @@ class TestLitterRobot5Camera:
         """Test has_camera returns False for standard model."""
         robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
         assert robot.has_camera is False
+
+        await robot._account.disconnect()
 
     async def test_camera_metadata_pro(
         self,
@@ -293,6 +366,8 @@ class TestLitterRobot5Camera:
         robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
         assert robot.camera_metadata is not None
         assert robot.camera_metadata["deviceId"] == CAMERA_DEVICE_ID
+
+        await robot._account.disconnect()
 
     async def test_get_camera_client(
         self,
@@ -304,6 +379,8 @@ class TestLitterRobot5Camera:
         assert isinstance(client, CameraClient)
         assert client.device_id == CAMERA_DEVICE_ID
 
+        await robot._account.disconnect()
+
     async def test_get_camera_session(
         self,
         mock_account: Account,
@@ -313,6 +390,8 @@ class TestLitterRobot5Camera:
         robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
         session = await robot.get_camera_session()
         assert isinstance(session, CameraSession)
+
+        await robot._account.disconnect()
 
     async def test_get_camera_videos(
         self,
@@ -325,6 +404,8 @@ class TestLitterRobot5Camera:
         assert len(videos) == 2
         assert isinstance(videos[0], VideoClip)
 
+        await robot._account.disconnect()
+
     async def test_set_camera_view_front(
         self,
         mock_account: Account,
@@ -334,6 +415,8 @@ class TestLitterRobot5Camera:
         robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
         result = await robot.set_camera_view("front")
         assert result is True
+
+        await robot._account.disconnect()
 
     async def test_set_camera_view_globe(
         self,
@@ -345,6 +428,8 @@ class TestLitterRobot5Camera:
         result = await robot.set_camera_view("globe")
         assert result is True
 
+        await robot._account.disconnect()
+
     async def test_set_camera_view_invalid(
         self,
         mock_account: Account,
@@ -354,6 +439,8 @@ class TestLitterRobot5Camera:
         with pytest.raises(InvalidCommandException, match="Invalid camera view"):
             await robot.set_camera_view("rear")
 
+        await robot._account.disconnect()
+
     async def test_no_camera_raises(
         self,
         mock_account: Account,
@@ -362,3 +449,5 @@ class TestLitterRobot5Camera:
         robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
         with pytest.raises(CameraNotAvailableException):
             robot.get_camera_client()
+
+        await robot._account.disconnect()

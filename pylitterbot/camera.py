@@ -20,14 +20,14 @@ from typing import TYPE_CHECKING, Any, Callable
 from aiohttp import ClientResponseError, ClientSession, WSMsgType
 
 from .exceptions import CameraStreamException
-from .utils import to_timestamp
+from .utils import to_timestamp, utcnow
 
 if TYPE_CHECKING:
     from .session import Session
 
 _LOGGER = logging.getLogger(__name__)
 
-WATFORD_API = "https://watford.ienso-dev.com"
+WATFORD_API = "https://watford.ienso-dev.com"  # vendor-maintained URL; the -dev suffix is intentional
 CAMERA_SETTINGS_API = "https://7mnuil943l.execute-api.us-east-1.amazonaws.com"
 CAMERA_INVENTORY_API = "https://rrntg65uwf.execute-api.us-east-1.amazonaws.com"
 
@@ -174,7 +174,8 @@ class CameraClient:
         url = f"{self._settings_base}/reported-settings/{settings_type}"
         try:
             data = await self._session.get(url, headers=self._settings_headers())
-        except ClientResponseError:
+        except ClientResponseError as err:
+            _LOGGER.debug("get_video_settings failed: %s", err)
             return None
         return data if isinstance(data, dict) else None
 
@@ -185,8 +186,6 @@ class CameraClient:
             canvas: One of ``CAMERA_CANVAS_FRONT`` or ``CAMERA_CANVAS_GLOBE``.
 
         """
-        from .utils import utcnow
-
         url = f"{self._settings_base}/desired-settings/videoSettings"
         payload = {
             "streams": {"live-view": {"canvas": canvas}},
@@ -197,7 +196,8 @@ class CameraClient:
                 url, json=payload, headers=self._settings_headers()
             )
             return True
-        except ClientResponseError:
+        except ClientResponseError as err:
+            _LOGGER.debug("set_camera_canvas failed: %s", err)
             return False
 
     async def set_audio_enabled(self, enabled: bool) -> bool:
@@ -216,7 +216,8 @@ class CameraClient:
                 url, json=payload, headers=self._settings_headers()
             )
             return True
-        except ClientResponseError:
+        except ClientResponseError as err:
+            _LOGGER.debug("set_audio_enabled failed: %s", err)
             return False
 
     async def get_audio_settings(self) -> dict[str, Any] | None:
@@ -224,7 +225,8 @@ class CameraClient:
         url = f"{self._settings_base}/reported-settings/audioSettings"
         try:
             data = await self._session.get(url, headers=self._settings_headers())
-        except ClientResponseError:
+        except ClientResponseError as err:
+            _LOGGER.debug("get_audio_settings failed: %s", err)
             return None
         return data if isinstance(data, dict) else None
 
@@ -233,7 +235,8 @@ class CameraClient:
         url = self._inventory_base
         try:
             data = await self._session.get(url, headers=self._settings_headers())
-        except ClientResponseError:
+        except ClientResponseError as err:
+            _LOGGER.debug("get_camera_info failed: %s", err)
             return None
         return data if isinstance(data, dict) else None
 
@@ -260,7 +263,8 @@ class CameraClient:
                 headers=self._settings_headers(),
                 params=params or None,
             )
-        except ClientResponseError:
+        except ClientResponseError as err:
+            _LOGGER.debug("get_videos failed: %s", err)
             return []
         if not isinstance(data, list):
             return []
@@ -286,7 +290,8 @@ class CameraClient:
                 headers=self._settings_headers(),
                 params=params or None,
             )
-        except ClientResponseError:
+        except ClientResponseError as err:
+            _LOGGER.debug("get_events failed: %s", err)
             return []
         if not isinstance(data, list):
             return []
@@ -456,6 +461,9 @@ class CameraSignalingRelay:
                         try:
                             sdp = b64decode(raw_sdp).decode()
                         except Exception:
+                            _LOGGER.debug(
+                                "Signaling relay: SDP not base64-encoded, using raw"
+                            )
                             sdp = raw_sdp
                         _LOGGER.debug(
                             "Signaling relay: received answer (%d bytes)",
@@ -574,12 +582,11 @@ class CameraStream:
             # ... frames delivered via callback ...
     """
 
-    def __init__(self, client: CameraClient, **kwargs: Any) -> None:
+    def __init__(self, client: CameraClient) -> None:
         """Initialize the camera stream.
 
         Args:
             client: A ``CameraClient`` instance.
-            **kwargs: Extra keyword arguments (reserved for future use).
 
         Raises:
             ImportError: If ``aiortc`` is not installed.
@@ -592,7 +599,6 @@ class CameraStream:
             )
 
         self._client = client
-        self._kwargs = kwargs
 
         self._session: CameraSession | None = None
         self._pc: RTCPeerConnection | None = None
@@ -757,7 +763,7 @@ class CameraStream:
     @staticmethod
     def _build_ice_servers(
         turn_creds: list[dict[str, Any]],
-    ) -> list[Any]:
+    ) -> list[RTCIceServer]:
         """Convert TURN credentials to RTCIceServer objects."""
         servers: list[RTCIceServer] = [
             RTCIceServer(urls="stun:stun.l.google.com:19302"),
@@ -820,6 +826,7 @@ class CameraStream:
             try:
                 sdp = b64decode(raw_sdp).decode()
             except Exception:
+                _LOGGER.debug("CameraStream: SDP not base64-encoded, using raw")
                 sdp = raw_sdp
 
             answer = RTCSessionDescription(sdp=sdp, type="answer")

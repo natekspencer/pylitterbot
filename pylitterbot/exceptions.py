@@ -19,7 +19,3 @@ class CameraNotAvailableException(LitterRobotException):
 
 class CameraStreamException(LitterRobotException):
     """Raised when a camera streaming operation fails."""
-
-
-class CameraSessionExpiredException(CameraStreamException):
-    """Raised when the camera session token has expired."""
