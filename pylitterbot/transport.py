@@ -47,6 +47,7 @@ class WebSocketProtocol(Generic[_RobotT]):
         Callable[[_RobotT, ClientWebSocketResponse], Awaitable[None]] | None
     ) = None
     message_handler: Callable[[_RobotT, dict], None] | None = None
+    is_shared: bool = False
 
 
 class Transport(ABC):
@@ -100,7 +101,11 @@ class WebSocketMonitor(Transport):
                 # winding down.  Clear it so _run() reconnects once _connect()
                 # returns, rather than exiting and leaving this listener orphaned.
                 self._stop_event.clear()
-            elif self._ws is not None and self._protocol.subscribe_factory:
+            elif (
+                self._ws is not None
+                and self._protocol.subscribe_factory
+                and not self._protocol.is_shared
+            ):
                 await self._protocol.subscribe_factory(robot, self._ws)
 
     async def stop(self, robot: Robot) -> None:
@@ -110,7 +115,11 @@ class WebSocketMonitor(Transport):
         async with self._lock:
             self._listeners.pop(robot.id, None)
 
-            if self._ws is not None and self._protocol.unsubscribe_factory:
+            if (
+                self._ws is not None
+                and self._protocol.unsubscribe_factory
+                and (not self._protocol.is_shared or not self._listeners)
+            ):
                 try:
                     await self._protocol.unsubscribe_factory(robot, self._ws)
                 except Exception:
@@ -178,8 +187,12 @@ class WebSocketMonitor(Transport):
                     await ws.send_json(connection_init)
 
                 if self._protocol.subscribe_factory:
-                    for robot in list(self._listeners.values()):
-                        await self._protocol.subscribe_factory(robot, ws)
+                    if self._protocol.is_shared:
+                        first_robot = next(iter(self._listeners.values()))
+                        await self._protocol.subscribe_factory(first_robot, ws)
+                    else:
+                        for robot in list(self._listeners.values()):
+                            await self._protocol.subscribe_factory(robot, ws)
 
                 async for msg in ws:
                     if self._stop_event.is_set():

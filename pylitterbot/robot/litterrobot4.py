@@ -762,11 +762,11 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return is_success
 
     @staticmethod
-    def parse_websocket_message(data: dict) -> dict | None:
-        """Parse a wesocket message."""
+    def parse_websocket_message(data: dict) -> list[dict] | None:
+        """Parse a websocket message."""
         if (data_type := data["type"]) == "data":
-            data = data["payload"]["data"]["litterRobot4StateSubscriptionBySerial"]
-            return data
+            states = data["payload"]["data"]["litterRobot4StateSubscriptionByUser"]
+            return states if isinstance(states, list) else None
         if data_type == "error":
             _LOGGER.error(data)
         elif data_type not in ("start_ack", "ka", "complete"):
@@ -824,11 +824,11 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                     "data": dumps(
                         {
                             "query": f"""
-                                subscription GetLR4($serial: String!) {{
-                                    litterRobot4StateSubscriptionBySerial(serial: $serial) {LITTER_ROBOT_4_MODEL}
+                                subscription GetLR4ByUser($userId: String!) {{
+                                    litterRobot4StateSubscriptionByUser(userId: $userId) {LITTER_ROBOT_4_MODEL}
                                 }}
                             """,
-                            "variables": {"serial": self.serial},
+                            "variables": {"userId": self._account.user_id},
                         }
                     ),
                     "extensions": {
@@ -851,14 +851,18 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     def _ws_message_handler(self, data: dict) -> None:
         """Handle a message from the WebSocket."""
         parsed = self.parse_websocket_message(data)
-        if isinstance(parsed, dict) and str(parsed.get(self._data_id)) == self.id:
-            self._update_data(parsed)
+        if isinstance(parsed, list):
+            for item in parsed:
+                if isinstance(item, dict) and str(item.get(self._data_id)) == self.id:
+                    self._update_data(item)
+                    break
 
     _WS_PROTOCOL: ClassVar[WebSocketProtocol] = WebSocketProtocol(
         ws_config_factory=_ws_config_factory,
         subscribe_factory=_ws_subscribe,
         unsubscribe_factory=_ws_unsubscribe,
         message_handler=_ws_message_handler,
+        is_shared=True,
     )
 
     def _build_transport(self) -> WebSocketMonitor:
