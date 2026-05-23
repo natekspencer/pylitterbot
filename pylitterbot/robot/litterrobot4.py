@@ -765,7 +765,9 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
     def parse_websocket_message(data: dict) -> list[dict] | None:
         """Parse a websocket message."""
         if (data_type := data["type"]) == "data":
-            states = data["payload"]["data"]["litterRobot4StateSubscriptionByUser"]
+            states = data["payload"]["data"][
+                "litterRobot4StateSubscriptionByUser"
+            ]["robots"]
             return states if isinstance(states, list) else None
         if data_type == "error":
             _LOGGER.error(data)
@@ -825,7 +827,9 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                         {
                             "query": f"""
                                 subscription GetLR4ByUser($userId: String!) {{
-                                    litterRobot4StateSubscriptionByUser(userId: $userId) {LITTER_ROBOT_4_MODEL}
+                                    litterRobot4StateSubscriptionByUser(userId: $userId) {{
+                                        robots {LITTER_ROBOT_4_MODEL}
+                                    }}
                                 }}
                             """,
                             "variables": {"userId": self._account.user_id},

@@ -349,7 +349,9 @@ async def test_litter_robot_4_websocket_subscription_payload() -> None:
     states = [{**LITTER_ROBOT_4_DATA, "DFILevelPercent": 50}]
     message = {
         "type": "data",
-        "payload": {"data": {"litterRobot4StateSubscriptionByUser": states}},
+        "payload": {
+            "data": {"litterRobot4StateSubscriptionByUser": {"robots": states}}
+        },
     }
     assert LitterRobot4.parse_websocket_message(message) == states
     assert LitterRobot4._WS_PROTOCOL.is_shared
@@ -367,10 +369,12 @@ async def test_litter_robot_4_shared_subscription_dispatch(
         "type": "data",
         "payload": {
             "data": {
-                "litterRobot4StateSubscriptionByUser": [
-                    {**data_a, "DFILevelPercent": 42},
-                    {**data_b, "DFILevelPercent": 99},
-                ]
+                "litterRobot4StateSubscriptionByUser": {
+                    "robots": [
+                        {**data_a, "DFILevelPercent": 42},
+                        {**data_b, "DFILevelPercent": 99},
+                    ]
+                }
             }
         },
     }
