@@ -467,17 +467,43 @@ class TestLitterRobot5Camera:
 class TestSignalingHelpers:
     """Tests for the module-level signaling parse helpers."""
 
+    ANSWER_SDP = (
+        "v=0\r\no=- 1 1 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\n"
+        "m=video 9 UDP/TLS/RTP/SAVPF 96"
+    )
+
     def test_parse_answer_base64(self) -> None:
         """Test parsing a base64-encoded SDP answer."""
-        sdp = "v=0\r\no=- 1 1 IN IP4 0.0.0.0"
-        parsed = _parse_signaling_message({"type": "answer", "sdp": encode(sdp)})
-        assert parsed == ("answer", sdp)
+        parsed = _parse_signaling_message(
+            {"type": "answer", "sdp": encode(self.ANSWER_SDP)}
+        )
+        assert parsed == ("answer", self.ANSWER_SDP)
 
     def test_parse_answer_raw(self) -> None:
         """Test parsing a raw (non-base64) SDP answer."""
-        sdp = "v=0\r\no=- 1 1 IN IP4 0.0.0.0"
-        parsed = _parse_signaling_message({"type": "answer", "payload": sdp})
-        assert parsed == ("answer", sdp)
+        parsed = _parse_signaling_message(
+            {"type": "answer", "payload": self.ANSWER_SDP}
+        )
+        assert parsed == ("answer", self.ANSWER_SDP)
+
+    def test_parse_answer_truncated(self) -> None:
+        r"""Test that a truncated answer SDP is discarded.
+
+        Observed live: the camera occasionally sends an answer payload that
+        decodes to just ``"v=0\r\n"``, which the peer's SDP parser rejects
+        ("Expect line: o=").
+        """
+        assert (
+            _parse_signaling_message({"type": "answer", "payload": encode("v=0\r\n")})
+            is None
+        )
+        assert _parse_signaling_message({"type": "answer", "payload": ""}) is None
+        assert (
+            _parse_signaling_message(
+                {"type": "answer", "payload": "v=0\r\no=- 1 1 IN IP4 0.0.0.0"}
+            )
+            is None
+        )
 
     def test_parse_candidate(self) -> None:
         """Test parsing an ICE candidate message."""

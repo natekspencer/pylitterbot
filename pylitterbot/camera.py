@@ -66,18 +66,39 @@ def _decode_sdp(raw_sdp: str) -> str:
     return raw_sdp
 
 
+def _is_complete_sdp(sdp: str) -> bool:
+    r"""Check that an SDP answer has a version line and at least one media section.
+
+    The camera occasionally emits a truncated answer (observed live: just
+    ``"v=0\r\n"``), which hard-fails the peer's SDP parser if forwarded.
+    """
+    return sdp.startswith("v=") and any(
+        line.startswith("m=") for line in sdp.splitlines()
+    )
+
+
 def _parse_signaling_message(data: dict[str, Any]) -> tuple[str, Any] | None:
     """Parse a signaling message into ``("answer", sdp)`` or ``("candidate", dict)``.
 
-    Returns ``None`` for messages that carry neither. Explicit JSON ``null``
-    values for ``sdpMid``/``sdpMLineIndex`` are normalized to their defaults
+    Returns ``None`` for messages that carry neither, and for truncated
+    answer SDPs (the peer would reject them; the camera may still send a
+    complete answer afterwards). Explicit JSON ``null`` values for
+    ``sdpMid``/``sdpMLineIndex`` are normalized to their defaults
     (``dict.get`` defaults do not apply to present-but-null keys).
     """
     msg_type = data.get("type", "")
 
     if msg_type == "answer":
         raw_sdp = data.get("payload") or data.get("sdp", "")
-        return ("answer", _decode_sdp(raw_sdp))
+        sdp = _decode_sdp(raw_sdp)
+        if not _is_complete_sdp(sdp):
+            _LOGGER.warning(
+                "Signaling: discarding malformed answer SDP (%d bytes): %r",
+                len(sdp),
+                sdp[:80],
+            )
+            return None
+        return ("answer", sdp)
 
     if msg_type == "candidate" or "candidate" in data:
         if not (candidate := data.get("candidate", "")):
