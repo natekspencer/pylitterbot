@@ -372,13 +372,37 @@ CAMERA_SESSION_RESPONSE: dict[str, Any] = {
 CAMERA_VIDEO_SETTINGS_RESPONSE: dict[str, Any] = {
     "reportedSettings": [
         {
+            "settingsType": "videoSettings",
             "data": {
                 "streams": {
                     "live-view": {
                         "canvas": "sensor_0_1080p",
                     }
                 }
-            }
+            },
+            "timestamp": "2026-06-10T18:30:45.375Z",
+        }
+    ]
+}
+
+CAMERA_AUDIO_SETTINGS_RESPONSE: dict[str, Any] = {
+    "reportedSettings": [
+        {
+            "settingsType": "audioSettings",
+            "data": {
+                "audio_in": {
+                    "global": {
+                        "mute": True,
+                        "volume": 79,
+                        "channels": 1,
+                        "latency_ms": 100,
+                        "sample_format": "int16",
+                        "sample_rate": 48000,
+                    }
+                },
+                "audio_out": {"volume": 69, "gain": 0, "mute": False},
+            },
+            "timestamp": "2026-06-10T18:30:45.375Z",
         }
     ]
 }

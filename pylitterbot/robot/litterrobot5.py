@@ -10,6 +10,12 @@ from typing import TYPE_CHECKING, Any, cast
 from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponseError
 
 from ..activity import Activity, Insight
+from ..camera import (
+    CAMERA_CANVAS_FRONT,
+    CAMERA_CANVAS_GLOBE,
+    CameraClient,
+    CameraStream,
+)
 from ..enums import (
     BrightnessLevel,
     GlobeMotorFaultStatus,
@@ -26,12 +32,13 @@ from ..exceptions import (
 )
 from ..sleep_schedule import SleepSchedule
 from ..transport import PollingTransport
-from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin
+from ..utils import calculate_litter_level, decode, to_enum, to_timestamp, urljoin
 from .litterrobot import LitterRobot
+from .litterrobot3 import DEFAULT_ENDPOINT_KEY
 
 if TYPE_CHECKING:
     from ..account import Account
-    from ..camera import CameraClient, CameraSession, CameraStream, VideoClip
+    from ..camera import CameraSession, VideoClip
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -136,6 +143,7 @@ class LitterRobot5(LitterRobot):
         super().__init__(data, account)
         self._path = LR5_ENDPOINT
         self._camera_audio_enabled: bool | None = None
+        self._camera_client: CameraClient | None = None
 
     @property
     def is_pro(self) -> bool:
@@ -492,7 +500,9 @@ class LitterRobot5(LitterRobot):
 
         Uses locally cached state from ``set_camera_audio`` when available,
         since the robot API's ``soundSettings.cameraAudioEnabled`` field does
-        not reflect changes made via the camera settings API.
+        not reflect changes made via the camera settings API.  Call
+        ``refresh_camera_audio_enabled`` to reconcile the cache with the
+        camera's reported settings (e.g. after changes in the Whisker app).
         """
         if self._camera_audio_enabled is not None:
             return self._camera_audio_enabled
@@ -842,14 +852,44 @@ class LitterRobot5(LitterRobot):
         )
 
     async def set_camera_audio(self, value: bool) -> bool:
-        """Enable or disable camera audio (Pro only)."""
-        if not self.has_camera:
-            return False
+        """Enable or disable camera audio (Pro only).
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
         client = self.get_camera_client()
         if await client.set_audio_enabled(value):
             self._camera_audio_enabled = value
             return True
         return False
+
+    async def refresh_camera_audio_enabled(self) -> bool | None:
+        """Fetch the camera microphone state from the camera settings API.
+
+        Reconciles the locally cached value used by ``camera_audio_enabled``
+        with the camera's reported settings, so changes made outside this
+        client (e.g. in the Whisker app) are picked up.
+
+        Returns:
+            The current state, or ``None`` if it could not be determined.
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        client = self.get_camera_client()
+        if (settings := await client.get_audio_settings()) is None:
+            return None
+        mute = None
+        if isinstance(audio_in := settings.get("audio_in"), dict) and isinstance(
+            audio_global := audio_in.get("global"), dict
+        ):
+            mute = audio_global.get("mute")
+        if not isinstance(mute, bool):
+            return None
+        self._camera_audio_enabled = not mute
+        return self._camera_audio_enabled
 
     async def set_wait_time(self, wait_time: int) -> bool:
         """Set the wait time on the Litter-Robot."""
@@ -1035,22 +1075,19 @@ class LitterRobot5(LitterRobot):
             CameraNotAvailableException: If the robot has no camera.
 
         """
-        from ..camera import CameraClient
-        from ..utils import decode
-
         cam = self.camera_metadata
         if not cam or not cam.get("deviceId"):
             raise CameraNotAvailableException(
                 f"Robot {self.serial} does not have a camera"
             )
 
-        from .litterrobot3 import DEFAULT_ENDPOINT_KEY
-
-        return CameraClient(
-            session=self._account.session,
-            device_id=cam["deviceId"],
-            api_key=decode(DEFAULT_ENDPOINT_KEY),
-        )
+        if self._camera_client is None:
+            self._camera_client = CameraClient(
+                session=self._account.session,
+                device_id=cam["deviceId"],
+                api_key=decode(DEFAULT_ENDPOINT_KEY),
+            )
+        return self._camera_client
 
     async def get_camera_session(self) -> CameraSession:
         """Generate a camera streaming session.
@@ -1094,8 +1131,6 @@ class LitterRobot5(LitterRobot):
             CameraNotAvailableException: If the robot has no camera.
 
         """
-        from ..camera import CAMERA_CANVAS_FRONT, CAMERA_CANVAS_GLOBE
-
         view_map = {
             "front": CAMERA_CANVAS_FRONT,
             "globe": CAMERA_CANVAS_GLOBE,
@@ -1118,8 +1153,6 @@ class LitterRobot5(LitterRobot):
             ImportError: If ``aiortc`` is not installed.
 
         """
-        from ..camera import CameraStream
-
         client = self.get_camera_client()
         return CameraStream(client)
 

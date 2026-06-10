@@ -22,6 +22,7 @@ from pylitterbot.utils import urljoin
 
 from .common import (
     ACTIVITY_RESPONSE,
+    CAMERA_AUDIO_SETTINGS_RESPONSE,
     CAMERA_DEVICE_ID,
     CAMERA_EVENTS_RESPONSE,
     CAMERA_INFO_RESPONSE,
@@ -143,7 +144,7 @@ def mock_aioresponse() -> aioresponses:
             re.compile(
                 rf"{re.escape(CAMERA_SETTINGS_API)}/prod/v1/cameras/.*/reported-settings/audioSettings"
             ),
-            payload={"audioEnabled": False, "volume": 50},
+            payload=CAMERA_AUDIO_SETTINGS_RESPONSE,
             repeat=True,
         )
         mock.patch(

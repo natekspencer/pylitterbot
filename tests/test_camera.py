@@ -3,10 +3,14 @@
 # pylint: disable=protected-access
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from aiohttp import ClientResponseError, RequestInfo
 from aioresponses import aioresponses
+from multidict import CIMultiDict, CIMultiDictProxy
+from yarl import URL
 
 from pylitterbot import Account
 from pylitterbot.camera import (
@@ -15,9 +19,16 @@ from pylitterbot.camera import (
     CameraClient,
     CameraSession,
     VideoClip,
+    _decode_sdp,
+    _parse_signaling_message,
 )
-from pylitterbot.exceptions import CameraNotAvailableException, InvalidCommandException
+from pylitterbot.exceptions import (
+    CameraNotAvailableException,
+    CameraStreamException,
+    InvalidCommandException,
+)
 from pylitterbot.robot.litterrobot5 import LitterRobot5
+from pylitterbot.utils import encode
 
 from .common import (
     CAMERA_DEVICE_ID,
@@ -153,7 +164,7 @@ class TestCameraClient:
             api_key="test-key",
         )
         settings = await client.get_video_settings()
-        assert settings == CAMERA_VIDEO_SETTINGS_RESPONSE
+        assert settings == CAMERA_VIDEO_SETTINGS_RESPONSE["reportedSettings"][0]["data"]
 
         await mock_account.disconnect()
 
@@ -170,7 +181,7 @@ class TestCameraClient:
         )
         settings = await client.get_audio_settings()
         assert settings is not None
-        assert "audioEnabled" in settings
+        assert settings["audio_in"]["global"]["mute"] is True
 
         await mock_account.disconnect()
 
@@ -449,5 +460,203 @@ class TestLitterRobot5Camera:
         robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
         with pytest.raises(CameraNotAvailableException):
             robot.get_camera_client()
+
+        await robot._account.disconnect()
+
+
+class TestSignalingHelpers:
+    """Tests for the module-level signaling parse helpers."""
+
+    def test_parse_answer_base64(self) -> None:
+        """Test parsing a base64-encoded SDP answer."""
+        sdp = "v=0\r\no=- 1 1 IN IP4 0.0.0.0"
+        parsed = _parse_signaling_message({"type": "answer", "sdp": encode(sdp)})
+        assert parsed == ("answer", sdp)
+
+    def test_parse_answer_raw(self) -> None:
+        """Test parsing a raw (non-base64) SDP answer."""
+        sdp = "v=0\r\no=- 1 1 IN IP4 0.0.0.0"
+        parsed = _parse_signaling_message({"type": "answer", "payload": sdp})
+        assert parsed == ("answer", sdp)
+
+    def test_parse_candidate(self) -> None:
+        """Test parsing an ICE candidate message."""
+        parsed = _parse_signaling_message(
+            {"candidate": "candidate:1 1 udp 2 1.2.3.4 5 typ host", "sdpMid": "1"}
+        )
+        assert parsed is not None
+        kind, payload = parsed
+        assert kind == "candidate"
+        assert payload["sdpMid"] == "1"
+        assert payload["sdpMLineIndex"] == 0
+
+    def test_parse_candidate_null_fields(self) -> None:
+        """Test explicit JSON nulls for sdpMid/sdpMLineIndex get defaults."""
+        parsed = _parse_signaling_message(
+            {
+                "type": "candidate",
+                "candidate": "candidate:1 1 udp 2 1.2.3.4 5 typ host",
+                "sdpMid": None,
+                "sdpMLineIndex": None,
+            }
+        )
+        assert parsed is not None
+        _, payload = parsed
+        assert payload["sdpMid"] == "0"
+        assert payload["sdpMLineIndex"] == 0
+
+    def test_parse_empty_candidate(self) -> None:
+        """Test that an empty candidate string is ignored."""
+        assert _parse_signaling_message({"type": "candidate", "candidate": ""}) is None
+
+    def test_parse_unknown_message(self) -> None:
+        """Test that unknown message types are ignored."""
+        assert _parse_signaling_message({"type": "status", "ok": True}) is None
+
+    def test_decode_sdp_passthrough(self) -> None:
+        """Test that non-base64 input is passed through unchanged."""
+        assert _decode_sdp("not-base64!!") == "not-base64!!"
+        assert _decode_sdp("v=0 raw sdp") == "v=0 raw sdp"
+
+    def test_decode_sdp_base64_non_sdp(self) -> None:
+        """Test that base64 input not decoding to SDP is passed through raw."""
+        raw = encode("hello world")
+        assert _decode_sdp(raw) == raw
+
+    def test_ws_url_encodes_token(self) -> None:
+        """Test that the session token is URL-encoded in the ws URL."""
+        session = CameraSession(
+            session_id="s",
+            session_token="ab+c/d=",
+            session_expiration=None,
+            signaling_url="wss://host/sig",
+        )
+        assert session.ws_url == "wss://host/sig?accessToken=ab%2Bc%2Fd%3D"
+
+
+class TestCameraClientErrorFallbacks:
+    """Tests that API errors degrade per the documented contracts."""
+
+    @staticmethod
+    def _failing_session(error: Exception) -> Any:
+        session = SimpleNamespace()
+
+        async def _raise(*args: Any, **kwargs: Any) -> Any:
+            raise error
+
+        session.get = _raise
+        session.patch = _raise
+        return session
+
+    async def test_get_videos_invalid_command_returns_empty(self) -> None:
+        """Test HTTP 500 (InvalidCommandException) returns [] from get_videos."""
+        client = CameraClient(
+            session=self._failing_session(InvalidCommandException("server error")),
+            device_id=CAMERA_DEVICE_ID,
+        )
+        assert await client.get_videos() == []
+        assert await client.get_events() == []
+
+    async def test_get_video_settings_invalid_command_returns_none(self) -> None:
+        """Test HTTP 500 (InvalidCommandException) returns None from settings."""
+        client = CameraClient(
+            session=self._failing_session(InvalidCommandException("server error")),
+            device_id=CAMERA_DEVICE_ID,
+        )
+        assert await client.get_video_settings() is None
+        assert await client.get_audio_settings() is None
+        assert await client.get_camera_info() is None
+
+    async def test_set_audio_enabled_invalid_command_returns_false(self) -> None:
+        """Test HTTP 500 (InvalidCommandException) returns False from setters."""
+        client = CameraClient(
+            session=self._failing_session(InvalidCommandException("server error")),
+            device_id=CAMERA_DEVICE_ID,
+        )
+        assert await client.set_audio_enabled(True) is False
+        assert await client.set_camera_canvas(CAMERA_CANVAS_FRONT) is False
+
+    async def test_generate_session_wraps_invalid_command(self) -> None:
+        """Test generate_session wraps InvalidCommandException."""
+        client = CameraClient(
+            session=self._failing_session(InvalidCommandException("server error")),
+            device_id=CAMERA_DEVICE_ID,
+        )
+        with pytest.raises(CameraStreamException, match="Failed to generate"):
+            await client.generate_session()
+
+    async def test_generate_session_wraps_client_response_error(self) -> None:
+        """Test generate_session wraps ClientResponseError (e.g. 403)."""
+        request_info = RequestInfo(
+            url=URL("https://watford.example/session"),
+            method="GET",
+            headers=CIMultiDictProxy(CIMultiDict()),
+            real_url=URL("https://watford.example/session"),
+        )
+        error = ClientResponseError(
+            request_info=request_info, history=(), status=403, message="Forbidden"
+        )
+        client = CameraClient(
+            session=self._failing_session(error),
+            device_id=CAMERA_DEVICE_ID,
+        )
+        with pytest.raises(CameraStreamException, match="Failed to generate"):
+            await client.generate_session()
+
+
+class TestCameraAudioReconciliation:
+    """Tests for refresh_camera_audio_enabled."""
+
+    async def test_refresh_camera_audio_enabled(
+        self,
+        mock_account: Account,
+        mock_aioresponse: aioresponses,
+    ) -> None:
+        """Test reconciling the audio cache from reported settings."""
+        robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+        # conftest serves CAMERA_AUDIO_SETTINGS_RESPONSE (mute: True) for
+        # reported audioSettings
+        assert await robot.refresh_camera_audio_enabled() is False
+        assert robot.camera_audio_enabled is False
+
+        await robot._account.disconnect()
+
+    async def test_refresh_camera_audio_unmuted(
+        self,
+        mock_account: Account,
+    ) -> None:
+        """Test an unmuted reported-settings response enables the cache."""
+        robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+        client = robot.get_camera_client()
+
+        async def _settings(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            return {
+                "reportedSettings": [
+                    {
+                        "settingsType": "audioSettings",
+                        "data": {"audio_in": {"global": {"mute": False}}},
+                    }
+                ]
+            }
+
+        client._session = SimpleNamespace(get=_settings)  # type: ignore[assignment]
+        assert await robot.refresh_camera_audio_enabled() is True
+        assert robot.camera_audio_enabled is True
+
+        await robot._account.disconnect()
+
+    async def test_refresh_camera_audio_unknown_shape(
+        self,
+        mock_account: Account,
+    ) -> None:
+        """Test an unrecognized settings shape returns None and leaves cache."""
+        robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+        client = robot.get_camera_client()
+
+        async def _settings(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            return {"something": "else"}
+
+        client._session = SimpleNamespace(get=_settings)  # type: ignore[assignment]
+        assert await robot.refresh_camera_audio_enabled() is None
 
         await robot._account.disconnect()

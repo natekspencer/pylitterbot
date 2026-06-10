@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from base64 import b64decode, b64encode
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable
+from urllib.parse import quote
 
 from aiohttp import (
     ClientResponseError,
@@ -24,8 +24,10 @@ from aiohttp import (
     WSMsgType,
 )
 
-from .exceptions import CameraStreamException
-from .utils import to_timestamp, utcnow
+from .exceptions import CameraStreamException, InvalidCommandException
+from .session import DEFAULT_USER_AGENT
+from .transport import cancel_task
+from .utils import decode, encode, first_value, to_timestamp, utcnow
 
 if TYPE_CHECKING:
     from .session import Session
@@ -38,15 +40,60 @@ CAMERA_INVENTORY_API = "https://rrntg65uwf.execute-api.us-east-1.amazonaws.com"
 
 CAMERA_CANVAS_FRONT = "sensor_0_1080p"
 CAMERA_CANVAS_GLOBE = "sensor_1_720p"
-CAMERA_CANVAS_LABELS: dict[str, str] = {
-    CAMERA_CANVAS_FRONT: "Front Camera (1080p)",
-    CAMERA_CANVAS_GLOBE: "Globe Camera (720p)",
-}
 
 GENERATE_SESSION_PATH = "api/device-manager/client/generate-session"
 SIGNALING_PATH = "api/signaling"
+FALLBACK_STUN_URL = "stun:stun.l.google.com:19302"
 
 PING_INTERVAL = 5  # seconds -- ping frequently to prevent server idle timeout (~18s)
+MAX_PENDING_CANDIDATES = 50
+
+# session.request converts HTTP 500 responses into InvalidCommandException, so
+# graceful-fallback handling must catch it alongside other client errors.
+_API_ERRORS = (ClientResponseError, InvalidCommandException)
+
+_WS_HEADERS = {"User-Agent": DEFAULT_USER_AGENT}
+
+
+def _decode_sdp(raw_sdp: str) -> str:
+    """Return the SDP from a signaling payload that may be base64-encoded."""
+    try:
+        decoded = decode(raw_sdp)
+        if decoded.strip().startswith("v="):
+            return decoded
+    except (TypeError, ValueError):
+        _LOGGER.debug("Signaling: SDP not base64-encoded, using raw")
+    return raw_sdp
+
+
+def _parse_signaling_message(data: dict[str, Any]) -> tuple[str, Any] | None:
+    """Parse a signaling message into ``("answer", sdp)`` or ``("candidate", dict)``.
+
+    Returns ``None`` for messages that carry neither. Explicit JSON ``null``
+    values for ``sdpMid``/``sdpMLineIndex`` are normalized to their defaults
+    (``dict.get`` defaults do not apply to present-but-null keys).
+    """
+    msg_type = data.get("type", "")
+
+    if msg_type == "answer":
+        raw_sdp = data.get("payload") or data.get("sdp", "")
+        return ("answer", _decode_sdp(raw_sdp))
+
+    if msg_type == "candidate" or "candidate" in data:
+        if not (candidate := data.get("candidate", "")):
+            return None
+        sdp_mid = data.get("sdpMid")
+        sdp_mline_index = data.get("sdpMLineIndex")
+        return (
+            "candidate",
+            {
+                "candidate": candidate,
+                "sdpMid": "0" if sdp_mid is None else sdp_mid,
+                "sdpMLineIndex": 0 if sdp_mline_index is None else sdp_mline_index,
+            },
+        )
+
+    return None
 
 
 @dataclass
@@ -60,16 +107,16 @@ class CameraSession:
     turn_servers: list[dict[str, Any]] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
+    @property
+    def ws_url(self) -> str:
+        """Return the signaling websocket URL with the URL-encoded session token."""
+        return f"{self.signaling_url}?accessToken={quote(self.session_token, safe='')}"
+
     @classmethod
     def from_response(cls, data: dict[str, Any]) -> CameraSession:
         """Create a CameraSession from the generate-session API response."""
-        session_token = data.get("sessionToken", "")
-
         turn_creds = (
-            data.get("turnServer")
-            or data.get("turnCredentials")
-            or data.get("iceServers")
-            or []
+            first_value(data, ("turnServer", "turnCredentials", "iceServers")) or []
         )
         if isinstance(turn_creds, dict):
             turn_creds = [turn_creds]
@@ -81,7 +128,7 @@ class CameraSession:
 
         return cls(
             session_id=data.get("sessionId", ""),
-            session_token=session_token,
+            session_token=data.get("sessionToken", ""),
             session_expiration=to_timestamp(data.get("sessionExpiration")),
             signaling_url=signaling_url,
             turn_servers=turn_creds,
@@ -156,16 +203,46 @@ class CameraClient:
             headers["x-api-key"] = self._api_key
         return headers
 
+    async def _get(self, url: str, **kwargs: Any) -> Any | None:
+        """GET a camera endpoint, returning ``None`` on API failure."""
+        try:
+            return await self._session.get(
+                url, headers=self._settings_headers(), **kwargs
+            )
+        except _API_ERRORS as err:
+            _LOGGER.debug("Camera GET %s failed: %s", url, err)
+            return None
+
+    async def _patch(self, url: str, payload: dict[str, Any]) -> bool:
+        """PATCH a camera endpoint, returning ``False`` on API failure."""
+        try:
+            await self._session.patch(
+                url, json=payload, headers=self._settings_headers()
+            )
+        except _API_ERRORS as err:
+            _LOGGER.debug("Camera PATCH %s failed: %s", url, err)
+            return False
+        return True
+
     async def generate_session(self, *, auto_start: bool = True) -> CameraSession:
         """Create a camera streaming session.
 
         Returns TURN credentials and a signaling websocket URL.
+
+        Raises:
+            CameraStreamException: If the session could not be generated.
+
         """
         url = f"{WATFORD_API}/{GENERATE_SESSION_PATH}/{self._device_id}"
-        data = await self._session.get(
-            url,
-            params={"autoStart": "true" if auto_start else "false"},
-        )
+        try:
+            data = await self._session.get(
+                url,
+                params={"autoStart": "true" if auto_start else "false"},
+            )
+        except _API_ERRORS as err:
+            raise CameraStreamException(
+                f"Failed to generate camera session for {self._device_id}: {err}"
+            ) from err
         if not isinstance(data, dict):
             raise CameraStreamException(
                 "Failed to generate camera session: unexpected response"
@@ -175,14 +252,20 @@ class CameraClient:
     async def get_video_settings(
         self, settings_type: str = "videoSettings"
     ) -> dict[str, Any] | None:
-        """Fetch reported video settings for the camera."""
+        """Fetch reported video settings for the camera.
+
+        The endpoint wraps each settings document in a ``reportedSettings``
+        list; the inner ``data`` dict for the requested type is returned.
+        """
         url = f"{self._settings_base}/reported-settings/{settings_type}"
-        try:
-            data = await self._session.get(url, headers=self._settings_headers())
-        except ClientResponseError as err:
-            _LOGGER.debug("get_video_settings failed: %s", err)
+        data = await self._get(url)
+        if not isinstance(data, dict):
             return None
-        return data if isinstance(data, dict) else None
+        for item in data.get("reportedSettings", []):
+            if isinstance(item, dict) and item.get("settingsType") == settings_type:
+                inner = item.get("data")
+                return inner if isinstance(inner, dict) else None
+        return None
 
     async def set_camera_canvas(self, canvas: str) -> bool:
         """Set the live-view canvas (camera view selection).
@@ -196,14 +279,7 @@ class CameraClient:
             "streams": {"live-view": {"canvas": canvas}},
             "timestamp": utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z"),
         }
-        try:
-            await self._session.patch(
-                url, json=payload, headers=self._settings_headers()
-            )
-            return True
-        except ClientResponseError as err:
-            _LOGGER.debug("set_camera_canvas failed: %s", err)
-            return False
+        return await self._patch(url, payload)
 
     async def set_audio_enabled(self, enabled: bool) -> bool:
         """Enable or disable the camera microphone.
@@ -216,33 +292,15 @@ class CameraClient:
         payload = {
             "audio_in": {"global": {"mute": not enabled}},
         }
-        try:
-            await self._session.patch(
-                url, json=payload, headers=self._settings_headers()
-            )
-            return True
-        except ClientResponseError as err:
-            _LOGGER.debug("set_audio_enabled failed: %s", err)
-            return False
+        return await self._patch(url, payload)
 
     async def get_audio_settings(self) -> dict[str, Any] | None:
         """Fetch reported audio settings for the camera."""
-        url = f"{self._settings_base}/reported-settings/audioSettings"
-        try:
-            data = await self._session.get(url, headers=self._settings_headers())
-        except ClientResponseError as err:
-            _LOGGER.debug("get_audio_settings failed: %s", err)
-            return None
-        return data if isinstance(data, dict) else None
+        return await self.get_video_settings("audioSettings")
 
     async def get_camera_info(self) -> dict[str, Any] | None:
         """Fetch camera device information from the inventory API."""
-        url = self._inventory_base
-        try:
-            data = await self._session.get(url, headers=self._settings_headers())
-        except ClientResponseError as err:
-            _LOGGER.debug("get_camera_info failed: %s", err)
-            return None
+        data = await self._get(self._inventory_base)
         return data if isinstance(data, dict) else None
 
     async def get_videos(
@@ -255,22 +313,9 @@ class CameraClient:
             limit: Optional max number of results.
 
         """
-        parts = [f"{self._inventory_base}/videos"]
-        if date:
-            parts.append(f"/{date}")
-        url = "".join(parts)
-        params: dict[str, str] = {}
-        if limit is not None:
-            params["limit"] = str(limit)
-        try:
-            data = await self._session.get(
-                url,
-                headers=self._settings_headers(),
-                params=params or None,
-            )
-        except ClientResponseError as err:
-            _LOGGER.debug("get_videos failed: %s", err)
-            return []
+        url = f"{self._inventory_base}/videos" + (f"/{date}" if date else "")
+        params = {"limit": str(limit)} if limit is not None else None
+        data = await self._get(url, params=params)
         if not isinstance(data, list):
             return []
         clips = [
@@ -286,25 +331,40 @@ class CameraClient:
 
         """
         url = f"{self._inventory_base}/events"
-        params: dict[str, str] = {}
-        if limit is not None:
-            params["limit"] = str(limit)
-        try:
-            data = await self._session.get(
-                url,
-                headers=self._settings_headers(),
-                params=params or None,
-            )
-        except ClientResponseError as err:
-            _LOGGER.debug("get_events failed: %s", err)
-            return []
+        params = {"limit": str(limit)} if limit is not None else None
+        data = await self._get(url, params=params)
         if not isinstance(data, list):
             return []
         events = [item for item in data if isinstance(item, dict)]
         return events[:limit] if limit is not None else events
 
 
-class CameraSignalingRelay:
+class _SignalingMixin:
+    """Shared signaling-websocket plumbing for relay and stream classes."""
+
+    _ws: ClientWebSocketResponse | None
+
+    @property
+    def _finished(self) -> bool:
+        """Return `True` once the owner has been closed/stopped."""
+        raise NotImplementedError
+
+    async def _ping_loop(self) -> None:
+        """Send periodic pings to keep the signaling connection alive."""
+        try:
+            while not self._finished:
+                await asyncio.sleep(PING_INTERVAL)
+                if self._ws is None or self._ws.closed:
+                    break
+                await self._ws.ping()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            if not self._finished:
+                _LOGGER.debug("Signaling ping loop ended", exc_info=True)
+
+
+class CameraSignalingRelay(_SignalingMixin):
     """Signaling relay for browser-to-camera WebRTC.
 
     Unlike ``CameraStream`` (which creates its own RTCPeerConnection via
@@ -327,8 +387,13 @@ class CameraSignalingRelay:
         self._ping_task: asyncio.Task[None] | None = None
         self._receive_task: asyncio.Task[None] | None = None
         self._closed = False
+        self._started = False
         self._pending_candidates: list[dict[str, Any]] = []
         self._reconnect_task: asyncio.Task[None] | None = None
+
+    @property
+    def _finished(self) -> bool:
+        return self._closed
 
     @property
     def session(self) -> CameraSession | None:
@@ -351,6 +416,10 @@ class CameraSignalingRelay:
         Returns:
             The ``CameraSession`` with TURN credentials.
 
+        Raises:
+            CameraStreamException: If the relay is closed/started or the
+                camera session could not be generated.
+
         """
         if self._closed:
             raise CameraStreamException("Relay has been closed")
@@ -361,12 +430,12 @@ class CameraSignalingRelay:
 
         try:
             websession = self._client.websession
-            ws_url = f"{self._session.signaling_url}?accessToken={self._session.session_token}"
-            self._ws = await websession.ws_connect(ws_url)
+            self._ws = await websession.ws_connect(
+                self._session.ws_url, headers=_WS_HEADERS
+            )
 
-            encoded_sdp = b64encode(offer_sdp.encode()).decode()
             _LOGGER.debug("Signaling relay: sending offer (%d bytes)", len(offer_sdp))
-            await self._ws.send_json({"type": "offer", "sdp": encoded_sdp})
+            await self._ws.send_json({"type": "offer", "sdp": encode(offer_sdp)})
 
             if self._pending_candidates:
                 _LOGGER.debug(
@@ -381,6 +450,7 @@ class CameraSignalingRelay:
                 self._receive_loop(on_answer, on_candidate)
             )
             self._ping_task = asyncio.ensure_future(self._ping_loop())
+            self._started = True
         except Exception:
             if self._ws is not None and not self._ws.closed:
                 await self._ws.close()
@@ -420,9 +490,14 @@ class CameraSignalingRelay:
         _LOGGER.debug(
             "Signaling relay: WS closed -- buffering ICE candidate for reconnect"
         )
+        if len(self._pending_candidates) >= MAX_PENDING_CANDIDATES:
+            _LOGGER.warning("Signaling relay: candidate buffer full -- dropping oldest")
+            self._pending_candidates.pop(0)
         self._pending_candidates.append(msg)
+        # Only reconnect once start() has completed; before that, start()'s own
+        # flush delivers the buffer (a parallel socket here would race the offer).
         if (
-            self._session
+            self._started
             and not self._closed
             and (self._reconnect_task is None or self._reconnect_task.done())
         ):
@@ -432,15 +507,7 @@ class CameraSignalingRelay:
         """Cancel tasks and close the signaling WebSocket."""
         self._closed = True
 
-        for task in filter(
-            None, [self._ping_task, self._receive_task, self._reconnect_task]
-        ):
-            if not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+        await cancel_task(self._ping_task, self._receive_task, self._reconnect_task)
 
         if self._ws and not self._ws.closed:
             await self._ws.close()
@@ -456,49 +523,26 @@ class CameraSignalingRelay:
             async for msg in self._ws:  # type: ignore[union-attr]
                 if self._closed:
                     break
-                _LOGGER.debug("Signaling relay: received msg type=%s", msg.type)
-                if msg.type == WSMsgType.TEXT:
-                    data = msg.json()
-                    msg_type = data.get("type", "")
-                    _LOGGER.debug(
-                        "Signaling relay: message type=%s keys=%s",
-                        msg_type,
-                        list(data.keys()),
-                    )
-
-                    if msg_type == "answer":
-                        raw_sdp = data.get("payload") or data.get("sdp", "")
-                        try:
-                            decoded = b64decode(raw_sdp).decode()
-                            sdp = (
-                                decoded if decoded.strip().startswith("v=") else raw_sdp
-                            )
-                        except Exception:
-                            _LOGGER.debug(
-                                "Signaling relay: SDP not base64-encoded, using raw"
-                            )
-                            sdp = raw_sdp
-                        _LOGGER.debug(
-                            "Signaling relay: received answer (%d bytes)",
-                            len(sdp),
-                        )
-                        on_answer(sdp)
-
-                    elif msg_type == "candidate" or "candidate" in data:
-                        candidate_str = data.get("candidate", "")
-                        if candidate_str:
-                            _LOGGER.debug("Signaling relay: received ICE candidate")
-                            on_candidate(
-                                {
-                                    "candidate": candidate_str,
-                                    "sdpMid": data.get("sdpMid", "0"),
-                                    "sdpMLineIndex": data.get("sdpMLineIndex", 0),
-                                }
-                            )
-
-                elif msg.type in (WSMsgType.CLOSED, WSMsgType.ERROR):
+                if msg.type in (WSMsgType.CLOSED, WSMsgType.ERROR):
                     _LOGGER.debug("Signaling relay: WS closed/error type=%s", msg.type)
                     break
+                if msg.type != WSMsgType.TEXT:
+                    continue
+                # isolate per-message errors so one bad frame can't end signaling
+                try:
+                    data = msg.json()
+                    if not isinstance(data, dict):
+                        continue
+                    if (parsed := _parse_signaling_message(data)) is None:
+                        continue
+                    kind, payload = parsed
+                    _LOGGER.debug("Signaling relay: received %s", kind)
+                    if kind == "answer":
+                        on_answer(payload)
+                    else:
+                        on_candidate(payload)
+                except Exception:
+                    _LOGGER.exception("Signaling relay: error handling message")
             _LOGGER.debug("Signaling relay: receive loop ended")
         except asyncio.CancelledError:
             raise
@@ -524,11 +568,9 @@ class CameraSignalingRelay:
             )
             try:
                 websession = self._client.websession
-                ws_url = (
-                    f"{self._session.signaling_url}"
-                    f"?accessToken={self._session.session_token}"
+                ws = await websession.ws_connect(
+                    self._session.ws_url, headers=_WS_HEADERS
                 )
-                ws = await websession.ws_connect(ws_url)
                 pending, self._pending_candidates = self._pending_candidates, []
                 sent = 0
                 try:
@@ -546,24 +588,12 @@ class CameraSignalingRelay:
                     await ws.close()
             except Exception:
                 if not self._closed:
-                    _LOGGER.debug(
-                        "Signaling relay: late ICE candidate reconnect failed",
+                    _LOGGER.warning(
+                        "Signaling relay: failed to forward %d late ICE candidate(s)",
+                        len(self._pending_candidates),
                         exc_info=True,
                     )
                 break
-
-    async def _ping_loop(self) -> None:
-        """Send periodic pings to keep the signaling connection alive."""
-        try:
-            while not self._closed:
-                await asyncio.sleep(PING_INTERVAL)
-                if self._ws and not self._ws.closed:
-                    await self._ws.ping()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            if not self._closed:
-                _LOGGER.debug("Relay ping loop ended")
 
 
 try:
@@ -580,7 +610,7 @@ except ImportError:
     HAS_AIORTC = False
 
 
-class CameraStream:
+class CameraStream(_SignalingMixin):
     """WebRTC live stream for an LR5 Pro camera.
 
     Requires the ``aiortc`` package.  Install with::
@@ -627,6 +657,10 @@ class CameraStream:
         self._connected = asyncio.Event()
         self._stopped = False
 
+    @property
+    def _finished(self) -> bool:
+        return self._stopped
+
     def on_video_frame(self, callback: Callable) -> None:
         """Register a callback for incoming video frames."""
         self._video_callback = callback
@@ -640,7 +674,13 @@ class CameraStream:
         self._state_callback = callback
 
     async def start(self) -> None:
-        """Start the WebRTC streaming session."""
+        """Start the WebRTC streaming session.
+
+        Raises:
+            CameraStreamException: If the stream is stopped/started or the
+                camera session could not be generated.
+
+        """
         if self._stopped:
             raise CameraStreamException("Stream has been stopped")
         if self._pc is not None:
@@ -681,22 +721,18 @@ class CameraStream:
 
         try:
             websession = self._client.websession
-            ws_url = (
-                f"{self._session.signaling_url}"
-                f"?accessToken={self._session.session_token}"
+            self._ws = await websession.ws_connect(
+                self._session.ws_url, headers=_WS_HEADERS
             )
-            self._ws = await websession.ws_connect(ws_url)
 
             # localDescription.sdp includes gathered ICE candidates; offer.sdp has none
             offer = await self._pc.createOffer()
             await self._pc.setLocalDescription(offer)
 
-            local_sdp = self._pc.localDescription.sdp
-            encoded_sdp = b64encode(local_sdp.encode()).decode()
             await self._ws.send_json(
                 {
                     "type": "offer",
-                    "sdp": encoded_sdp,
+                    "sdp": encode(self._pc.localDescription.sdp),
                 }
             )
         except Exception:
@@ -715,30 +751,8 @@ class CameraStream:
         """Stop the WebRTC streaming session and clean up resources."""
         self._stopped = True
 
-        for task in self._media_tasks:
-            if not task.done():
-                task.cancel()
-        for task in self._media_tasks:
-            if not task.done():
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+        await cancel_task(*self._media_tasks, self._ping_task, self._receive_task)
         self._media_tasks.clear()
-
-        if self._ping_task and not self._ping_task.done():
-            self._ping_task.cancel()
-            try:
-                await self._ping_task
-            except asyncio.CancelledError:
-                pass
-
-        if self._receive_task and not self._receive_task.done():
-            self._receive_task.cancel()
-            try:
-                await self._receive_task
-            except asyncio.CancelledError:
-                pass
 
         if self._ws and not self._ws.closed:
             await self._ws.close()
@@ -775,12 +789,15 @@ class CameraStream:
     def _build_ice_servers(
         turn_creds: list[dict[str, Any]],
     ) -> list[RTCIceServer]:
-        """Convert TURN credentials to RTCIceServer objects."""
-        servers: list[RTCIceServer] = [
-            RTCIceServer(urls="stun:stun.l.google.com:19302"),
-        ]
+        """Convert TURN credentials to RTCIceServer objects.
+
+        Prefers the vendor-provided STUN server from the session response;
+        falls back to a public STUN server only if none is provided.
+        """
+        servers: list[RTCIceServer] = []
+        has_stun = False
         for cred in turn_creds:
-            urls = cred.get("turnUrl") or cred.get("urls") or cred.get("uris") or []
+            urls = first_value(cred, ("turnUrl", "urls", "uris")) or []
             if isinstance(urls, str):
                 urls = [urls]
             if urls:
@@ -788,7 +805,9 @@ class CameraStream:
                     RTCIceServer(
                         urls=urls,
                         username=cred.get("username", ""),
-                        credential=cred.get("password") or cred.get("credential", ""),
+                        credential=first_value(
+                            cred, ("password", "credential"), default=""
+                        ),
                     )
                 )
             stun_url = cred.get("stunUrl")
@@ -797,6 +816,9 @@ class CameraStream:
                 for s in servers
             ):
                 servers.append(RTCIceServer(urls=stun_url))
+                has_stun = True
+        if not has_stun:
+            servers.append(RTCIceServer(urls=FALLBACK_STUN_URL))
         return servers
 
     async def _consume_track(self, track: Any, callback: Callable) -> None:
@@ -818,10 +840,18 @@ class CameraStream:
             async for msg in self._ws:  # type: ignore[union-attr]
                 if self._stopped:
                     break
-                if msg.type == WSMsgType.TEXT:
-                    await self._handle_signaling_message(msg.json())
-                elif msg.type in (WSMsgType.CLOSED, WSMsgType.ERROR):
+                if msg.type in (WSMsgType.CLOSED, WSMsgType.ERROR):
                     break
+                if msg.type != WSMsgType.TEXT:
+                    continue
+                # isolate per-message errors so one bad frame can't end signaling
+                try:
+                    data = msg.json()
+                    if isinstance(data, dict):
+                        await self._handle_signaling_message(data)
+                except Exception:
+                    if not self._stopped:
+                        _LOGGER.exception("Error handling signaling message")
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -830,48 +860,23 @@ class CameraStream:
 
     async def _handle_signaling_message(self, data: dict[str, Any]) -> None:
         """Handle an incoming signaling message (answer or ICE candidate)."""
-        msg_type = data.get("type", "")
+        if (parsed := _parse_signaling_message(data)) is None:
+            return
+        kind, payload = parsed
 
-        if msg_type == "answer":
-            raw_sdp = data.get("payload") or data.get("sdp", "")
-            try:
-                decoded = b64decode(raw_sdp).decode()
-                sdp = decoded if decoded.strip().startswith("v=") else raw_sdp
-            except Exception:
-                _LOGGER.debug("CameraStream: SDP not base64-encoded, using raw")
-                sdp = raw_sdp
-
-            answer = RTCSessionDescription(sdp=sdp, type="answer")
+        if kind == "answer":
+            answer = RTCSessionDescription(sdp=payload, type="answer")
             await self._pc.setRemoteDescription(answer)  # type: ignore[union-attr]
             _LOGGER.debug("Set remote description (answer)")
+            return
 
-        elif msg_type == "candidate" or "candidate" in data:
-            candidate_str = data.get("candidate", "")
-            if not candidate_str:
-                return
-            sdp_mid = data.get("sdpMid", "0")
-            sdp_mline_index = data.get("sdpMLineIndex", 0)
-
-            try:
-                candidate = candidate_from_sdp(candidate_str)
-                candidate.sdpMid = sdp_mid
-                candidate.sdpMLineIndex = sdp_mline_index
-            except Exception:
-                _LOGGER.warning("Failed to parse ICE candidate: %s", candidate_str[:80])
-                return
-
-            await self._pc.addIceCandidate(candidate)  # type: ignore[union-attr]
-            _LOGGER.debug("Added ICE candidate: %s", candidate_str[:60])
-
-    async def _ping_loop(self) -> None:
-        """Send periodic pings to keep the signaling connection alive."""
+        candidate_str = payload["candidate"]
         try:
-            while not self._stopped:
-                await asyncio.sleep(PING_INTERVAL)
-                if self._ws and not self._ws.closed:
-                    await self._ws.ping()
-        except asyncio.CancelledError:
-            raise
+            candidate = candidate_from_sdp(candidate_str)
+            candidate.sdpMid = payload["sdpMid"]
+            candidate.sdpMLineIndex = payload["sdpMLineIndex"]
+            await self._pc.addIceCandidate(candidate)  # type: ignore[union-attr]
         except Exception:
-            if not self._stopped:
-                _LOGGER.debug("Ping loop ended")
+            _LOGGER.warning("Failed to add ICE candidate: %s", candidate_str[:80])
+            return
+        _LOGGER.debug("Added ICE candidate: %s", candidate_str[:60])
