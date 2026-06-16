@@ -16,6 +16,7 @@ from ..camera import (
     CameraClient,
     CameraStream,
 )
+from ..const import API_V2_ENDPOINT_KEY
 from ..enums import (
     BrightnessLevel,
     GlobeMotorFaultStatus,
@@ -34,7 +35,6 @@ from ..sleep_schedule import SleepSchedule
 from ..transport import PollingTransport
 from ..utils import calculate_litter_level, decode, to_enum, to_timestamp, urljoin
 from .litterrobot import LitterRobot
-from .litterrobot3 import DEFAULT_ENDPOINT_KEY
 
 if TYPE_CHECKING:
     from ..account import Account
@@ -1085,7 +1085,7 @@ class LitterRobot5(LitterRobot):
             self._camera_client = CameraClient(
                 session=self._account.session,
                 device_id=cam["deviceId"],
-                api_key=decode(DEFAULT_ENDPOINT_KEY),
+                api_key=decode(API_V2_ENDPOINT_KEY),
             )
         return self._camera_client
 
