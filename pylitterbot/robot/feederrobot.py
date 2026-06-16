@@ -38,6 +38,13 @@ COMMAND_ENDPOINT = (
 COMMAND_ENDPOINT_KEY = decode(
     "dzJ0UEZiamxQMTNHVW1iOGRNalVMNUIyWXlQVkQzcEo3RXk2Zno4dg=="
 )
+# Same API-Gateway stage as COMMAND_ENDPOINT; feeding-schedule CRUD is REST (not GraphQL).
+SCHEDULE_ENDPOINT = (
+    "https://42nk7qrhdg.execute-api.us-east-1.amazonaws.com/prod/feeder/schedule"
+)
+
+# Sentinel value the API uses for a meal that is not skipped.
+NO_SKIP = "0000-01-01T00:00:00.000"
 
 FOOD_LEVEL_MAP = {9: 100, 8: 70, 7: 60, 6: 50, 5: 40, 4: 30, 3: 20, 2: 10, 1: 5, 0: 0}
 MEAL_INSERT_SIZE_CUPS_MAP = {0: 1 / 4, 1: 1 / 8}
@@ -202,6 +209,20 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
         """Return the updated at string."""
         return str(self._data["state"].get("updated_at"))
 
+    @property
+    def active_schedule(self) -> dict[str, Any] | None:
+        """Return a copy of the active feeding schedule, if any.
+
+        Shape: ``{"id", "name", "created_at", "meals": [...]}`` where each meal
+        is ``{"id", "scheduleId", "mealNumber", "name", "hour", "minute", "days",
+        "portions", "paused", "skip"}``. The result is a deep copy; mutating it
+        does not change the robot's state -- use :meth:`set_schedule` to persist
+        edits.
+        """
+        return deepcopy(
+            cast(dict[str, Any] | None, self._data["state"].get("active_schedule"))
+        )
+
     def get_food_dispensed_since(self, start: datetime) -> float:
         """Return the amount of food (in cups) since the given datetime."""
         feedings: list[dict] = list(self._data.get("feeding_meal") or [])
@@ -235,7 +256,7 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
 
             # Skip meals with a skip date that is today or in the future
             skip = meal.get("skip")
-            if skip and skip != "0000-01-01T00:00:00.000":
+            if skip and skip != NO_SKIP:
                 skip_dt = datetime.fromisoformat(skip)
                 if skip_dt.tzinfo is None:
                     skip_dt = skip_dt.replace(tzinfo=tz)
@@ -398,6 +419,116 @@ class FeederRobot(Robot):  # pylint: disable=abstract-method
             data["state"]["info"]["panelLockout"] = value
             self._update_data(data)
         return self.panel_lock_enabled == value
+
+    def _active_meals(self) -> list[dict[str, Any]]:
+        """Return the active schedule's meals (already a copy), or raise."""
+        schedule = self.active_schedule
+        if not schedule or not schedule.get("meals"):
+            raise InvalidCommandException(
+                "Feeder-Robot has no active feeding schedule to update."
+            )
+        return cast(list[dict[str, Any]], schedule["meals"])
+
+    @staticmethod
+    def _find_meal(meals: list[dict[str, Any]], meal_number: int) -> dict[str, Any]:
+        """Return the meal with the given ``mealNumber``, or raise."""
+        meal = next((m for m in meals if m.get("mealNumber") == meal_number), None)
+        if meal is None:
+            raise InvalidCommandException(
+                f"No meal with mealNumber {meal_number} in the active schedule."
+            )
+        return meal
+
+    def _next_occurrence(self, meal: dict[str, Any]) -> datetime | None:
+        """Return the next datetime this meal would dispense (ignores skip/paused)."""
+        tz = ZoneInfo(self.timezone)
+        now = datetime.now(tz)
+        meal_time = time(meal["hour"], meal["minute"])
+        best: datetime | None = None
+        for day in meal["days"]:
+            days_ahead = (WEEKDAY_MAP[day] - now.weekday() + 7) % 7
+            if days_ahead == 0 and meal_time <= now.time():
+                days_ahead = 7
+            occurrence = datetime.combine(
+                now.date() + timedelta(days=days_ahead), meal_time
+            ).replace(tzinfo=tz)
+            if best is None or occurrence < best:
+                best = occurrence
+        return best
+
+    async def set_schedule(self, meals: list[dict[str, Any]]) -> bool:
+        """Replace the meals in the active feeding schedule and activate it.
+
+        Each meal dict has the shape returned by :attr:`active_schedule` ->
+        ``meals`` (``mealNumber``, ``hour``, ``minute``, ``days``, ``portions``,
+        ``paused``, ``skip``, ...). Use this for adding/removing/editing meals;
+        :meth:`skip_meal` and :meth:`pause_meal` are convenience wrappers.
+        """
+        schedule = self.active_schedule
+        if not schedule:
+            raise InvalidCommandException(
+                "Feeder-Robot has no active feeding schedule to update."
+            )
+        payload = {
+            "id": schedule.get("id"),
+            "name": schedule.get("name"),
+            "serial": self.serial,
+            "createdAt": schedule.get("created_at"),
+            "meals": meals,
+        }
+        await self._post(
+            SCHEDULE_ENDPOINT,
+            json={"schedule": payload, "setActive": True},
+            headers={"x-api-key": COMMAND_ENDPOINT_KEY},
+        )
+        data = deepcopy(self._data)
+        data["state"]["active_schedule"] = {**schedule, "meals": deepcopy(meals)}
+        data["state"]["updated_at"] = utcnow().isoformat()
+        self._update_data(data)
+        active = self.active_schedule
+        return active is not None and active.get("meals") == meals
+
+    async def skip_meal(self, meal_number: int, skip: bool = True) -> bool:
+        """Skip (or un-skip) the next occurrence of the meal with ``meal_number``.
+
+        Skipping sets the meal's ``skip`` to the date of its next scheduled
+        occurrence at midnight (e.g. ``2026-02-19T00:00:00.000``, matching the
+        app); passing ``skip=False`` clears it.
+        """
+        meals = self._active_meals()
+        meal = self._find_meal(meals, meal_number)
+        if skip:
+            occurrence = self._next_occurrence(meal)
+            meal["skip"] = (
+                occurrence.strftime("%Y-%m-%dT00:00:00.000") if occurrence else NO_SKIP
+            )
+        else:
+            meal["skip"] = NO_SKIP
+        return await self.set_schedule(meals)
+
+    async def pause_meal(self, meal_number: int, paused: bool = True) -> bool:
+        """Pause (or resume) the meal with ``meal_number`` indefinitely."""
+        meals = self._active_meals()
+        self._find_meal(meals, meal_number)["paused"] = paused
+        return await self.set_schedule(meals)
+
+    async def clear_schedule(self) -> bool:
+        """Clear the active feeding schedule (removes all meals)."""
+        await self._post(
+            f"{SCHEDULE_ENDPOINT}/clear",
+            json={"serial": self.serial},
+            headers={"x-api-key": COMMAND_ENDPOINT_KEY},
+        )
+        data = deepcopy(self._data)
+        if data["state"].get("active_schedule"):
+            data["state"]["active_schedule"] = {
+                **data["state"]["active_schedule"],
+                "meals": [],
+            }
+        data["state"]["updated_at"] = utcnow().isoformat()
+        self._update_data(data)
+        active = self.active_schedule
+        return active is None or active.get("meals") == []
 
     @staticmethod
     def parse_websocket_message(data: dict) -> dict | None:
