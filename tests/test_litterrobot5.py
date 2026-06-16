@@ -14,7 +14,11 @@ from yarl import URL
 
 from pylitterbot import Account
 from pylitterbot.enums import GlobeMotorFaultStatus, LitterBoxStatus
-from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
+from pylitterbot.exceptions import (
+    CameraNotAvailableException,
+    InvalidCommandException,
+    LitterRobotException,
+)
 from pylitterbot.robot.litterrobot5 import (
     LITTER_LEVEL_EMPTY,
     LR5_ENDPOINT,
@@ -1009,14 +1013,23 @@ async def test_litter_robot_5_set_camera_audio(
     mock_aioresponse: aioresponses,
     mock_account: Account,
 ) -> None:
-    """Tests toggling camera audio."""
-    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    """Tests toggling camera audio via camera API."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
 
-    mock_aioresponse.patch(LR5_GET_URL, payload={})
     assert await robot.set_camera_audio(True)
-
-    mock_aioresponse.patch(LR5_GET_URL, payload={})
     assert await robot.set_camera_audio(False)
+    assert not robot.camera_audio_enabled
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_set_camera_audio_no_camera(
+    mock_account: Account,
+) -> None:
+    """Tests that set_camera_audio raises for robots without a camera."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    with pytest.raises(CameraNotAvailableException):
+        await robot.set_camera_audio(True)
 
     await robot._account.disconnect()
 

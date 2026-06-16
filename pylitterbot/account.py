@@ -15,12 +15,13 @@ from aiohttp import (
 )
 from botocore.exceptions import ClientError
 
+from .const import API_V2_ENDPOINT, API_V2_ENDPOINT_KEY
 from .event import EVENT_UPDATE
 from .exceptions import LitterRobotException, LitterRobotLoginException
 from .pet import Pet
 from .robot import Robot
 from .robot.feederrobot import FeederRobot
-from .robot.litterrobot3 import DEFAULT_ENDPOINT, DEFAULT_ENDPOINT_KEY, LitterRobot3
+from .robot.litterrobot3 import LitterRobot3
 from .robot.litterrobot4 import LitterRobot4
 from .robot.litterrobot5 import LitterRobot5
 from .session import LitterRobotSession
@@ -49,8 +50,8 @@ class Account:
     ) -> None:
         """Initialize the account data."""
         self._session = LitterRobotSession(token=token, websession=websession)
-        self._session._custom_args[DEFAULT_ENDPOINT] = {
-            "headers": {"x-api-key": decode(DEFAULT_ENDPOINT_KEY)}
+        self._session._custom_args[API_V2_ENDPOINT] = {
+            "headers": {"x-api-key": decode(API_V2_ENDPOINT_KEY)}
         }
         self._user_id = self._session.get_user_id() if token else None
         self._user: dict = {}
@@ -174,7 +175,7 @@ class Account:
         """Refresh the logged in user's info."""
         data = cast(
             dict,
-            await self.session.get(urljoin(DEFAULT_ENDPOINT, f"users/{self.user_id}")),
+            await self.session.get(urljoin(API_V2_ENDPOINT, f"users/{self.user_id}")),
         )
         self._user.update(data.get("user", {}))
 

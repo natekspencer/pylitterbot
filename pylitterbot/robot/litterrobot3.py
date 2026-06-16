@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 import aiohttp
 
 from ..activity import Activity, Insight
+from ..const import API_V2_ENDPOINT
 from ..enums import LitterBoxCommand, LitterBoxStatus
 from ..exceptions import InvalidCommandException
 from ..sleep_schedule import SleepSchedule
@@ -27,8 +28,7 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_ENDPOINT = "https://v2.api.whisker.iothings.site"
-DEFAULT_ENDPOINT_KEY = "cDduZE1vajYxbnBSWlA1Q1Z6OXY0VWowYkc3Njl4eTY3NThRUkJQYg=="
+DEFAULT_ENDPOINT = API_V2_ENDPOINT
 WEBSOCKET_ENDPOINT = "https://8s1fz54a82.execute-api.us-east-1.amazonaws.com/prod"
 
 SLEEP_MODE_ACTIVE = "sleepModeActive"

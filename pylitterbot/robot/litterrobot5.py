@@ -11,6 +11,13 @@ from typing import TYPE_CHECKING, Any, cast
 from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponseError
 
 from ..activity import Activity, Insight
+from ..camera import (
+    CAMERA_CANVAS_FRONT,
+    CAMERA_CANVAS_GLOBE,
+    CameraClient,
+    CameraStream,
+)
+from ..const import API_V2_ENDPOINT_KEY
 from ..enums import (
     BrightnessLevel,
     GlobeMotorFaultStatus,
@@ -20,10 +27,14 @@ from ..enums import (
     LitterRobot5Command,
     NightLightMode,
 )
-from ..exceptions import InvalidCommandException, LitterRobotException
+from ..exceptions import (
+    CameraNotAvailableException,
+    InvalidCommandException,
+    LitterRobotException,
+)
 from ..sleep_schedule import SleepSchedule
 from ..transport import PollingTransport
-from ..utils import calculate_litter_level, to_enum, to_timestamp, urljoin
+from ..utils import calculate_litter_level, decode, to_enum, to_timestamp, urljoin
 from .litterrobot import LitterRobot
 
 if sys.version_info >= (3, 13):
@@ -33,6 +44,7 @@ else:
 
 if TYPE_CHECKING:
     from ..account import Account
+    from ..camera import CameraSession, VideoClip
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -135,6 +147,8 @@ class LitterRobot5(LitterRobot):
         """Initialize a Litter-Robot 5."""
         super().__init__(data, account)
         self._path = LR5_ENDPOINT
+        self._camera_audio_enabled: bool | None = None
+        self._camera_client: CameraClient | None = None
 
     @property
     def is_pro(self) -> bool:
@@ -493,7 +507,16 @@ class LitterRobot5(LitterRobot):
 
     @property
     def camera_audio_enabled(self) -> bool:
-        """Return `True` if camera audio is enabled (Pro only)."""
+        """Return `True` if camera audio is enabled (Pro only).
+
+        Uses locally cached state from ``set_camera_audio`` when available,
+        since the robot API's ``soundSettings.cameraAudioEnabled`` field does
+        not reflect changes made via the camera settings API.  Call
+        ``refresh_camera_audio_enabled`` to reconcile the cache with the
+        camera's reported settings (e.g. after changes in the Whisker app).
+        """
+        if self._camera_audio_enabled is not None:
+            return self._camera_audio_enabled
         return self._sound_settings.get("cameraAudioEnabled") is True
 
     @property
@@ -840,11 +863,44 @@ class LitterRobot5(LitterRobot):
         )
 
     async def set_camera_audio(self, value: bool) -> bool:
-        """Enable or disable camera audio (Pro only)."""
-        return await self._dispatch_command(
-            LitterRobot5Command.SOUND_SETTINGS,
-            value={"cameraAudioEnabled": value},
-        )
+        """Enable or disable camera audio (Pro only).
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        client = self.get_camera_client()
+        if await client.set_audio_enabled(value):
+            self._camera_audio_enabled = value
+            return True
+        return False
+
+    async def refresh_camera_audio_enabled(self) -> bool | None:
+        """Fetch the camera microphone state from the camera settings API.
+
+        Reconciles the locally cached value used by ``camera_audio_enabled``
+        with the camera's reported settings, so changes made outside this
+        client (e.g. in the Whisker app) are picked up.
+
+        Returns:
+            The current state, or ``None`` if it could not be determined.
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        client = self.get_camera_client()
+        if (settings := await client.get_audio_settings()) is None:
+            return None
+        mute = None
+        if isinstance(audio_in := settings.get("audio_in"), dict) and isinstance(
+            audio_global := audio_in.get("global"), dict
+        ):
+            mute = audio_global.get("mute")
+        if not isinstance(mute, bool):
+            return None
+        self._camera_audio_enabled = not mute
+        return self._camera_audio_enabled
 
     async def set_wait_time(self, wait_time: int) -> bool:
         """Set the wait time on the Litter-Robot."""
@@ -1016,6 +1072,100 @@ class LitterRobot5(LitterRobot):
         ) as ex:
             _LOGGER.error("Reassign pet visit failed: %s", ex)
             return None
+
+    @property
+    def has_camera(self) -> bool:
+        """Return `True` if this robot has camera metadata (Pro model)."""
+        cam = self.camera_metadata
+        return isinstance(cam, dict) and bool(cam.get("deviceId"))
+
+    def get_camera_client(self) -> CameraClient:
+        """Return a ``CameraClient`` for this robot's camera.
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        cam = self.camera_metadata
+        if not cam or not cam.get("deviceId"):
+            raise CameraNotAvailableException(
+                f"Robot {self.serial} does not have a camera"
+            )
+
+        if self._camera_client is None:
+            self._camera_client = CameraClient(
+                session=self._account.session,
+                device_id=cam["deviceId"],
+                api_key=decode(API_V2_ENDPOINT_KEY),
+            )
+        return self._camera_client
+
+    async def get_camera_session(self) -> CameraSession:
+        """Generate a camera streaming session.
+
+        Returns:
+            A ``CameraSession`` with TURN credentials and signaling URL.
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        client = self.get_camera_client()
+        return await client.generate_session()
+
+    async def get_camera_videos(
+        self, *, date: str | None = None, limit: int | None = None
+    ) -> list[VideoClip]:
+        """Fetch recorded camera video clips.
+
+        Args:
+            date: Optional date (YYYY-MM-DD) filter.
+            limit: Optional max results.
+
+        """
+        client = self.get_camera_client()
+        return await client.get_videos(date=date, limit=limit)
+
+    async def get_camera_video_settings(self) -> dict[str, Any] | None:
+        """Fetch the camera's reported video settings."""
+        client = self.get_camera_client()
+        return await client.get_video_settings()
+
+    async def set_camera_view(self, view: str) -> bool:
+        """Switch the camera live-view canvas.
+
+        Args:
+            view: ``"front"`` or ``"globe"``.
+
+        Raises:
+            InvalidCommandException: If the view is not recognized.
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        view_map = {
+            "front": CAMERA_CANVAS_FRONT,
+            "globe": CAMERA_CANVAS_GLOBE,
+        }
+        canvas = view_map.get(view.lower())
+        if canvas is None:
+            raise InvalidCommandException(
+                f"Invalid camera view {view!r}. Must be 'front' or 'globe'."
+            )
+        client = self.get_camera_client()
+        return await client.set_camera_canvas(canvas)
+
+    def create_camera_stream(self) -> CameraStream:
+        """Create a ``CameraStream`` for live WebRTC streaming.
+
+        Requires the ``aiortc`` optional dependency.
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+            ImportError: If ``aiortc`` is not installed.
+
+        """
+        client = self.get_camera_client()
+        return CameraStream(client)
 
     @classmethod
     async def fetch_for_account(cls, account: Account) -> list[dict[str, object]]:
