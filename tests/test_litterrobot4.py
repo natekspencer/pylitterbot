@@ -344,6 +344,46 @@ async def test_litter_robot_4(
     await robot._account.disconnect()
 
 
+async def test_litter_robot_4_websocket_subscription_payload() -> None:
+    """LR4 WebSocket data frames use litterRobot4StateSubscriptionByUser."""
+    states = [{**LITTER_ROBOT_4_DATA, "DFILevelPercent": 50}]
+    message = {
+        "type": "data",
+        "payload": {
+            "data": {"litterRobot4StateSubscriptionByUser": {"robots": states}}
+        },
+    }
+    assert LitterRobot4.parse_websocket_message(message) == states
+    assert LitterRobot4._WS_PROTOCOL.is_shared
+
+
+async def test_litter_robot_4_shared_subscription_dispatch(
+    mock_account: Account,
+) -> None:
+    """A ByUser array payload updates each LR4 listener with its own entry."""
+    data_a = {**LITTER_ROBOT_4_DATA, "unitId": "LR4ID-A"}
+    data_b = {**LITTER_ROBOT_4_DATA, "unitId": "LR4ID-B"}
+    robot_a = LitterRobot4(data=data_a, account=mock_account)
+    robot_b = LitterRobot4(data=data_b, account=mock_account)
+    message = {
+        "type": "data",
+        "payload": {
+            "data": {
+                "litterRobot4StateSubscriptionByUser": {
+                    "robots": [
+                        {**data_a, "DFILevelPercent": 42},
+                        {**data_b, "DFILevelPercent": 99},
+                    ]
+                }
+            }
+        },
+    }
+    robot_a._ws_message_handler(message)
+    robot_b._ws_message_handler(message)
+    assert robot_a.waste_drawer_level == 42
+    assert robot_b.waste_drawer_level == 99
+
+
 async def test_litter_robot_4_sleep_time(
     freezer: FrozenDateTimeFactory, mock_account: Account
 ) -> None:
