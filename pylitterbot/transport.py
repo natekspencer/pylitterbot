@@ -85,6 +85,7 @@ class WebSocketMonitor(Transport):
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
         self._ws: ClientWebSocketResponse | None = None
+        self._shared_subscriber: Robot | None = None
 
         self._lock = asyncio.Lock()
 
@@ -121,7 +122,13 @@ class WebSocketMonitor(Transport):
                 and (not self._protocol.is_shared or not self._listeners)
             ):
                 try:
-                    await self._protocol.unsubscribe_factory(robot, self._ws)
+                    unsubscribe_robot = (
+                        self._shared_subscriber if self._protocol.is_shared else robot
+                    )
+                    if unsubscribe_robot is not None:
+                        await self._protocol.unsubscribe_factory(
+                            unsubscribe_robot, self._ws
+                        )
                 except Exception:
                     _LOGGER.debug(
                         "Error sending unsubscribe for %r", robot, exc_info=True
@@ -188,8 +195,8 @@ class WebSocketMonitor(Transport):
 
                 if self._protocol.subscribe_factory:
                     if self._protocol.is_shared:
-                        first_robot = next(iter(self._listeners.values()))
-                        await self._protocol.subscribe_factory(first_robot, ws)
+                        self._shared_subscriber = robot
+                        await self._protocol.subscribe_factory(robot, ws)
                     else:
                         for robot in list(self._listeners.values()):
                             await self._protocol.subscribe_factory(robot, ws)
@@ -212,6 +219,7 @@ class WebSocketMonitor(Transport):
                         break
             finally:
                 self._ws = None
+                self._shared_subscriber = None
 
 
 class PollingTransport(Transport):
