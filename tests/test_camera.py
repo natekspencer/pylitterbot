@@ -40,8 +40,6 @@ from .common import (
     LITTER_ROBOT_5_PRO_DATA,
 )
 
-pytestmark = pytest.mark.asyncio
-
 
 class TestCameraSession:
     """Tests for CameraSession dataclass."""

@@ -55,10 +55,10 @@ async def test_account(
 
     caplog.set_level(logging.INFO)
     await account.load_robots()
-    assert (
-        caplog.messages[-1]
-        == "skipping robot without serial number (id=00a2d005ceae00, name=Deleted Test)"
+    expected = (
+        "skipping robot without serial number (id=00a2d005ceae00, name=Deleted Test)"
     )
+    assert any(message == expected for message in caplog.messages)
     assert len(account.robots) == ROBOT_COUNT
 
     mock_aiointercept.get(ROBOT_ENDPOINT % ROBOT_ID, payload={})

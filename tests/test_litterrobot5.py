@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from aiohttp import ClientConnectionError
-from aiointercept import aiointercept
+from aiointercept import CallbackResult, aiointercept
 from freezegun.api import FrozenDateTimeFactory
 from yarl import URL
 
@@ -476,9 +476,17 @@ async def test_litter_robot_5_dispatch_command_failure(
     """Tests that dispatch_command handles errors gracefully."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
 
-    mock_aiointercept.patch(LR5_GET_URL, exception=True)
-    with pytest.raises(ClientConnectionError):
-        assert not await robot._dispatch_command("testCommand")
+    def _raise_invalid_command(url: URL, **kwargs: Any) -> CallbackResult:
+        return CallbackResult(
+            status=500,
+            payload={
+                "type": "InvalidCommandException",
+                "developerMessage": "Test error",
+            },
+        )
+
+    mock_aiointercept.patch(LR5_GET_URL, payload=None, callback=_raise_invalid_command)
+    assert not await robot._dispatch_command("testCommand")
 
     await robot._account.disconnect()
 
