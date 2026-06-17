@@ -20,7 +20,7 @@ async def resolve_robot(identifier: str) -> Robot:
         name = robot.name or ""
         if name.casefold() == normalized or str(robot.id) == identifier:
             return robot
-    available = ", ".join(r.name for r in account.robots)
+    available = ", ".join((r.name or str(r.id)) for r in account.robots)
     raise ValueError(f"No robot found matching '{identifier}'. Available: {available}")
 
 
