@@ -10,7 +10,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from aioresponses import CallbackResult, aioresponses
+from aiointercept import CallbackResult, aiointercept
 from freezegun.api import FrozenDateTimeFactory
 from yarl import URL
 
@@ -145,7 +145,7 @@ async def test_litter_robot_3_with_unknown_status(mock_account: Account) -> None
 
 
 async def test_litter_robot_3_with_drawer_full_status(
-    mock_aioresponse: aioresponses,
+    mock_aiointercept: aiointercept,
 ) -> None:
     """Tests that a robot with a `unitStatus` of DF1/DF2 calls the activity endpoint."""
     url = ROBOT_ENDPOINT % ROBOT_FULL_ID
@@ -159,7 +159,7 @@ async def test_litter_robot_3_with_drawer_full_status(
     assert robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
 
     robot_status = LitterBoxStatus.DRAWER_FULL_2
-    mock_aioresponse.get(url, payload={**ROBOT_DATA, UNIT_STATUS: robot_status.value})
+    mock_aiointercept.get(url, payload={**ROBOT_DATA, UNIT_STATUS: robot_status.value})
     assert robot_status.minimum_cycles_left == 1
     await robot.refresh()
     assert robot.status == robot_status
@@ -167,7 +167,7 @@ async def test_litter_robot_3_with_drawer_full_status(
     assert robot.cycle_capacity == robot.cycle_count + robot_status.minimum_cycles_left
 
     robot_status = LitterBoxStatus.DRAWER_FULL
-    mock_aioresponse.get(url, payload={**ROBOT_DATA, UNIT_STATUS: robot_status.value})
+    mock_aiointercept.get(url, payload={**ROBOT_DATA, UNIT_STATUS: robot_status.value})
     assert robot_status.minimum_cycles_left == 0
     await robot.refresh()
     assert robot.status == robot_status
@@ -200,7 +200,7 @@ async def test_litter_robot_3_deleted(mock_account: Account) -> None:
     ],
 )
 async def test_dispatch_commands(
-    mock_aioresponse: aioresponses,
+    mock_aiointercept: aiointercept,
     method_call: Callable,
     dispatch_command: str,
     args: Any,
@@ -208,18 +208,18 @@ async def test_dispatch_commands(
     """Tests that the dispatch commands are sent as expected."""
     robot = await get_robot()
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         f"{ROBOT_ENDPOINT % robot.id}/{LitterBoxCommand.ENDPOINT}",
         payload=COMMAND_RESPONSE,
     )
     await getattr(robot, method_call.__name__)(*args)
-    assert list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json") == {
+    assert list(mock_aiointercept.requests.items())[-1][-1][-1].kwargs.get("json") == {
         "command": f"{LitterBoxCommand.PREFIX}{dispatch_command}"
     }
     await robot._account.disconnect()
 
 
-async def test_other_commands(mock_aioresponse: aioresponses) -> None:
+async def test_other_commands(mock_aiointercept: aiointercept) -> None:
     """Tests that other various robot commands call as expected."""
     robot = await get_robot()
     url = ROBOT_ENDPOINT % robot.id
@@ -227,7 +227,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
     def patch_callback(_: URL, **kwargs: Any) -> CallbackResult:
         return CallbackResult(payload={**robot._data, **kwargs["json"]})
 
-    mock_aioresponse.patch(url, callback=patch_callback)
+    mock_aiointercept.patch(url, callback=patch_callback)
     new_name = "New Name"
     await robot.set_name(new_name)
     assert robot.name == new_name
@@ -236,7 +236,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
         assert kwargs["json"] == {"sleepModeEnable": False}
         return CallbackResult(payload=robot._data)
 
-    mock_aioresponse.patch(url, callback=patch_callback2)
+    mock_aiointercept.patch(url, callback=patch_callback2)
     await robot.set_sleep_mode(False)
 
     def patch_callback3(_: URL, **kwargs: Any) -> CallbackResult:
@@ -249,7 +249,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
         )
         return CallbackResult(payload={**robot._data, **json})
 
-    mock_aioresponse.patch(url, callback=patch_callback3)
+    mock_aiointercept.patch(url, callback=patch_callback3)
     await robot.set_sleep_mode(True)
 
     def patch_callback4(_: URL, **kwargs: Any) -> CallbackResult:
@@ -262,7 +262,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
         )
         return CallbackResult(payload={**robot._data, **json})
 
-    mock_aioresponse.patch(url, callback=patch_callback4)
+    mock_aiointercept.patch(url, callback=patch_callback4)
     assert robot.sleep_mode_start_time
     await robot.set_sleep_mode(True, robot.sleep_mode_start_time.timetz())
 
@@ -270,7 +270,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
         json = kwargs["json"]
         return CallbackResult(payload={**robot._data, **json})
 
-    mock_aioresponse.patch(url, callback=patch_callback5)
+    mock_aiointercept.patch(url, callback=patch_callback5)
     assert robot.cycle_count > 0
     if isinstance(robot, LitterRobot3):
         await robot.reset_waste_drawer()
@@ -293,7 +293,7 @@ async def test_other_commands(mock_aioresponse: aioresponses) -> None:
 
 
 async def test_invalid_commands(
-    mock_aioresponse: aioresponses, caplog: pytest.LogCaptureFixture
+    mock_aiointercept: aiointercept, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Tests expected exceptions/responses for invalid commands."""
     robot = await get_robot()
@@ -302,11 +302,11 @@ async def test_invalid_commands(
     with pytest.raises(InvalidCommandException):
         await robot.set_wait_time(12)
 
-    mock_aioresponse.post(url, payload=INVALID_COMMAND_RESPONSE, status=500)
+    mock_aiointercept.post(url, payload=INVALID_COMMAND_RESPONSE, status=500)
     assert not await robot._dispatch_command("W12")
     assert "Invalid command: <W12" in caplog.messages[-1]
 
-    mock_aioresponse.post(url, payload={"oops": "no developerMessage"}, status=500)
+    mock_aiointercept.post(url, payload={"oops": "no developerMessage"}, status=500)
     assert not await robot._dispatch_command("BAD")
     assert "oops" in caplog.messages[-1]
 

@@ -6,7 +6,7 @@ import logging
 from unittest.mock import PropertyMock, patch
 
 import pytest
-from aioresponses import aioresponses
+from aiointercept import aiointercept
 
 from pylitterbot import FeederRobot, LitterRobot3, LitterRobot4, LitterRobot5
 from pylitterbot.exceptions import LitterRobotLoginException
@@ -30,7 +30,7 @@ ROBOT_COUNT = 6
 
 
 async def test_account(
-    mock_aioresponse: aioresponses, caplog: pytest.LogCaptureFixture
+    mock_aiointercept: aiointercept, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Tests that an account is properly setup."""
     account = await get_account(token_update_callback=lambda token: None)
@@ -61,12 +61,12 @@ async def test_account(
     )
     assert len(account.robots) == ROBOT_COUNT
 
-    mock_aioresponse.get(ROBOT_ENDPOINT % ROBOT_ID, payload={})
-    mock_aioresponse.get(ROBOT_ENDPOINT % ROBOT_FULL_ID, payload={})
-    mock_aioresponse.get(
+    mock_aiointercept.get(ROBOT_ENDPOINT % ROBOT_ID, payload={})
+    mock_aiointercept.get(ROBOT_ENDPOINT % ROBOT_FULL_ID, payload={})
+    mock_aiointercept.get(
         urljoin(LR5_ENDPOINT, "robots/LR5-00-00-00-0000-000001"), payload={}
     )
-    mock_aioresponse.get(
+    mock_aiointercept.get(
         urljoin(LR5_ENDPOINT, "robots/LR5-00-00-00-0000-000002"), payload={}
     )
     await account.refresh_robots()
@@ -87,7 +87,7 @@ async def test_account(
     await account.disconnect()
 
 
-async def test_account_get_robots(mock_aioresponse: aioresponses) -> None:
+async def test_account_get_robots(mock_aiointercept: aiointercept) -> None:
     """Tests that an account is properly setup."""
     account = await get_account(token_update_callback=lambda token: None)
 
@@ -102,7 +102,7 @@ async def test_account_get_robots(mock_aioresponse: aioresponses) -> None:
     await account.disconnect()
 
 
-async def test_account_robot_type_filter(mock_aioresponse: aioresponses) -> None:
+async def test_account_robot_type_filter(mock_aiointercept: aiointercept) -> None:
     """Tests that robot discovery can be limited to specific robot classes."""
     account = await get_account(
         token_update_callback=lambda token: None,

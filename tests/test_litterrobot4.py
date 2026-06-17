@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import pytest
-from aioresponses import aioresponses
+from aiointercept import aiointercept
 from freezegun.api import FrozenDateTimeFactory
 
 from pylitterbot import Account
@@ -31,7 +31,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_litter_robot_4(
-    mock_aioresponse: aioresponses,
+    mock_aiointercept: aiointercept,
     mock_account: Account,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -84,8 +84,8 @@ async def test_litter_robot_4(
 
     assert await robot.start_cleaning()
 
-    mock_aioresponse.clear()
-    mock_aioresponse.post(
+    mock_aiointercept.clear()
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {
@@ -128,7 +128,7 @@ async def test_litter_robot_4(
     with pytest.raises(InvalidCommandException):
         await robot.get_activity_history(0)
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {
@@ -152,14 +152,14 @@ async def test_litter_robot_4(
     insight = await robot.get_insight(days=7)
     assert len(insight.cycle_history) == 7
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={"data": {"getLitterRobot4Insights": None}},
     )
     with pytest.raises(LitterRobotException):
         await robot.get_insight(days=7)
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={"data": {"sendLitterRobot4Command": "Error sending a command"}},
     )
@@ -167,7 +167,7 @@ async def test_litter_robot_4(
     assert caplog.messages[-1] == "Error sending a command"
 
     error_message = "sendLitterRobot4Command: Robot not online: LR4C000001"
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {"sendLitterRobot4Command": None},
@@ -179,7 +179,7 @@ async def test_litter_robot_4(
 
     # test multiple errors in message
     error_message2 = "sendLitterRobot4Command: Robot still offline: LR4C000001"
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {"sendLitterRobot4Command": None},
@@ -189,7 +189,7 @@ async def test_litter_robot_4(
     assert not await robot.set_night_light_brightness(100)
     assert caplog.messages[-1] == f"{error_message}, {error_message2}"
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {
@@ -203,7 +203,7 @@ async def test_litter_robot_4(
     await robot.refresh()
     assert robot.waste_drawer_level == 99
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {
@@ -215,7 +215,7 @@ async def test_litter_robot_4(
     with pytest.raises(InvalidCommandException):
         await robot.set_wait_time(-1)
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {
@@ -237,7 +237,7 @@ async def test_litter_robot_4(
     assert robot.status == LitterBoxStatus.DRAWER_FULL
 
     new_name = "Test Name"
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={"data": {"updateLitterRobot4": {"name": new_name}}},
     )
@@ -245,7 +245,7 @@ async def test_litter_robot_4(
     assert await robot.set_name(new_name)
     assert robot.name == new_name
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {
@@ -257,7 +257,7 @@ async def test_litter_robot_4(
     with pytest.raises(InvalidCommandException):
         await robot.set_night_light_brightness(20)
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {
@@ -267,7 +267,7 @@ async def test_litter_robot_4(
     )
     await robot.set_night_light_mode(NightLightMode.AUTO)
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {
@@ -288,17 +288,17 @@ async def test_litter_robot_4(
         },
     }
     firmware_response = {"data": {"litterRobot4CompareFirmwareVersion": version_info}}
-    mock_aioresponse.post(LR4_ENDPOINT, payload=firmware_response)
+    mock_aiointercept.post(LR4_ENDPOINT, payload=firmware_response)
     assert await robot.has_firmware_update()
 
     version_info["isEspFirmwareUpdateNeeded"] = False
     version_info["isPicFirmwareUpdateNeeded"] = False
-    mock_aioresponse.post(LR4_ENDPOINT, payload=firmware_response)
+    mock_aiointercept.post(LR4_ENDPOINT, payload=firmware_response)
     assert not await robot.has_firmware_update(True)
     latest_firmware = await robot.get_latest_firmware()
     assert latest_firmware == "ESP: 1.1.54 / PIC: 10512.2560.2.66 / TOF: 4.0.65.4"
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {
@@ -312,7 +312,7 @@ async def test_litter_robot_4(
         },
     )
     assert await robot.update_firmware()
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={
             "data": {
@@ -337,7 +337,7 @@ async def test_litter_robot_4(
             }
         ],
     }
-    mock_aioresponse.post(LR4_ENDPOINT, payload=firmware_response, repeat=True)
+    mock_aiointercept.post(LR4_ENDPOINT, payload=firmware_response, repeat=True)
     assert not await robot.has_firmware_update(True)
     assert not await robot.get_latest_firmware()
 
@@ -416,7 +416,7 @@ async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
     ],
 )
 async def test_litter_robot_4_commands(
-    mock_aioresponse: aioresponses,
+    mock_aiointercept: aiointercept,
     mock_account: Account,
     method_call: Callable,
     dispatch_command: str,
@@ -426,15 +426,15 @@ async def test_litter_robot_4_commands(
     """Tests that commands for Litter-Robot 4 are sent as expected."""
     robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
 
-    mock_aioresponse.clear()
-    mock_aioresponse.post(
+    mock_aiointercept.clear()
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={"data": mock_response_data},
     )
 
     await getattr(robot, method_call.__name__)(*args)
 
-    json = list(mock_aioresponse.requests.items())[-1][-1][-1].kwargs.get("json", {})
+    json = list(mock_aiointercept.requests.items())[-1][-1][-1].kwargs.get("json", {})
     assert "sendLitterRobot4Command" in json.get("query", "")
     assert json.get("variables", {}).get("command") == dispatch_command
 
@@ -475,7 +475,7 @@ async def test_litter_robot_4_commands(
     ],
 )
 async def test_litter_hopper_toggle(
-    mock_aioresponse: aioresponses,
+    mock_aiointercept: aiointercept,
     mock_account: Account,
     is_removed: bool,
     mock_mutation_response_data: dict,
@@ -486,8 +486,8 @@ async def test_litter_hopper_toggle(
     """Tests that LitterHopper toggling works as expected."""
     robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
 
-    mock_aioresponse.clear()
-    mock_aioresponse.post(
+    mock_aiointercept.clear()
+    mock_aiointercept.post(
         LR4_ENDPOINT,
         payload={"data": mock_mutation_response_data},
     )
@@ -496,7 +496,7 @@ async def test_litter_hopper_toggle(
     assert robot.hopper_status == expected_hopper_status
     assert robot.is_hopper_removed is expected_is_hopper_removed
 
-    json = list(mock_aioresponse.requests.items())[-1][-1][0].kwargs.get("json", {})
+    json = list(mock_aiointercept.requests.items())[-1][-1][0].kwargs.get("json", {})
     assert "toggleHopper" in json.get("query", "")
     assert json.get("variables", {}).get("isRemoved") == is_removed
 
