@@ -30,7 +30,10 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
-          version: "0.10.2"
+          version: "0.11.21"
+
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
 
       - name: Run linting
         run: |
