@@ -28,7 +28,7 @@ async def get_activity_history(robot: str, limit: int = 100) -> list[dict[str, s
         {
             "timestamp": str(a.timestamp),
             "action": a.action.text
-            if isinstance(a.action, LitterBoxStatus)
+            if isinstance(a.action, LitterBoxStatus) and a.action.text
             else str(a.action),
         }
         for a in activities

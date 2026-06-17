@@ -30,7 +30,7 @@ async def get_account() -> Account:
         return _account
     async with _account_lock:
         if _account is not None:
-            return _account
+            return _account  # type: ignore[unreachable]
         username = os.environ.get("LITTER_ROBOT_USERNAME")
         password = os.environ.get("LITTER_ROBOT_PASSWORD")
         if not username or not password:

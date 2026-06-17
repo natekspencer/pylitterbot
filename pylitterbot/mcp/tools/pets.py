@@ -6,10 +6,11 @@ from typing import Any
 
 from pylitterbot.mcp.helpers import format_pet_summary, resolve_robot
 from pylitterbot.mcp.server import get_account, mcp
+from pylitterbot.pet import Pet
 from pylitterbot.robot.litterrobot5 import LitterRobot5
 
 
-def _resolve_pet_id(pets: list, identifier: str) -> str:
+def _resolve_pet_id(pets: list[Pet], identifier: str) -> str:
     """Find a pet by name (case-insensitive) or ID and return its ID."""
     normalized = identifier.casefold()
     for pet in pets:

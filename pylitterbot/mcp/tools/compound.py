@@ -293,7 +293,7 @@ async def maintenance_forecast() -> list[dict[str, Any]]:
     account = await get_account()
     await account.refresh_robots()
 
-    forecasts = []
+    forecasts: list[dict[str, Any]] = []
     for robot in account.robots:
         if not isinstance(robot, LitterRobot):
             continue

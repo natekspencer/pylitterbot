@@ -492,8 +492,11 @@ class TestHouseholdDigestDefensiveAlerts:
 
         # Create a real object whose .text property raises AttributeError.
         class BrokenStatus:
+            """Broken status class."""
+
             @property
-            def text(self):
+            def text(self) -> None:
+                """Text property."""
                 raise AttributeError("no text attribute")
 
         kitchen.status = BrokenStatus()

@@ -84,7 +84,9 @@ def format_robot_summary(robot: Robot) -> dict[str, Any]:
                 "cycle_capacity": robot.cycle_capacity,
                 "is_sleeping": robot.is_sleeping,
                 "clean_cycle_wait_time_minutes": robot.clean_cycle_wait_time_minutes,
-                "firmware": robot.firmware,
+                "firmware": robot.firmware
+                if isinstance(robot, (LitterRobot4, LitterRobot5))
+                else None,
                 "sleep_mode_enabled": robot.sleep_mode_enabled,
                 "sleep_schedule": (
                     [
