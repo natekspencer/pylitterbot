@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import pytest
 from aiohttp import ClientResponseError
-from aioresponses import aioresponses
+from aiointercept import aiointercept
 
 from pylitterbot.session import DEFAULT_USER_AGENT, LitterRobotSession
 
@@ -22,11 +22,12 @@ EXPIRED_ACCESS_TOKEN = {
     "id_token": token,
     "refresh_token": "some_refresh_token",
 }
+LOCALHOST = "http://localhost"
 
 
-async def test_token_refresh(mock_aioresponse: aioresponses) -> None:
+async def test_token_refresh(mock_aiointercept: aiointercept) -> None:
     """Tests the base session."""
-    mock_aioresponse.patch("localhost")
+    mock_aiointercept.patch(LOCALHOST)
 
     async with LitterRobotSession() as session:
         assert not session.is_token_valid()
@@ -35,7 +36,7 @@ async def test_token_refresh(mock_aioresponse: aioresponses) -> None:
 
     async with LitterRobotSession(token=EXPIRED_ACCESS_TOKEN) as session:
         assert not session.is_token_valid()
-        await session.patch("localhost")
+        await session.patch(LOCALHOST)
         assert session.is_token_valid()
 
 
@@ -48,10 +49,10 @@ async def test_custom_headers() -> None:
         }
 
 
-async def test_not_authorized(mock_aioresponse: aioresponses) -> None:
+async def test_not_authorized(mock_aiointercept: aiointercept) -> None:
     """Test not authorized error."""
-    mock_aioresponse.patch("localhost", status=401)
+    mock_aiointercept.patch(LOCALHOST, status=401)
 
     async with LitterRobotSession(token=EXPIRED_ACCESS_TOKEN) as session:
         with pytest.raises(ClientResponseError):
-            await session.patch("localhost")
+            await session.patch(LOCALHOST)

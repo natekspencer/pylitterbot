@@ -3,7 +3,7 @@
 from datetime import date, datetime, timezone
 
 import pytest
-from aioresponses import aioresponses
+from aiointercept import aiointercept
 
 from pylitterbot.exceptions import InvalidCommandException, LitterRobotException
 from pylitterbot.pet import (
@@ -20,7 +20,7 @@ from .common import PET_DATA, PET_ID, get_pet
 pytestmark = pytest.mark.asyncio
 
 
-async def test_pet_setup(mock_aioresponse: aioresponses) -> None:
+async def test_pet_setup(mock_aiointercept: aiointercept) -> None:
     """Tests that pet setup is successful and parses as expected."""
     pet = await get_pet()
     assert pet.id == PET_ID
@@ -52,7 +52,7 @@ async def test_pet_setup(mock_aioresponse: aioresponses) -> None:
 
 
 async def test_pet_with_unexpected_values(
-    mock_aioresponse: aioresponses, caplog: pytest.LogCaptureFixture
+    mock_aiointercept: aiointercept, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Tests expected error logs for unexpected values."""
     pet = await get_pet()
@@ -72,10 +72,10 @@ async def test_pet_with_unexpected_values(
     assert 'Unknown pet type "oops"' in caplog.messages
 
 
-async def test_pet_weight_history(mock_aioresponse: aioresponses) -> None:
+async def test_pet_weight_history(mock_aiointercept: aiointercept) -> None:
     """Tests expected error logs for unexpected values."""
     pet = await get_pet()
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         PET_PROFILE_ENDPOINT,
         payload={
             "data": {
@@ -94,7 +94,7 @@ async def test_pet_weight_history(mock_aioresponse: aioresponses) -> None:
     with pytest.raises(InvalidCommandException):
         await pet.fetch_weight_history(-1)
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         PET_PROFILE_ENDPOINT,
         payload={"data": {"getWeightHistoryByPetId": []}},
     )
@@ -102,11 +102,11 @@ async def test_pet_weight_history(mock_aioresponse: aioresponses) -> None:
     assert len(weight_history) == 0
 
 
-async def test_fetch_pet_by_id(mock_aioresponse: aioresponses) -> None:
+async def test_fetch_pet_by_id(mock_aiointercept: aiointercept) -> None:
     """Tests fetching a pet by id."""
     pet = await get_pet()
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         PET_PROFILE_ENDPOINT,
         payload={"data": {"getPetByPetId": PET_DATA}},
     )
@@ -114,12 +114,12 @@ async def test_fetch_pet_by_id(mock_aioresponse: aioresponses) -> None:
     assert new_pet
 
 
-async def test_pet_refresh(mock_aioresponse: aioresponses) -> None:
+async def test_pet_refresh(mock_aiointercept: aiointercept) -> None:
     """Tests refreshing a pet."""
     pet = await get_pet()
 
     new_data = {"lastWeightReading": 8.1}
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         PET_PROFILE_ENDPOINT,
         payload={"data": {"getPetByPetId": PET_DATA | new_data}},
     )
@@ -127,11 +127,11 @@ async def test_pet_refresh(mock_aioresponse: aioresponses) -> None:
     assert pet.weight == 8.1
 
 
-async def test_pet_refresh_no_data(mock_aioresponse: aioresponses) -> None:
+async def test_pet_refresh_no_data(mock_aiointercept: aiointercept) -> None:
     """Tests refreshing a pet when data returned is null."""
     pet = await get_pet()
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         PET_PROFILE_ENDPOINT,
         payload={"data": None},
     )

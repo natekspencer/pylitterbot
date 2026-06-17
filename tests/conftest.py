@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import pytest
 import pytest_asyncio
-from aioresponses import aioresponses
+from aiointercept import aiointercept
 from pycognito import TokenVerificationException
 
 from pylitterbot import Account
@@ -86,10 +86,10 @@ async def mock_account() -> Account:
     return await get_account()
 
 
-@pytest.fixture
-def mock_aioresponse() -> aioresponses:
-    """Mock aioresponses fixture."""
-    with aioresponses() as mock:
+@pytest_asyncio.fixture
+async def mock_aiointercept() -> aiointercept:
+    """Mock aiointercept fixture."""
+    async with aiointercept(mock_external_urls=True) as mock:
         mock.get(re.compile(".*/users$"), payload=USER_RESPONSE)
         mock.get(
             re.compile(rf"^{re.escape(DEFAULT_ENDPOINT)}/users/[^/]+/robots$"),

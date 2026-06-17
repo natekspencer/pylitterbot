@@ -5,7 +5,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from aioresponses import aioresponses
+from aiointercept import aiointercept
 from freezegun.api import FrozenDateTimeFactory
 
 from pylitterbot import Account
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_feeder_robot(
-    mock_aioresponse: aioresponses,
+    mock_aiointercept: aiointercept,
     mock_account: Account,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -70,8 +70,8 @@ async def test_feeder_robot(
         assert robot.power_status == "DC"
     assert robot.power_type == "DC"
 
-    mock_aioresponse.clear()
-    mock_aioresponse.post(
+    mock_aiointercept.clear()
+    mock_aiointercept.post(
         FEEDER_ENDPOINT,
         payload={
             "data": {
@@ -86,7 +86,7 @@ async def test_feeder_robot(
     assert robot.last_meal is None
     assert robot.last_feeding == robot.last_snack
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         FEEDER_ENDPOINT,
         payload={
             "data": {
@@ -112,7 +112,7 @@ async def test_feeder_robot(
     assert robot.meal_insert_size == 0
     assert caplog.messages[-1] == 'Unknown meal insert size "2"'
 
-    mock_aioresponse.post(COMMAND_ENDPOINT, repeat=True)
+    mock_aiointercept.post(COMMAND_ENDPOINT, repeat=True)
     assert await robot.give_snack()
     assert await robot.set_gravity_mode(True)
     assert robot.gravity_mode_enabled
@@ -120,7 +120,7 @@ async def test_feeder_robot(
     assert await robot.set_night_light(True)
     assert await robot.set_panel_lockout(True)
 
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         FEEDER_ENDPOINT,
         payload={
             "data": {
@@ -140,7 +140,7 @@ async def test_feeder_robot(
     assert robot.meal_insert_size == 0.25
 
     new_name = "New Name"
-    mock_aioresponse.post(
+    mock_aiointercept.post(
         FEEDER_ENDPOINT,
         payload={
             "data": {
@@ -190,7 +190,7 @@ async def test_feeder_robot_schedule(
 
 async def test_feeder_robot_schedule_writes(
     freezer: FrozenDateTimeFactory,
-    mock_aioresponse: aioresponses,
+    mock_aiointercept: aiointercept,
     mock_account: Account,
 ) -> None:
     """Tests that the feeding schedule can be edited, skipped, paused, and cleared."""
@@ -201,8 +201,8 @@ async def test_feeder_robot_schedule_writes(
     robot = FeederRobot(data=deepcopy(FEEDER_ROBOT_DATA), account=mock_account)
     assert robot.active_schedule is not None
 
-    mock_aioresponse.post(SCHEDULE_ENDPOINT, repeat=True)
-    mock_aioresponse.post(f"{SCHEDULE_ENDPOINT}/clear", repeat=True)
+    mock_aiointercept.post(SCHEDULE_ENDPOINT, repeat=True)
+    mock_aiointercept.post(f"{SCHEDULE_ENDPOINT}/clear", repeat=True)
 
     def meal(meal_number: int) -> dict:
         assert (schedule := robot.active_schedule) is not None
@@ -214,7 +214,7 @@ async def test_feeder_robot_schedule_writes(
         Asserts the endpoint was actually called, so a write that silently
         skipped its HTTP request would fail the test.
         """
-        for (_method, request_url), calls in mock_aioresponse.requests.items():
+        for (_method, request_url), calls in mock_aiointercept.requests.items():
             if str(request_url) == url:
                 body: dict = calls[-1].kwargs["json"]
                 return body

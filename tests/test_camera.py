@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from aiohttp import ClientResponseError, RequestInfo
-from aioresponses import aioresponses
+from aiointercept import aiointercept
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
@@ -39,8 +39,6 @@ from .common import (
     LITTER_ROBOT_5_DATA,
     LITTER_ROBOT_5_PRO_DATA,
 )
-
-pytestmark = pytest.mark.asyncio
 
 
 class TestCameraSession:
@@ -138,7 +136,7 @@ class TestCameraClient:
     async def test_generate_session(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test generating a camera session."""
         client = CameraClient(
@@ -155,7 +153,7 @@ class TestCameraClient:
     async def test_get_video_settings(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test fetching video settings."""
         client = CameraClient(
@@ -171,7 +169,7 @@ class TestCameraClient:
     async def test_get_audio_settings(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test fetching audio settings."""
         client = CameraClient(
@@ -188,7 +186,7 @@ class TestCameraClient:
     async def test_set_camera_canvas(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test setting camera canvas."""
         client = CameraClient(
@@ -204,7 +202,7 @@ class TestCameraClient:
     async def test_set_audio_enabled(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test setting audio enabled."""
         client = CameraClient(
@@ -220,7 +218,7 @@ class TestCameraClient:
     async def test_get_camera_info(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test fetching camera info."""
         client = CameraClient(
@@ -237,7 +235,7 @@ class TestCameraClient:
     async def test_get_videos(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test fetching video clips."""
         client = CameraClient(
@@ -255,7 +253,7 @@ class TestCameraClient:
     async def test_get_videos_with_limit(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test that get_videos enforces limit client-side."""
         client = CameraClient(
@@ -272,7 +270,7 @@ class TestCameraClient:
     async def test_get_events(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test fetching camera events."""
         client = CameraClient(
@@ -289,7 +287,7 @@ class TestCameraClient:
     async def test_get_events_with_limit(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test that get_events enforces limit client-side."""
         client = CameraClient(
@@ -395,7 +393,7 @@ class TestLitterRobot5Camera:
     async def test_get_camera_session(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test get_camera_session returns a CameraSession."""
         robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
@@ -407,7 +405,7 @@ class TestLitterRobot5Camera:
     async def test_get_camera_videos(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test get_camera_videos returns video clips."""
         robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
@@ -420,7 +418,7 @@ class TestLitterRobot5Camera:
     async def test_set_camera_view_front(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test set_camera_view with 'front'."""
         robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
@@ -432,7 +430,7 @@ class TestLitterRobot5Camera:
     async def test_set_camera_view_globe(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test set_camera_view with 'globe'."""
         robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
@@ -636,7 +634,7 @@ class TestCameraAudioReconciliation:
     async def test_refresh_camera_audio_enabled(
         self,
         mock_account: Account,
-        mock_aioresponse: aioresponses,
+        mock_aiointercept: aiointercept,
     ) -> None:
         """Test reconciling the audio cache from reported settings."""
         robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
