@@ -30,6 +30,7 @@ async def test_pet_setup(mock_aiointercept: aiointercept) -> None:
     assert pet.estimated_weight == 8.5
     assert pet.last_weight_reading == 8.6
     assert pet.weight == 8.6
+    assert pet.breed == "Sphynx"
     assert pet.breeds == ["sphynx"]
     assert pet.age == 0
     assert pet.birthday == date(2016, 7, 2)
@@ -49,6 +50,31 @@ async def test_pet_setup(mock_aiointercept: aiointercept) -> None:
     )
     assert pet.weight_history[0].weight == 8.68
     assert pet.get_visits_since(datetime(2024, 4, 17, 9, tzinfo=timezone.utc)) == 1
+
+
+@pytest.mark.parametrize(
+    "breeds,breed",
+    [
+        (["sphynx"], "Sphynx"),
+        (["british_shorthair"], "British Shorthair"),
+        (["british_shorthair", "siamese"], "Mixed-breed"),
+        (["british_shorthair", "siamese", "other"], "Mixed-breed"),
+        ([], "Unknown"),
+        (None, "Unknown"),
+    ],
+)
+async def test_pet_breeds(
+    mock_aiointercept: aiointercept,
+    caplog: pytest.LogCaptureFixture,
+    breeds: list[str] | None,
+    breed: str,
+) -> None:
+    """Tests expected pet breed values."""
+    pet = await get_pet()
+
+    pet._data |= {"breeds": breeds}
+    assert pet.breeds == breeds
+    assert pet.breed == breed
 
 
 async def test_pet_with_unexpected_values(
