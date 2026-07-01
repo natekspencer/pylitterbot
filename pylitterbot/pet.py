@@ -196,6 +196,15 @@ class Pet(Event):
         return self.last_weight_reading or self.estimated_weight
 
     @property
+    def breed(self) -> str:
+        """Return the breed, if known."""
+        if not (breeds := self.breeds):
+            return "Unknown"
+        if len(breeds) > 1:
+            return "Mixed-breed"
+        return breeds[0].replace("_", " ").title()
+
+    @property
     def breeds(self) -> list[str] | None:
         """Return the breeds, if known."""
         return self._data.get("breeds")
