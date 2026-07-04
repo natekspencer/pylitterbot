@@ -1,10 +1,14 @@
 """Test utils module."""
 
+import pytest
+
 from pylitterbot.utils import (
     REDACTED,
     decode,
     encode,
     first_value,
+    hex_to_rgb,
+    rgb_to_hex,
     redact,
     round_time,
     to_timestamp,
@@ -50,3 +54,25 @@ def test_first_value() -> None:
     assert first_value(values, ("key3", "key5")) is None
     assert first_value(values, ("key3", "key5"), 0) == 0
     assert first_value(None, ("key3", "key5"), 10) == 10
+
+
+def test_hex_to_rgb() -> None:
+    """Test converting color hex strings to RGB tuples."""
+    assert hex_to_rgb("#FF0000") == (255, 0, 0)
+    assert hex_to_rgb("83FF5B") == (131, 255, 91)
+    assert hex_to_rgb("#F0A") == (255, 0, 170)
+    assert hex_to_rgb("#83FF5B00") == (131, 255, 91)  # trailing alpha is ignored
+
+    for invalid in ("", "#12345", "#GG0000", "#123456789"):
+        with pytest.raises(ValueError):
+            hex_to_rgb(invalid)
+
+
+def test_rgb_to_hex() -> None:
+    """Test converting RGB tuples to color hex strings."""
+    assert rgb_to_hex((255, 0, 0)) == "#FF0000"
+    assert rgb_to_hex((131, 255, 91)) == "#83FF5B"
+
+    for invalid in ((256, 0, 0), (0, -1, 0)):
+        with pytest.raises(ValueError):
+            rgb_to_hex(invalid)

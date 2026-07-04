@@ -34,7 +34,15 @@ from ..exceptions import (
 )
 from ..sleep_schedule import SleepSchedule
 from ..transport import PollingTransport
-from ..utils import calculate_litter_level, decode, to_enum, to_timestamp, urljoin
+from ..utils import (
+    calculate_litter_level,
+    decode,
+    hex_to_rgb,
+    rgb_to_hex,
+    to_enum,
+    to_timestamp,
+    urljoin,
+)
 from .litterrobot import LitterRobot
 
 if sys.version_info >= (3, 13):
@@ -423,6 +431,17 @@ class LitterRobot5(LitterRobot):
         return self._night_light_settings.get("color")
 
     @property
+    def night_light_rgb_color(self) -> tuple[int, int, int] | None:
+        """Return the night light color as an RGB tuple, if valid."""
+        if (color := self.night_light_color) is None:
+            return None
+        try:
+            return hex_to_rgb(color)
+        except ValueError:
+            _LOGGER.warning("Unexpected night light color: %s", color)
+            return None
+
+    @property
     def night_light_level(self) -> BrightnessLevel | None:
         """Return the night light level."""
         brightness = self._night_light_settings.get("brightness")
@@ -731,14 +750,14 @@ class LitterRobot5(LitterRobot):
         *,
         mode: NightLightMode | None = None,
         brightness: int | None = None,
-        color: str | None = None,
+        color: str | tuple[int, int, int] | None = None,
     ) -> bool:
         """Set night light settings.
 
         Args:
             mode: Night light mode.
             brightness: Brightness level (0-100).
-            color: Color hex string (e.g., "#FF0000").
+            color: Color hex string (e.g., "#FF0000") or RGB tuple.
 
         """
         value: dict[str, Any] = {}
@@ -751,7 +770,14 @@ class LitterRobot5(LitterRobot):
                 )
             value["brightness"] = brightness
         if color is not None:
-            value["color"] = color
+            try:
+                value["color"] = (
+                    rgb_to_hex(color)
+                    if isinstance(color, tuple)
+                    else rgb_to_hex(hex_to_rgb(color))
+                )
+            except ValueError as ex:
+                raise InvalidCommandException(f"Invalid color: {color!r}") from ex
         if not value:
             raise InvalidCommandException(
                 "At least one of mode, brightness, or color must be provided."
