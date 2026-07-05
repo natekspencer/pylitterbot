@@ -172,16 +172,16 @@ wheels = [
 
 [[package]]
 name = "aiointercept"
-version = "0.1.7"
+version = "0.1.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "multidict" },
     { name = "yarl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/43/de/637bd02b6d6ab6ff3b11e3726b0bbbf7878e7acc649b509ad91026a1a838/aiointercept-0.1.7.tar.gz", hash = "sha256:b9681ec590457e062159c8bdb1d77f17b9a80521a95c779010d55bd8c5d585cc", size = 156459, upload-time = "2026-06-12T09:31:38.518Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/5a/2b27fd1631f150c8118676e0e5a807b8e7c104fe7a283a2e7ebf199c13dd/aiointercept-0.1.8.tar.gz", hash = "sha256:2a9f1b75acb7ce539d07ea961ac141f07ae79a92a8019b7a49b039c743cfeb1c", size = 164969, upload-time = "2026-06-28T08:38:42.694Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a7/be/34c2ae1347845e87fbb613ce4f9ea0492c680feace356cd7e2a24c33e1bc/aiointercept-0.1.7-py3-none-any.whl", hash = "sha256:953d3c2d27e93e710d655ea47d191376e2966ca432a99fcfe2c780f9965e1212", size = 18010, upload-time = "2026-06-12T09:31:37.286Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/b0/777e89f29ec3d2b199f92ec3ecd5f5982bc5c1ab6b10c1cb607e0b9d8349/aiointercept-0.1.8-py3-none-any.whl", hash = "sha256:32f172c33e6155959a2b80e703875ad82b5d4878bcde1491ae15b5fcc4a170c3", size = 19360, upload-time = "2026-06-28T08:38:41.555Z" },
 ]
 
 [[package]]
