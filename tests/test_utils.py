@@ -8,8 +8,8 @@ from pylitterbot.utils import (
     encode,
     first_value,
     hex_to_rgb,
-    rgb_to_hex,
     redact,
+    rgb_to_hex,
     round_time,
     to_timestamp,
 )
