@@ -52,6 +52,27 @@ def encode(value: str | dict) -> str:
     return b64encode(value.encode(ENCODING)).decode(ENCODING)
 
 
+def hex_to_rgb(value: str) -> tuple[int, int, int]:
+    """Convert a color hex string to an RGB tuple.
+
+    Accepts "#RGB", "#RRGGBB" and "#RRGGBBAA" (the Litter-Robot API may store
+    a trailing alpha byte, which is ignored). Raises ValueError otherwise.
+    """
+    color = value.lstrip("#")
+    if len(color) == 3:
+        color = "".join(component * 2 for component in color)
+    if len(color) not in (6, 8) or not re.fullmatch(r"[0-9A-Fa-f]+", color):
+        raise ValueError(f"Invalid color hex string: {value!r}")
+    return int(color[0:2], 16), int(color[2:4], 16), int(color[4:6], 16)
+
+
+def rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+    """Convert an RGB tuple to an "#RRGGBB" color hex string."""
+    if any(not 0 <= channel <= 255 for channel in rgb):
+        raise ValueError(f"Invalid RGB tuple: {rgb!r}")
+    return "#{:02X}{:02X}{:02X}".format(*rgb)
+
+
 def to_timestamp(timestamp: str | int | float | None) -> datetime | None:
     """Construct a UTC offset-aware datetime from a Litter-Robot API timestamp."""
     if not timestamp:

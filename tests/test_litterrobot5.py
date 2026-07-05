@@ -66,6 +66,7 @@ async def test_litter_robot_5(
     assert robot.name == "Robo-shitter"
     assert robot.night_light_brightness == 70
     assert robot.night_light_color == "#665F5F"
+    assert robot.night_light_rgb_color == (102, 95, 95)
     assert robot.night_light_level is None  # 70 doesn't map to LOW/MEDIUM/HIGH
     assert robot.night_light_mode == NightLightMode.AUTO
     assert robot.night_light_mode_enabled
@@ -1279,5 +1280,12 @@ async def test_litter_robot_5_set_night_light_settings(
     mock_aiointercept.patch(patch_url, payload={})
     result = await robot.set_night_light_settings(brightness=50, color="#FF0000")
     assert result is True
+
+    mock_aiointercept.patch(patch_url, payload={})
+    result = await robot.set_night_light_settings(color=(131, 255, 91))
+    assert result is True
+
+    with pytest.raises(InvalidCommandException):
+        await robot.set_night_light_settings(color="#NOTHEX")
 
     await robot._account.disconnect()
