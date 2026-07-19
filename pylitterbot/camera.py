@@ -179,6 +179,27 @@ class VideoClip:
         )
 
 
+@dataclass
+class VideoPlayback:
+    """Signed playback details for a recorded video clip.
+
+    The ``hls_url`` on a :class:`VideoClip` is unsigned and is rejected by the
+    CDN with HTTP 403.  :meth:`CameraClient.get_video_playback` exchanges a clip
+    id for short-lived CloudFront signed cookies; send them (see
+    :attr:`cookie_header`) when fetching the HLS playlist and its segments.
+    """
+
+    clip_id: str
+    hls_url: str | None
+    cookies: dict[str, str]
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @property
+    def cookie_header(self) -> str:
+        """Return the cookies formatted as an HTTP ``Cookie`` header value."""
+        return "; ".join(f"{name}={value}" for name, value in self.cookies.items())
+
+
 class CameraClient:
     """REST client for LR5 Pro camera APIs.
 
@@ -343,6 +364,53 @@ class CameraClient:
             VideoClip.from_response(item) for item in data if isinstance(item, dict)
         ]
         return clips[:limit] if limit is not None else clips
+
+    async def get_video_playback(self, clip_id: str) -> VideoPlayback | None:
+        """Fetch signed playback details for a recorded clip.
+
+        The clip's ``hlsUrl`` (from :meth:`get_videos`) is unsigned and is
+        rejected by the CDN with HTTP 403.  The clip-detail endpoint responds
+        with the CloudFront signed cookies (``CloudFront-Policy``,
+        ``CloudFront-Signature`` and ``CloudFront-Key-Pair-Id``) required to
+        stream it; pass them as a ``Cookie`` header when fetching the ``.m3u8``
+        playlist and its segments.
+
+        Args:
+            clip_id: The :attr:`VideoClip.id` of the clip to play.
+
+        Returns:
+            A :class:`VideoPlayback`, or ``None`` on API failure. The cookies
+            are short-lived, so fetch and use them promptly.
+
+        """
+        # The detail endpoint lives under ``camera-videos`` (not the per-device
+        # ``cameras/{id}/videos`` listing) and sets the CloudFront cookies as
+        # response headers, so it must be read from the raw session rather than
+        # the JSON-only ``_get`` helper.
+        url = f"{CAMERA_INVENTORY_API}/prod/v1/camera-videos/{quote(str(clip_id))}"
+        headers = self._settings_headers()
+        if (auth := await self._session.get_bearer_authorization()) is not None:
+            headers["authorization"] = auth
+        try:
+            async with self.websession.get(url, headers=headers) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                cookies = {
+                    name: morsel.value
+                    for name, morsel in resp.cookies.items()
+                    if name.startswith("CloudFront-")
+                }
+        except _API_ERRORS as err:
+            _LOGGER.debug("Camera video playback %s failed: %s", clip_id, err)
+            return None
+        if not isinstance(data, dict):
+            return None
+        return VideoPlayback(
+            clip_id=str(clip_id),
+            hls_url=data.get("hlsUrl"),
+            cookies=cookies,
+            raw=data,
+        )
 
     async def get_events(self, *, limit: int | None = None) -> list[dict[str, Any]]:
         """Fetch camera events (AI detections, etc.).

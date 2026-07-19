@@ -16,9 +16,11 @@ from pylitterbot import Account
 from pylitterbot.camera import (
     CAMERA_CANVAS_FRONT,
     CAMERA_CANVAS_GLOBE,
+    CAMERA_INVENTORY_API,
     CameraClient,
     CameraSession,
     VideoClip,
+    VideoPlayback,
     _decode_sdp,
     _parse_signaling_message,
 )
@@ -128,6 +130,26 @@ class TestVideoClip:
         assert clip.thumbnail_url is None
         assert clip.event_type is None
         assert clip.created_at is None
+
+
+class TestVideoPlayback:
+    """Tests for VideoPlayback dataclass."""
+
+    def test_cookie_header(self) -> None:
+        """Cookies render as an HTTP Cookie header value."""
+        playback = VideoPlayback(
+            clip_id="12345",
+            hls_url="https://cdn.example/clip.m3u8",
+            cookies={"CloudFront-Policy": "abc", "CloudFront-Signature": "def"},
+        )
+        assert playback.cookie_header == (
+            "CloudFront-Policy=abc; CloudFront-Signature=def"
+        )
+
+    def test_cookie_header_empty(self) -> None:
+        """No cookies yields an empty Cookie header."""
+        playback = VideoPlayback(clip_id="1", hls_url=None, cookies={})
+        assert playback.cookie_header == ""
 
 
 class TestCameraClient:
@@ -264,6 +286,90 @@ class TestCameraClient:
         videos = await client.get_videos(limit=1)
         assert len(videos) == 1
         assert videos[0].id == str(CAMERA_VIDEOS_RESPONSE[0]["id"])
+
+        await mock_account.disconnect()
+
+    async def test_get_video_playback(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test fetching signed playback details (HLS URL + CloudFront cookies)."""
+        clip_id = "12345"
+        mock_aiointercept.get(
+            f"{CAMERA_INVENTORY_API}/prod/v1/camera-videos/{clip_id}",
+            payload={"id": clip_id, "hlsUrl": "https://cdn.example/clip.m3u8"},
+            headers=CIMultiDict(
+                [
+                    ("Set-Cookie", "CloudFront-Policy=pol; Path=/"),
+                    ("Set-Cookie", "CloudFront-Signature=sig; Path=/"),
+                    ("Set-Cookie", "CloudFront-Key-Pair-Id=kid; Path=/"),
+                    ("Set-Cookie", "session=nope; Path=/"),
+                ]
+            ),
+        )
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+
+        async def _bearer() -> str:
+            return "Bearer test-token"
+
+        monkeypatch.setattr(mock_account.session, "get_bearer_authorization", _bearer)
+        playback = await client.get_video_playback(clip_id)
+        assert isinstance(playback, VideoPlayback)
+        assert playback.clip_id == clip_id
+        assert playback.hls_url == "https://cdn.example/clip.m3u8"
+        # only CloudFront-* cookies are kept (the "session" cookie is dropped)
+        assert playback.cookies == {
+            "CloudFront-Policy": "pol",
+            "CloudFront-Signature": "sig",
+            "CloudFront-Key-Pair-Id": "kid",
+        }
+        assert "CloudFront-Policy=pol" in playback.cookie_header
+
+        await mock_account.disconnect()
+
+    async def test_get_video_playback_failure_returns_none(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """Test that an API error yields None rather than raising."""
+        clip_id = "99999"
+        mock_aiointercept.get(
+            f"{CAMERA_INVENTORY_API}/prod/v1/camera-videos/{clip_id}",
+            status=403,
+        )
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        assert await client.get_video_playback(clip_id) is None
+
+        await mock_account.disconnect()
+
+    async def test_get_video_playback_non_dict_returns_none(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """Test that an unexpected (non-object) response yields None."""
+        clip_id = "88888"
+        mock_aiointercept.get(
+            f"{CAMERA_INVENTORY_API}/prod/v1/camera-videos/{clip_id}",
+            payload=["unexpected"],
+        )
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        assert await client.get_video_playback(clip_id) is None
 
         await mock_account.disconnect()
 
