@@ -79,7 +79,7 @@ async def test_websocket_monitor_reconnects_after_stale_receive() -> None:
         ),
     )
 
-    async def ws_config_factory(robot: object) -> dict[str, str]:
+    async def ws_config_factory(robot: object) -> dict[str, Any]:
         """Return fake WebSocket configuration."""
         return {"url": "wss://example.test/graphql/realtime"}
 
@@ -109,7 +109,7 @@ async def test_websocket_monitor_breaks_on_closed_message() -> None:
         ),
     )
 
-    async def ws_config_factory(robot: object) -> dict[str, str]:
+    async def ws_config_factory(robot: object) -> dict[str, Any]:
         """Return fake WebSocket configuration."""
         return {"url": "wss://example.test/graphql/realtime"}
 
@@ -139,7 +139,7 @@ async def test_websocket_monitor_ignores_invalid_json_message() -> None:
     )
     message_handler = Mock()
 
-    async def ws_config_factory(robot: object) -> dict[str, str]:
+    async def ws_config_factory(robot: object) -> dict[str, Any]:
         """Return fake WebSocket configuration."""
         return {"url": "wss://example.test/graphql/realtime"}
 
