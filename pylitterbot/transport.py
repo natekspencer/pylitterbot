@@ -231,7 +231,15 @@ class WebSocketMonitor(Transport):
                     previous_received = self._last_received
                     self._last_received = received_at
                     if msg.type == WSMsgType.TEXT:
-                        data = msg.json()
+                        try:
+                            data = msg.json()
+                        except ValueError:
+                            _LOGGER.debug(
+                                "WebSocket message JSON decode failed",
+                                exc_info=True,
+                            )
+                            continue
+
                         message_type = (
                             data.get("type") if isinstance(data, dict) else None
                         )
@@ -273,7 +281,12 @@ class WebSocketMonitor(Transport):
                                     _LOGGER.exception(
                                         "Error dispatching WS message to %r", robot
                                     )
-                    elif msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE):
+                    elif msg.type in (
+                        WSMsgType.ERROR,
+                        WSMsgType.CLOSE,
+                        WSMsgType.CLOSING,
+                        WSMsgType.CLOSED,
+                    ):
                         break
             finally:
                 self._ws = None
