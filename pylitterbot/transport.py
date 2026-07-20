@@ -211,7 +211,7 @@ class WebSocketMonitor(Transport):
                             ws.receive(), timeout=self._stale_timeout
                         )
                     except asyncio.TimeoutError:
-                        idle_seconds = (
+                        stale_seconds = (
                             (utcnow() - self._last_received).total_seconds()
                             if self._last_received is not None
                             else self._stale_timeout
@@ -219,7 +219,7 @@ class WebSocketMonitor(Transport):
                         _LOGGER.warning(
                             "WebSocket stale after %.1fs without a message; "
                             "reconnecting",
-                            idle_seconds,
+                            stale_seconds,
                         )
                         await ws.close()
                         return
@@ -228,7 +228,7 @@ class WebSocketMonitor(Transport):
                         await ws.close()
                         return
                     received_at = utcnow()
-                    previous_received = self._last_received
+                    previous_received: datetime | None = self._last_received
                     self._last_received = received_at
                     if msg.type == WSMsgType.TEXT:
                         try:
@@ -243,7 +243,7 @@ class WebSocketMonitor(Transport):
                         message_type = (
                             data.get("type") if isinstance(data, dict) else None
                         )
-                        idle_seconds = (
+                        idle_seconds: float | None = (
                             (received_at - previous_received).total_seconds()
                             if previous_received is not None
                             else None

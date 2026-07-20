@@ -68,7 +68,7 @@ class FakeWebSocketContext:
 async def test_websocket_monitor_reconnects_after_stale_receive() -> None:
     """Test WebSocket monitor closes a stale connection so it can reconnect."""
     ws = FakeWebSocket()
-    robot = SimpleNamespace(
+    robot: Any = SimpleNamespace(
         id="robot-1",
         _account=SimpleNamespace(
             session=SimpleNamespace(
@@ -98,7 +98,7 @@ async def test_websocket_monitor_reconnects_after_stale_receive() -> None:
 async def test_websocket_monitor_breaks_on_closed_message() -> None:
     """Test WebSocket monitor exits when aiohttp reports a closed WebSocket."""
     ws = FakeMessageWebSocket(Mock(type=WSMsgType.CLOSED))
-    robot = SimpleNamespace(
+    robot: Any = SimpleNamespace(
         id="robot-1",
         _account=SimpleNamespace(
             session=SimpleNamespace(
@@ -127,7 +127,7 @@ async def test_websocket_monitor_ignores_invalid_json_message() -> None:
     bad_message = Mock(type=WSMsgType.TEXT)
     bad_message.json.side_effect = ValueError
     ws = FakeMessageWebSocket(bad_message, Mock(type=WSMsgType.CLOSED))
-    robot = SimpleNamespace(
+    robot: Any = SimpleNamespace(
         id="robot-1",
         _account=SimpleNamespace(
             session=SimpleNamespace(
