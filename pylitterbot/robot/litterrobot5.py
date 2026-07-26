@@ -321,7 +321,7 @@ class LitterRobot5(LitterRobot):
         the flat key as a fallback in case the API ever supplies it.
         """
         indicator = self._state.get("hopperStatusIndicator")
-        if isinstance(indicator, dict):
+        if isinstance(indicator, dict) and indicator.get("value") is not None:
             return to_enum(indicator.get("value"), HopperStatus)
         return to_enum(self._state.get("hopperStatus"), HopperStatus)
 

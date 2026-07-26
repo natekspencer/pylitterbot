@@ -807,8 +807,20 @@ async def test_litter_robot_5_hopper_status_indicator(
     assert robot.hopper_status == HopperStatus.ENABLED
     assert robot.hopper_status_text is None
 
-    # no hopper data at all
+    # an indicator missing its value must not shadow the flat key
+    data["state"]["hopperStatusIndicator"] = {"title": "Litter Low"}
+    data["state"]["hopperStatus"] = "ENABLED"
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.ENABLED
+
+    # ...nor invent a status when there is no flat key either
     data["state"].pop("hopperStatus")
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status is None
+    data["state"].pop("hopperStatusIndicator")
+
+    # no hopper data at all
+    data["state"].pop("hopperStatus", None)
     robot = LitterRobot5(data=data, account=mock_account)
     assert robot.hopper_status is None
 
