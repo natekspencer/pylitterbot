@@ -807,6 +807,13 @@ async def test_litter_robot_5_hopper_status_indicator(
     assert robot.hopper_status == HopperStatus.ENABLED
     assert robot.hopper_status_text is None
 
+    # READY: what a healthy, refilled hopper reports
+    data["state"]["hopperStatusIndicator"] = {"title": "Ready", "value": "READY"}
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.READY
+    assert robot.hopper_status_text == "Ready"
+    assert robot.is_hopper_removed is False
+
     # an indicator missing its value must not shadow the flat key
     data["state"]["hopperStatusIndicator"] = {"title": "Litter Low"}
     data["state"]["hopperStatus"] = "ENABLED"
