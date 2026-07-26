@@ -834,7 +834,10 @@ async def test_litter_robot_5_hopper_disabled_while_installed(
     assert robot.is_hopper_removed is True
 
     # enabled again: attached, reporting, not removed
-    data["state"]["hopperStatusIndicator"] = {"title": "Litter Low", "value": "LITTER_LOW"}
+    data["state"]["hopperStatusIndicator"] = {
+        "title": "Litter Low",
+        "value": "LITTER_LOW",
+    }
     robot = LitterRobot5(data=data, account=mock_account)
     assert robot.hopper_status == HopperStatus.LITTER_LOW
     assert robot.is_hopper_removed is False
