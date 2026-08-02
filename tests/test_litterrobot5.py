@@ -775,6 +775,100 @@ async def test_litter_robot_5_hopper_statuses(
     await robot._account.disconnect()
 
 
+async def test_litter_robot_5_hopper_status_indicator(
+    mock_account: Account,
+) -> None:
+    """Tests the hopperStatusIndicator an LR5 actually reports.
+
+    A real Litter-Robot 5 with a LitterHopper attached sends
+    ``hopperStatusIndicator`` and no flat ``hopperStatus``; reading only the
+    latter left ``hopper_status`` as ``None`` on live hardware.
+    """
+    data = deepcopy(LITTER_ROBOT_5_DATA)
+    data["state"].pop("hopperStatus", None)
+    data["state"]["isHopperInstalled"] = True
+    data["state"]["hopperStatusIndicator"] = {
+        "title": "Litter Low",
+        "value": "LITTER_LOW",
+    }
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.LITTER_LOW
+    assert robot.hopper_status_text == "Litter Low"
+    assert robot.is_hopper_removed is False
+
+    # the indicator wins when both are present
+    data["state"]["hopperStatus"] = "ENABLED"
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.LITTER_LOW
+
+    # and the flat key still works when no indicator is sent
+    data["state"].pop("hopperStatusIndicator")
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.ENABLED
+    assert robot.hopper_status_text is None
+
+    # READY: what a healthy, refilled hopper reports
+    data["state"]["hopperStatusIndicator"] = {"title": "Ready", "value": "READY"}
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.READY
+    assert robot.hopper_status_text == "Ready"
+    assert robot.is_hopper_removed is False
+
+    # an indicator missing its value must not shadow the flat key
+    data["state"]["hopperStatusIndicator"] = {"title": "Litter Low"}
+    data["state"]["hopperStatus"] = "ENABLED"
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.ENABLED
+
+    # ...nor invent a status when there is no flat key either
+    data["state"].pop("hopperStatus")
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status is None
+    data["state"].pop("hopperStatusIndicator")
+
+    # no hopper data at all
+    data["state"].pop("hopperStatus", None)
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status is None
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_5_hopper_disabled_while_installed(
+    mock_account: Account,
+) -> None:
+    """A hopper disabled from the app stays physically installed.
+
+    Toggling a LitterHopper off on an LR5 leaves ``isHopperInstalled`` True and
+    reports ``hopperStatusIndicator`` DISABLED, so checking installation alone
+    reported a disabled hopper as present.
+    """
+    data = deepcopy(LITTER_ROBOT_5_DATA)
+    data["state"].pop("hopperStatus", None)
+    data["state"]["isHopperInstalled"] = True
+    data["state"]["hopperStatusIndicator"] = {"title": "Disabled", "value": "DISABLED"}
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.DISABLED
+    assert robot.hopper_status_text == "Disabled"
+    assert robot.is_hopper_removed is True
+
+    # enabled again: attached, reporting, not removed
+    data["state"]["hopperStatusIndicator"] = {
+        "title": "Litter Low",
+        "value": "LITTER_LOW",
+    }
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.LITTER_LOW
+    assert robot.is_hopper_removed is False
+
+    # physically detached still counts as removed
+    data["state"]["isHopperInstalled"] = False
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.is_hopper_removed is True
+
+    await robot._account.disconnect()
+
+
 async def test_litter_robot_5_drawer_full_indicator(
     mock_account: Account,
 ) -> None:

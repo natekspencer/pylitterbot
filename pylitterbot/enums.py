@@ -74,10 +74,14 @@ class LitterRobot5Command:
     ONBOARD_PTAG_OFF = "ONBOARD_PTAG_OFF"
     PRIVACY_MODE_ON = "PRIVACY_MODE_ON"
     PRIVACY_MODE_OFF = "PRIVACY_MODE_OFF"
-    # Discovered via API 422 response but unverified on litter robot hardware:
+    # Accepted by the shared /commands schema but NOT implemented for a
+    # Litter-Robot 5 -- the endpoint advertises the same enum for every product
+    # line. Tested against an LR5 Pro with a LitterHopper attached:
     # NO_OP = "NO_OP"  # valid per API enum but returns INTERNAL_SERVER_ERROR
-    # FEED_NOW = "FEED_NOW"  # likely for Feeder-Robot or litter hopper accessory
-    # DISCARD_MEAL = "DISCARD_MEAL"  # likely for Feeder-Robot or litter hopper accessory
+    # FEED_NOW = "FEED_NOW"  # 500; does NOT dispense litter, hopper state unchanged
+    # DISCARD_MEAL = "DISCARD_MEAL"  # Feeder-Robot only; no meaning on a litter box
+    # There is no on-demand litter dispense command: the LitterHopper feeds the
+    # globe autonomously when it drops below `optimalLitterLevel`.
 
     # PATCH /robots/{serial} - settings keys
     CYCLE_DELAY = "cycleDelay"
@@ -230,6 +234,11 @@ class HopperStatus(Enum):
     MOTOR_OT_AMPS = "MOTOR_OT_AMPS"
     MOTOR_DISCONNECTED = "MOTOR_DISCONNECTED"
     EMPTY = "EMPTY"
+    # Reported by an LR5's hopperStatusIndicator. LITTER_LOW is not sticky: a
+    # refilled hopper re-measures and moves to READY (observed ~75 min and
+    # several dispenses after topping one up, alongside hopperLitterLevel 0->1).
+    LITTER_LOW = "LITTER_LOW"
+    READY = "READY"
 
 
 @unique

@@ -311,8 +311,27 @@ class LitterRobot5(LitterRobot):
 
     @property
     def hopper_status(self) -> HopperStatus | None:
-        """Return the hopper status."""
+        """Return the hopper status.
+
+        The Litter-Robot 5 does not report a flat ``hopperStatus`` the way the
+        Litter-Robot 4 does; it sends ``hopperStatusIndicator``, a dict shaped
+        like ``{"title": "Litter Low", "value": "LITTER_LOW"}``. Reading the
+        LR4 key here meant this property was always ``None`` on an LR5 even
+        with a hopper attached and reporting. Prefer the indicator, and keep
+        the flat key as a fallback in case the API ever supplies it.
+        """
+        indicator = self._state.get("hopperStatusIndicator")
+        if isinstance(indicator, dict) and indicator.get("value") is not None:
+            return to_enum(indicator.get("value"), HopperStatus)
         return to_enum(self._state.get("hopperStatus"), HopperStatus)
+
+    @property
+    def hopper_status_text(self) -> str | None:
+        """Return the human-readable hopper status (e.g. ``"Litter Low"``)."""
+        indicator = self._state.get("hopperStatusIndicator")
+        if isinstance(indicator, dict):
+            return cast(str | None, indicator.get("title"))
+        return None
 
     @property
     def is_bonnet_removed(self) -> bool:
@@ -341,8 +360,18 @@ class LitterRobot5(LitterRobot):
 
     @property
     def is_hopper_removed(self) -> bool:
-        """Return `True` if the hopper is removed/disabled."""
-        return self._state.get("isHopperInstalled") is False
+        """Return `True` if the hopper is removed or disabled.
+
+        ``isHopperInstalled`` tracks *physical attachment* only. Disabling the
+        hopper from the app leaves it ``True`` and instead reports
+        ``hopperStatusIndicator`` as ``DISABLED`` -- verified by toggling a
+        LitterHopper off and on against a Litter-Robot 5 Pro, where
+        ``isHopperInstalled`` never changed. Checking installation alone
+        therefore missed a disabled-but-attached hopper.
+        """
+        if self._state.get("isHopperInstalled") is False:
+            return True
+        return self.hopper_status is HopperStatus.DISABLED
 
     @property
     def is_laser_dirty(self) -> bool:
