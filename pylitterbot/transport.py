@@ -248,16 +248,7 @@ class WebSocketMonitor(Transport):
                             if previous_received is not None
                             else None
                         )
-                        if message_type == "ka":
-                            _LOGGER.debug(
-                                "WebSocket keepalive received%s",
-                                (
-                                    f" after {idle_seconds:.1f}s"
-                                    if idle_seconds is not None
-                                    else ""
-                                ),
-                            )
-                        elif isinstance(message_type, str) and message_type in {
+                        if isinstance(message_type, str) and message_type in {
                             "start_ack",
                             "complete",
                             "data",
