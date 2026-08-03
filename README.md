@@ -88,9 +88,9 @@ from pylitterbot import Account, LitterRobot4, LitterRobot5
 account = Account(robot_types=[LitterRobot4, LitterRobot5])
 
 await account.connect(
-  username=username,
-  password=password,
-  load_robots=True,
+    username=username,
+    password=password,
+    load_robots=True,
 )
 ```
 
