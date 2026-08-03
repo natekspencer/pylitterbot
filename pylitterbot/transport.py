@@ -257,7 +257,7 @@ class WebSocketMonitor(Transport):
                                     else ""
                                 ),
                             )
-                        elif message_type in {
+                        elif isinstance(message_type, str) and message_type in {
                             "start_ack",
                             "complete",
                             "data",

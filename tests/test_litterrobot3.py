@@ -22,7 +22,6 @@ from pylitterbot.robot.litterrobot3 import (
     SLEEP_MODE_ACTIVE,
     SLEEP_MODE_TIME,
     UNIT_STATUS,
-    WEBSOCKET_STALE_TIMEOUT_SECONDS,
     LitterRobot,
     LitterRobot3,
 )
@@ -49,7 +48,7 @@ async def test_litter_robot_3_websocket_stale_timeout(mock_account: Account) -> 
 
     transport = robot._build_transport()
 
-    assert transport._stale_timeout == WEBSOCKET_STALE_TIMEOUT_SECONDS
+    assert transport._stale_timeout == 3600.0
 
 
 async def test_litter_robot_3_setup(

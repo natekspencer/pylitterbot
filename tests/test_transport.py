@@ -124,11 +124,18 @@ async def test_websocket_monitor_breaks_on_closed_message() -> None:
     assert transport._ws is None
 
 
-async def test_websocket_monitor_ignores_invalid_json_message() -> None:
-    """Test WebSocket monitor continues after a malformed text message."""
+async def test_websocket_monitor_handles_invalid_text_messages() -> None:
+    """Test WebSocket monitor continues after invalid text messages."""
     bad_message = Mock(type=WSMsgType.TEXT)
     bad_message.json.side_effect = ValueError
-    ws = FakeMessageWebSocket(bad_message, Mock(type=WSMsgType.CLOSED))
+    unhashable_type_message = Mock(type=WSMsgType.TEXT)
+    data = {"type": []}
+    unhashable_type_message.json.return_value = data
+    ws = FakeMessageWebSocket(
+        bad_message,
+        unhashable_type_message,
+        Mock(type=WSMsgType.CLOSED),
+    )
     robot: Any = SimpleNamespace(
         id="robot-1",
         _account=SimpleNamespace(
@@ -155,8 +162,8 @@ async def test_websocket_monitor_ignores_invalid_json_message() -> None:
 
     await transport._connect()
 
-    assert ws.receive_count == 2
-    assert message_handler.call_count == 0
+    assert ws.receive_count == 3
+    message_handler.assert_called_once_with(robot, data)
     assert transport._ws is None
 
 
