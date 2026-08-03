@@ -129,7 +129,7 @@ async def test_websocket_monitor_handles_invalid_text_messages() -> None:
     bad_message = Mock(type=WSMsgType.TEXT)
     bad_message.json.side_effect = ValueError
     unhashable_type_message = Mock(type=WSMsgType.TEXT)
-    data = {"type": []}
+    data: dict[str, Any] = {"type": []}
     unhashable_type_message.json.return_value = data
     ws = FakeMessageWebSocket(
         bad_message,
