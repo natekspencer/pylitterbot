@@ -30,6 +30,7 @@ _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_ENDPOINT = API_V2_ENDPOINT
 WEBSOCKET_ENDPOINT = "https://8s1fz54a82.execute-api.us-east-1.amazonaws.com/prod"
+WEBSOCKET_STALE_TIMEOUT_SECONDS = 3600.0
 
 SLEEP_MODE_ACTIVE = "sleepModeActive"
 SLEEP_MODE_TIME = "sleepModeTime"
@@ -327,6 +328,7 @@ class LitterRobot3(LitterRobot):
         ws_config_factory=_ws_config_factory,
         subscribe_factory=_ws_subscribe,
         message_handler=_ws_message_handler,
+        stale_timeout=WEBSOCKET_STALE_TIMEOUT_SECONDS,
     )
 
     def _build_transport(self) -> WebSocketMonitor:

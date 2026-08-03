@@ -22,6 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 _RobotT = TypeVar("_RobotT", bound="Robot")
 
 BACKOFF_SECONDS_MAX = 300.0
+WEBSOCKET_STALE_TIMEOUT_SECONDS = 180.0
 
 
 async def cancel_task(*tasks: asyncio.Task | None) -> None:
@@ -48,6 +49,7 @@ class WebSocketProtocol(Generic[_RobotT]):
     ) = None
     message_handler: Callable[[_RobotT, dict], None] | None = None
     is_shared: bool = False
+    stale_timeout: float = WEBSOCKET_STALE_TIMEOUT_SECONDS
 
 
 class Transport(ABC):
@@ -80,6 +82,7 @@ class WebSocketMonitor(Transport):
         """Initialize a WebSocket monitor."""
         self._protocol = protocol
         self._reconnect_base = reconnect_base
+        self._stale_timeout = protocol.stale_timeout
 
         self._listeners: dict[str, Robot] = {}
         self._task: asyncio.Task | None = None
@@ -201,21 +204,80 @@ class WebSocketMonitor(Transport):
                         for robot in list(self._listeners.values()):
                             await self._protocol.subscribe_factory(robot, ws)
 
-                async for msg in ws:
+                self._last_received = None
+                while not self._stop_event.is_set():
+                    try:
+                        msg = await asyncio.wait_for(
+                            ws.receive(), timeout=self._stale_timeout
+                        )
+                    except asyncio.TimeoutError:
+                        stale_seconds = (
+                            (utcnow() - self._last_received).total_seconds()
+                            if self._last_received is not None
+                            else self._stale_timeout
+                        )
+                        _LOGGER.warning(
+                            "WebSocket stale after %.1fs without a message; "
+                            "reconnecting",
+                            stale_seconds,
+                        )
+                        await ws.close()
+                        return
+
                     if self._stop_event.is_set():
                         await ws.close()
                         return
-                    self._last_received = utcnow()
+                    received_at = utcnow()
+                    previous_received: datetime | None = self._last_received
+                    self._last_received = received_at
                     if msg.type == WSMsgType.TEXT:
+                        try:
+                            data = msg.json()
+                        except ValueError:
+                            _LOGGER.debug(
+                                "WebSocket message JSON decode failed",
+                                exc_info=True,
+                            )
+                            continue
+
+                        message_type = (
+                            data.get("type") if isinstance(data, dict) else None
+                        )
+                        idle_seconds: float | None = (
+                            (received_at - previous_received).total_seconds()
+                            if previous_received is not None
+                            else None
+                        )
+                        if isinstance(message_type, str) and message_type in {
+                            "start_ack",
+                            "complete",
+                            "data",
+                            "error",
+                        }:
+                            _LOGGER.debug(
+                                "WebSocket message received: type=%s%s",
+                                message_type,
+                                (
+                                    f" after {idle_seconds:.1f}s"
+                                    if idle_seconds is not None
+                                    else ""
+                                ),
+                            )
+
                         if self._protocol.message_handler:
                             for robot in list(self._listeners.values()):
                                 try:
-                                    self._protocol.message_handler(robot, msg.json())
+                                    self._protocol.message_handler(robot, data)
                                 except Exception:
                                     _LOGGER.exception(
                                         "Error dispatching WS message to %r", robot
                                     )
-                    elif msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE):
+                    elif msg.type in (
+                        WSMsgType.ERROR,
+                        WSMsgType.CLOSE,
+                        WSMsgType.CLOSING,
+                        WSMsgType.CLOSED,
+                    ):
                         break
             finally:
                 self._ws = None
