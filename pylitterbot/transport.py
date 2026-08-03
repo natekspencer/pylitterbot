@@ -49,6 +49,7 @@ class WebSocketProtocol(Generic[_RobotT]):
     ) = None
     message_handler: Callable[[_RobotT, dict], None] | None = None
     is_shared: bool = False
+    stale_timeout: float = WEBSOCKET_STALE_TIMEOUT_SECONDS
 
 
 class Transport(ABC):
@@ -77,12 +78,11 @@ class WebSocketMonitor(Transport):
         self,
         protocol: WebSocketProtocol,
         reconnect_base: float = 1.0,
-        stale_timeout: float = WEBSOCKET_STALE_TIMEOUT_SECONDS,
     ) -> None:
         """Initialize a WebSocket monitor."""
         self._protocol = protocol
         self._reconnect_base = reconnect_base
-        self._stale_timeout = stale_timeout
+        self._stale_timeout = protocol.stale_timeout
 
         self._listeners: dict[str, Robot] = {}
         self._task: asyncio.Task | None = None

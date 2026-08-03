@@ -22,6 +22,7 @@ from pylitterbot.robot.litterrobot3 import (
     SLEEP_MODE_ACTIVE,
     SLEEP_MODE_TIME,
     UNIT_STATUS,
+    WEBSOCKET_STALE_TIMEOUT_SECONDS,
     LitterRobot,
     LitterRobot3,
 )
@@ -40,6 +41,15 @@ from .common import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_litter_robot_3_websocket_stale_timeout(mock_account: Account) -> None:
+    """Test LR3 allows longer idle WebSocket connections."""
+    robot = LitterRobot3(data=ROBOT_DATA, account=mock_account)
+
+    transport = robot._build_transport()
+
+    assert transport._stale_timeout == WEBSOCKET_STALE_TIMEOUT_SECONDS
 
 
 async def test_litter_robot_3_setup(

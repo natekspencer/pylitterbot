@@ -84,8 +84,10 @@ async def test_websocket_monitor_reconnects_after_stale_receive() -> None:
         return {"url": "wss://example.test/graphql/realtime"}
 
     transport = WebSocketMonitor(
-        WebSocketProtocol(ws_config_factory=ws_config_factory),
-        stale_timeout=0.01,
+        WebSocketProtocol(
+            ws_config_factory=ws_config_factory,
+            stale_timeout=0.01,
+        )
     )
     transport._listeners[robot.id] = robot
 
