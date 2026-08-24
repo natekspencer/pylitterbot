@@ -150,6 +150,18 @@ class WebSocketMonitor(Transport):
             except asyncio.TimeoutError:
                 await cancel_task(task_to_await)
 
+    def _session_closed(self) -> bool:
+        """Return whether the account session can still serve a connection.
+
+        An aiohttp session does not reopen once closed, so every later attempt
+        raises the same error. This is reached when the session is closed by
+        something other than `Account.disconnect`, which stops the monitor
+        before closing.
+        """
+        if (robot := next(iter(self._listeners.values()), None)) is None:
+            return False
+        return bool(robot._account.session.websession.closed)
+
     async def _run(self) -> None:
         """Run the WebSocket monitor."""
         delay = self._reconnect_base
@@ -160,6 +172,9 @@ class WebSocketMonitor(Transport):
             except asyncio.CancelledError:
                 break
             except Exception as exc:
+                if self._session_closed():
+                    _LOGGER.debug("Account session closed; stopping WebSocket monitor")
+                    break
                 if isinstance(exc, (ClientError, OSError)):
                     _LOGGER.warning(
                         "WebSocket error (%s); reconnecting in %.1fs", exc, delay

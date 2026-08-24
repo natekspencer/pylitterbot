@@ -184,3 +184,58 @@ async def test_polling_transport_stops_cleanly() -> None:
     await transport.start(robot)
     await transport.stop(robot)  # should not block for 60 s
     assert transport._task is None or transport._task.done()
+
+
+async def test_websocket_monitor_stops_when_session_is_closed() -> None:
+    """Test the monitor stops instead of retrying against a closed session."""
+    websession = SimpleNamespace(
+        closed=True,
+        ws_connect=Mock(side_effect=RuntimeError("Session is closed")),
+    )
+    robot: Any = SimpleNamespace(
+        id="robot-1",
+        _account=SimpleNamespace(session=SimpleNamespace(websession=websession)),
+    )
+
+    async def ws_config_factory(_: object) -> dict[str, Any]:
+        """Return fake WebSocket configuration."""
+        return {"url": "wss://example.test/graphql/realtime"}
+
+    transport = WebSocketMonitor(
+        WebSocketProtocol(ws_config_factory=ws_config_factory, stale_timeout=0.01)
+    )
+    transport._listeners[robot.id] = robot
+    transport._reconnect_base = 30.0
+
+    await asyncio.wait_for(transport._run(), timeout=1.0)
+
+    assert websession.ws_connect.call_count == 1
+
+
+async def test_websocket_monitor_retries_while_session_is_open() -> None:
+    """Test an open session still reconnects after a failure."""
+    websession = SimpleNamespace(
+        closed=False,
+        ws_connect=Mock(side_effect=RuntimeError("boom")),
+    )
+    robot: Any = SimpleNamespace(
+        id="robot-1",
+        _account=SimpleNamespace(session=SimpleNamespace(websession=websession)),
+    )
+
+    async def ws_config_factory(_: object) -> dict[str, Any]:
+        """Return fake WebSocket configuration."""
+        return {"url": "wss://example.test/graphql/realtime"}
+
+    transport = WebSocketMonitor(
+        WebSocketProtocol(ws_config_factory=ws_config_factory, stale_timeout=0.01)
+    )
+    transport._listeners[robot.id] = robot
+    transport._reconnect_base = 0.01
+
+    task = asyncio.create_task(transport._run())
+    await asyncio.sleep(0.1)
+    transport._stop_event.set()
+    await asyncio.wait_for(task, timeout=1.0)
+
+    assert websession.ws_connect.call_count > 1
