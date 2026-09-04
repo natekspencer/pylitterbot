@@ -869,6 +869,36 @@ async def test_litter_robot_5_hopper_disabled_while_installed(
     await robot._account.disconnect()
 
 
+async def test_litter_robot_5_hopper_jammed_and_offline(
+    mock_account: Account,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A jammed or offline hopper resolves instead of logging on every read.
+
+    Both values arrive through ``hopperStatusIndicator`` on live hardware, so
+    while they were missing from the enum every state read logged an error.
+    """
+    data = deepcopy(LITTER_ROBOT_5_DATA)
+    data["state"].pop("hopperStatus", None)
+    data["state"]["isHopperInstalled"] = True
+
+    data["state"]["hopperStatusIndicator"] = {"title": "Jammed", "value": "JAMMED"}
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.JAMMED
+    assert robot.hopper_status_text == "Jammed"
+    # a jam is reported while the hopper keeps dispensing, so it is not removed
+    assert robot.is_hopper_removed is False
+
+    data["state"]["hopperStatusIndicator"] = {"title": "Offline", "value": "OFFLINE"}
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.hopper_status == HopperStatus.OFFLINE
+    assert robot.is_hopper_removed is False
+
+    assert "not found in enum HopperStatus" not in caplog.text
+
+    await robot._account.disconnect()
+
+
 async def test_litter_robot_5_drawer_full_indicator(
     mock_account: Account,
 ) -> None:
