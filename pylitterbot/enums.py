@@ -234,11 +234,11 @@ class HopperStatus(Enum):
     MOTOR_OT_AMPS = "MOTOR_OT_AMPS"
     MOTOR_DISCONNECTED = "MOTOR_DISCONNECTED"
     EMPTY = "EMPTY"
-    # Reported by an LR5's hopperStatusIndicator. LITTER_LOW is not sticky: a
-    # refilled hopper re-measures and moves to READY (observed ~75 min and
-    # several dispenses after topping one up, alongside hopperLitterLevel 0->1).
+    # Reported by an LR5's hopperStatusIndicator:
     LITTER_LOW = "LITTER_LOW"
     READY = "READY"
+    JAMMED = "JAMMED"
+    OFFLINE = "OFFLINE"
 
 
 @unique
