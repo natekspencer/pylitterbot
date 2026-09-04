@@ -236,7 +236,7 @@ class HopperStatus(Enum):
     EMPTY = "EMPTY"
     # Reported by an LR5's hopperStatusIndicator. LITTER_LOW is not sticky: a
     # refilled hopper re-measures and moves to READY (observed ~75 min and
-# Reported by an LR5's hopperStatusIndicator:
+    # Reported by an LR5's hopperStatusIndicator:
     LITTER_LOW = "LITTER_LOW"
     READY = "READY"
     JAMMED = "JAMMED"
