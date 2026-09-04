@@ -239,9 +239,6 @@ class HopperStatus(Enum):
 # Reported by an LR5's hopperStatusIndicator:
     LITTER_LOW = "LITTER_LOW"
     READY = "READY"
-    # Also reported by an LR5's hopperStatusIndicator. JAMMED does not stop the
-    # hopper from dispensing, and OFFLINE is sent while the hopper itself is
-    # unreachable even though the robot is online.
     JAMMED = "JAMMED"
     OFFLINE = "OFFLINE"
 
