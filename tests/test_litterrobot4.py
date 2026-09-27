@@ -352,13 +352,28 @@ async def test_litter_robot_4(
             datetime(2022, 9, 10, 8, 30, 15, tzinfo=timezone.utc),
             "2022-09-10 08:30:15",
         ),
-        (datetime(2022, 9, 10, 8, 30, 15, 123456), "2022-09-10 08:30:15"),
+        (datetime(2022, 9, 10, 8, 30, 15), "2022-09-10 08:30:15"),
         (
             datetime(2022, 9, 10, 1, 30, 15, tzinfo=timezone(timedelta(hours=-7))),
             "2022-09-10 08:30:15",
         ),
+        (
+            datetime(2022, 9, 10, 8, 30, 15, 123456, tzinfo=timezone.utc),
+            "2022-09-10 08:30:16",
+        ),
+        (
+            datetime(2022, 9, 10, 23, 59, 59, 1, tzinfo=timezone.utc),
+            "2022-09-11 00:00:00",
+        ),
     ],
-    ids=["no_start", "utc", "naive_as_utc", "offset_converted_to_utc"],
+    ids=[
+        "no_start",
+        "utc",
+        "naive_as_utc",
+        "offset_converted_to_utc",
+        "fraction_rounds_up",
+        "fraction_rounds_up_across_midnight",
+    ],
 )
 async def test_litter_robot_4_activity_history_start(
     mock_aiointercept: aiointercept,
