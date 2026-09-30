@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum, unique
 from json import dumps
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -544,12 +544,37 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             value=dumps({"clumpTime": wait_time}),
         )
 
-    async def get_activity_history(self, limit: int = 100) -> list[Activity]:
-        """Return the activity history."""
+    async def get_activity_history(
+        self, limit: int = 100, start: datetime | None = None
+    ) -> list[Activity]:
+        """Return the activity history.
+
+        If `start` is given, only activity at or after that time is requested
+        (naive datetimes are treated as UTC; a fractional second is rounded up
+        to the next whole second). `limit` still caps the number of entries
+        returned.
+        """
         if limit < 1:
             raise InvalidCommandException(
                 f"Invalid range for parameter limit, value: {limit}, valid range: 1-inf"
             )
+        variables: dict[str, Any] = {
+            "serial": self.serial,
+            "limit": limit,
+            "consumer": "app",
+        }
+        if start is not None:
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=timezone.utc)
+            start = start.astimezone(timezone.utc)
+            if start.microsecond:
+                # The API takes whole seconds only; round up so nothing before
+                # `start` is returned.
+                start = start.replace(microsecond=0) + timedelta(seconds=1)
+            # Without a start, the API returns only about the last 6 days no matter
+            # the limit. It expects "YYYY-MM-DD HH:MM:SS" in UTC and rejects
+            # ISO 8601 ("T"/"Z") with "Invalid Timestamp string".
+            variables["startTimestamp"] = start.strftime("%Y-%m-%d %H:%M:%S")
         data = await self._post(
             json={
                 "query": """
@@ -580,11 +605,7 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                         }
                     }
                 """,
-                "variables": {
-                    "serial": self.serial,
-                    "limit": limit,
-                    "consumer": "app",
-                },
+                "variables": variables,
             }
         )
         activities = cast(dict, data).get("data", {}).get("getLitterRobot4Activity", {})

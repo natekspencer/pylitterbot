@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -340,6 +340,75 @@ async def test_litter_robot_4(
     mock_aiointercept.post(LR4_ENDPOINT, payload=firmware_response, repeat=True)
     assert not await robot.has_firmware_update(True)
     assert not await robot.get_latest_firmware()
+
+    await robot._account.disconnect()
+
+
+@pytest.mark.parametrize(
+    "start,expected_start_timestamp",
+    [
+        (None, None),
+        (
+            datetime(2022, 9, 10, 8, 30, 15, tzinfo=timezone.utc),
+            "2022-09-10 08:30:15",
+        ),
+        (datetime(2022, 9, 10, 8, 30, 15), "2022-09-10 08:30:15"),
+        (
+            datetime(2022, 9, 10, 1, 30, 15, tzinfo=timezone(timedelta(hours=-7))),
+            "2022-09-10 08:30:15",
+        ),
+        (
+            datetime(2022, 9, 10, 8, 30, 15, 123456, tzinfo=timezone.utc),
+            "2022-09-10 08:30:16",
+        ),
+        (
+            datetime(2022, 9, 10, 23, 59, 59, 1, tzinfo=timezone.utc),
+            "2022-09-11 00:00:00",
+        ),
+    ],
+    ids=[
+        "no_start",
+        "utc",
+        "naive_as_utc",
+        "offset_converted_to_utc",
+        "fraction_rounds_up",
+        "fraction_rounds_up_across_midnight",
+    ],
+)
+async def test_litter_robot_4_activity_history_start(
+    mock_aiointercept: aiointercept,
+    mock_account: Account,
+    start: datetime | None,
+    expected_start_timestamp: str | None,
+) -> None:
+    """Tests that the activity history start is sent in the format the API accepts."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    mock_aiointercept.clear()
+    mock_aiointercept.post(
+        LR4_ENDPOINT,
+        payload={
+            "data": {
+                "getLitterRobot4Activity": [
+                    {
+                        "timestamp": "2022-09-17 20:53:32.000000000",
+                        "value": "robotCycleStatusIdle",
+                        "actionValue": "",
+                    }
+                ]
+            }
+        },
+    )
+
+    activities = await robot.get_activity_history(limit=10, start=start)
+    assert len(activities) == 1
+
+    json = list(mock_aiointercept.requests.items())[-1][-1][-1].kwargs.get("json", {})
+    variables = json.get("variables", {})
+    assert variables.get("limit") == 10
+    assert variables.get("startTimestamp") == expected_start_timestamp
+    if start is None:
+        assert "startTimestamp" not in variables
 
     await robot._account.disconnect()
 
