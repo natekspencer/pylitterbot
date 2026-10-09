@@ -23,7 +23,7 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 camera = ["aiortc>=1.9.0"]
-mcp = ["mcp[cli]>=1.0.0,<2"]
+mcp = ["mcp[cli]>=1.0.0,<3"]
 
 [project.scripts]
 pylitterbot-mcp = "pylitterbot.mcp:main"
