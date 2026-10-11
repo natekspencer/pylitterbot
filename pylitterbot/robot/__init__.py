@@ -9,11 +9,9 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
-from deepdiff import DeepDiff
-
 from ..event import EVENT_UPDATE, Event
 from ..transport import Transport
-from ..utils import to_timestamp, urljoin
+from ..utils import diff_data, to_timestamp, urljoin
 
 if sys.version_info >= (3, 13):
     from warnings import deprecated
@@ -152,12 +150,10 @@ class Robot(Event):
     ) -> None:
         """Save the robot info from a data dictionary."""
         if self._is_loaded:
-            if diff := DeepDiff(
-                self._data,
-                {**self._data, **data} if partial else data,
-                ignore_order=True,
-                report_repetition=True,
-                verbose_level=2,
+            if _LOGGER.isEnabledFor(logging.DEBUG) and (
+                diff := diff_data(
+                    self._data, {**self._data, **data} if partial else data
+                )
             ):
                 _LOGGER.debug("%s updated: %s", self.name, diff)
 

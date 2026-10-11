@@ -15,7 +15,6 @@ keywords = [
 ]
 dependencies = [
     "aiohttp>=3.8.1",
-    "deepdiff>=6.2.1",
     "pyjwt>=2.7.0",
     "pycognito>=2024.2.0",
 ]
@@ -44,7 +43,7 @@ dev = [
     "pytest-timeout==2.4.0",
     "tox==4.64.9",
     "tox-uv>=1.36.1",
-    "ruff==0.16.10",
+    "ruff==0.17.0",
 ]
 
 [build-system]
