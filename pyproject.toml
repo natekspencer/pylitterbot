@@ -15,7 +15,6 @@ keywords = [
 ]
 dependencies = [
     "aiohttp>=3.8.1",
-    "deepdiff>=6.2.1",
     "pyjwt>=2.7.0",
     "pycognito>=2024.2.0",
 ]

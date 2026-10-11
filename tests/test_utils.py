@@ -3,8 +3,10 @@
 import pytest
 
 from pylitterbot.utils import (
+    MISSING,
     REDACTED,
     decode,
+    diff_data,
     encode,
     first_value,
     hex_to_rgb,
@@ -76,3 +78,28 @@ def test_rgb_to_hex() -> None:
     for invalid in ((256, 0, 0), (0, -1, 0)):
         with pytest.raises(ValueError):
             rgb_to_hex(invalid)
+
+
+def test_diff_data() -> None:
+    """Test reporting the differences between two payloads."""
+    old = {"name": "Robot", "status": {"level": 5, "online": True}, "tags": [1, 2]}
+
+    assert diff_data(old, old) == {}
+    assert diff_data(old, {**old, "name": "Robot 2"}) == {
+        "root['name']": ("Robot", "Robot 2")
+    }
+    assert diff_data(old, {**old, "status": {"level": 6, "online": True}}) == {
+        "root['status']['level']": (5, 6)
+    }
+    assert diff_data(old, {**old, "tags": [2, 1], "new": 1}) == {
+        "root['tags']": ([1, 2], [2, 1]),
+        "root['new']": (MISSING, 1),
+    }
+    assert diff_data(old, {"name": "Robot"}) == {
+        "root['status']": ({"level": 5, "online": True}, MISSING),
+        "root['tags']": ([1, 2], MISSING),
+    }
+    assert diff_data(old, {**old, "status": None}) == {
+        "root['status']": ({"level": 5, "online": True}, None)
+    }
+    assert repr(MISSING) == "<missing>"

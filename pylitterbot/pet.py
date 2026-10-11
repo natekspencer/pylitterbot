@@ -8,12 +8,10 @@ from datetime import date, datetime
 from enum import Enum, unique
 from typing import Any, cast
 
-from deepdiff import DeepDiff
-
 from .event import EVENT_UPDATE, Event
 from .exceptions import InvalidCommandException
 from .session import Session
-from .utils import dig, to_timestamp
+from .utils import diff_data, dig, to_timestamp
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -294,12 +292,8 @@ class Pet(Event):
 
     def _update_data(self, data: dict, partial: bool = False) -> None:
         """Save the pet info from a data dictionary."""
-        if diff := DeepDiff(
-            self._data,
-            {**self._data, **data} if partial else data,
-            ignore_order=True,
-            report_repetition=True,
-            verbose_level=2,
+        if _LOGGER.isEnabledFor(logging.DEBUG) and (
+            diff := diff_data(self._data, {**self._data, **data} if partial else data)
         ):
             _LOGGER.debug("%s updated: %s", self.name, diff)
 
