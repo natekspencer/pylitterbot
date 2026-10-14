@@ -52,6 +52,7 @@ async def test_litter_robot_4(
     assert not robot.firmware_update_triggered
     assert robot.litter_level == 40.0
     assert not robot.is_drawer_full_indicator_triggered
+    assert not robot.is_laser_dirty
     assert robot.globe_motor_fault_status == GlobeMotorFaultStatus.FAULT_CLEAR
     assert robot.globe_motor_retract_fault_status == GlobeMotorFaultStatus.FAULT_CLEAR
     assert robot.is_on
@@ -451,6 +452,21 @@ async def test_litter_robot_4_shared_subscription_dispatch(
     robot_b._ws_message_handler(message)
     assert robot_a.waste_drawer_level == 42
     assert robot_b.waste_drawer_level == 99
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(True, True), (False, False), (None, False)],
+)
+async def test_litter_robot_4_laser_dirty(
+    mock_account: Account, value: bool | None, expected: bool
+) -> None:
+    """Tests that the laser dirty flag is read from the robot data."""
+    data = {**LITTER_ROBOT_4_DATA, "isLaserDirty": value}
+    robot = LitterRobot4(data=data, account=mock_account)
+    assert robot.is_laser_dirty is expected
+
+    await robot._account.disconnect()
 
 
 async def test_litter_robot_4_sleep_time(
