@@ -225,6 +225,11 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         return self._data.get("isHopperRemoved") is True
 
     @property
+    def is_laser_dirty(self) -> bool:
+        """Return `True` if the laser (cat detection) sensors need cleaning."""
+        return self._data.get("isLaserDirty") is True
+
+    @property
     def is_on(self) -> bool:
         """Return `True` if the robot is on."""
         return bool(self._data.get("unitPowerStatus", "") == "ON")
