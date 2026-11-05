@@ -496,6 +496,51 @@ async def test_litter_robot_4_sleep_time(
     assert robot.sleep_mode_end_time.isoformat() == "2022-07-24T08:30:00-06:00"
 
 
+async def test_litter_robot_4_sleep_time_full_day(
+    freezer: FrozenDateTimeFactory, mock_account: Account
+) -> None:
+    """Tests that matching sleep and wake times are a full day of sleep."""
+    days = (
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+    )
+    schedule = {
+        day: {"sleepTime": 10, "wakeTime": 10, "isEnabled": True} for day in days
+    }
+    mountain = timezone(timedelta(hours=-6))
+    freezer.move_to("2022-07-24 12:00:00-06:00")
+    robot = LitterRobot4(
+        data={**LITTER_ROBOT_4_DATA, "weekdaySleepModeEnabled": schedule},
+        account=mock_account,
+    )
+    assert robot.sleep_schedule
+    assert robot.sleep_schedule.is_active(datetime.now(mountain))
+    assert robot.sleep_mode_start_time
+    assert robot.sleep_mode_start_time.isoformat() == "2022-07-24T00:10:00-06:00"
+    assert robot.sleep_mode_end_time
+    assert robot.sleep_mode_end_time.isoformat() == "2022-07-25T00:10:00-06:00"
+
+    freezer.move_to("2022-07-25 00:10:00-06:00")
+    assert robot.sleep_mode_start_time
+    assert robot.sleep_mode_start_time.isoformat() == "2022-07-24T00:10:00-06:00"
+    assert robot.sleep_mode_end_time
+    assert robot.sleep_mode_end_time.isoformat() == "2022-07-25T00:10:00-06:00"
+
+    freezer.move_to("2022-07-25 00:10:01-06:00")
+    assert robot.sleep_schedule.is_active(datetime.now(mountain))
+    assert robot.sleep_mode_start_time
+    assert robot.sleep_mode_start_time.isoformat() == "2022-07-25T00:10:00-06:00"
+    assert robot.sleep_mode_end_time
+    assert robot.sleep_mode_end_time.isoformat() == "2022-07-26T00:10:00-06:00"
+
+    await robot._account.disconnect()
+
+
 async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
     """Tests Litter-Robot 4 in clean mode."""
     robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)

@@ -43,15 +43,21 @@ class SleepScheduleDay:
     sleep_time: time
     wake_time: time
     is_enabled: bool
+    is_full_day: bool = False
 
     @classmethod
     def from_named_dict(cls, name: str, data: dict) -> SleepScheduleDay:
-        """Return SleepScheduleDay from named dict."""
+        """Return SleepScheduleDay from named dict.
+
+        Only a Litter-Robot 4 uses this format, and it sleeps when its sleep and
+        wake times match. A Litter-Robot 5 doesn't reliably do the same.
+        """
         return cls(
             day=DayOfWeek.from_name(name),
             sleep_time=_minutes_to_time(data["sleepTime"]),
             wake_time=_minutes_to_time(data["wakeTime"]),
             is_enabled=data["isEnabled"],
+            is_full_day=data["sleepTime"] == data["wakeTime"],
         )
 
     @classmethod
@@ -151,6 +157,9 @@ class SleepSchedule:
                 start = start_of_day - timedelta(minutes=1440 - sleep_minutes)
             else:
                 start = start_of_day + timedelta(minutes=sleep_minutes)
+
+            if entry.is_full_day:
+                wake_minutes += 1440
 
             if dt >= start or end is None:
                 end = start_of_day + timedelta(minutes=wake_minutes)

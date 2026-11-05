@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from aiohttp import ClientConnectionError
@@ -964,6 +966,40 @@ async def test_litter_robot_5_sleep_time(
     assert robot.sleep_mode_start_time.isoformat() == "2026-03-27T22:30:00-06:00"
     assert robot.sleep_mode_end_time
     assert robot.sleep_mode_end_time.isoformat() == "2026-03-28T07:30:00-06:00"
+
+
+async def test_litter_robot_5_sleep_time_matching(
+    freezer: FrozenDateTimeFactory, mock_account: Account
+) -> None:
+    """Tests that matching sleep and wake times are not a period of sleep."""
+    freezer.move_to("2026-03-22 12:00:00-06:00")
+    sleep_schedules = {
+        "sleepSchedules": [
+            {"dayOfWeek": day, "isEnabled": True, "sleepTime": 10, "wakeTime": 10}
+            for day in range(7)
+        ]
+    }
+    data = {**LITTER_ROBOT_5_DATA, **sleep_schedules}
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.sleep_schedule
+    assert not robot.sleep_schedule.is_active(datetime.now(ZoneInfo("America/Denver")))
+
+
+async def test_litter_robot_5_sleep_time_midnight_to_midnight(
+    freezer: FrozenDateTimeFactory, mock_account: Account
+) -> None:
+    """Tests that sleep 0 and wake 1440 are not a period of sleep."""
+    freezer.move_to("2026-03-22 12:00:00-06:00")
+    sleep_schedules = {
+        "sleepSchedules": [
+            {"dayOfWeek": day, "isEnabled": True, "sleepTime": 0, "wakeTime": 1440}
+            for day in range(7)
+        ]
+    }
+    data = {**LITTER_ROBOT_5_DATA, **sleep_schedules}
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.sleep_schedule
+    assert not robot.sleep_schedule.is_active(datetime.now(ZoneInfo("America/Denver")))
 
 
 async def test_litter_robot_5_sleep_mode_disabled(
