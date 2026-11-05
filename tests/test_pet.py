@@ -1,5 +1,7 @@
 """Test pet module."""
 
+import logging
+import re
 from datetime import date, datetime, timezone
 
 import pytest
@@ -39,6 +41,8 @@ async def test_pet_setup(mock_aiointercept: aiointercept) -> None:
     assert pet.environment_type == PetEnvironment.INDOOR
     assert pet.health_concerns == []
     assert pet.image_url == "s3ImageURL"
+    query = list(mock_aiointercept.requests.items())[-1][-1][-1].kwargs["json"]["query"]
+    assert re.search(r"profileImage\s*{[^}]*s3ImageURL", query)
     assert pet.is_active
     assert pet.is_fixed
     assert pet.is_healthy
@@ -82,6 +86,21 @@ async def test_pet_without_profile_image(mock_aiointercept: aiointercept) -> Non
     pet = await get_pet()
     pet._data["profileImage"] = None
     assert pet.image_url is None
+
+
+async def test_pet_update_does_not_log_profile_image(
+    mock_aiointercept: aiointercept, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Tests that profile image values are kept out of the debug update log."""
+    pet = await get_pet()
+    profile_image = {"imagePath": "newPath", "s3ImageURL": "newUrl"}
+    with caplog.at_level(logging.DEBUG, logger="pylitterbot.pet"):
+        pet._update_data({"name": "New name", "profileImage": profile_image}, True)
+
+    assert "New name" in caplog.text
+    assert "newPath" not in caplog.text
+    assert "newUrl" not in caplog.text
+    assert pet.image_url == "newUrl"
 
 
 async def test_pet_with_unexpected_values(
