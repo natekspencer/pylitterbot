@@ -36,6 +36,7 @@ REDACT_FIELDS = [
     "unitId",
     "litterRobotSerial",
     "serial",
+    "profileImage",
     "s3ImageURL",
 ]
 

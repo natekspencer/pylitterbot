@@ -563,7 +563,7 @@ PET_DATA: dict[str, Any] = {
     "age": 0,
     "birthday": "2016-07-02 00:00:00.000",
     "adoptionDate": None,
-    "s3ImageURL": None,
+    "profileImage": {"imagePath": "pathToImage", "s3ImageURL": "s3ImageURL"},
     "diet": "BOTH",
     "isFixed": True,
     "environmentType": "INDOOR",
