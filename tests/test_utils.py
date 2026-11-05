@@ -41,6 +41,11 @@ def test_redact() -> None:
     """Test redacting values from a dictionary."""
     assert redact({"litterRobotId": None}) == {"litterRobotId": None}
     assert redact({"litterRobotId": "someId"}) == {"litterRobotId": REDACTED}
+    assert redact({"s3ImageURL": "url"}) == {"s3ImageURL": REDACTED}
+    assert redact({"profileImage": None}) == {"profileImage": None}
+    assert redact({"profileImage": {"imagePath": "path", "s3ImageURL": "url"}}) == {
+        "profileImage": REDACTED
+    }
 
     data = {"key": "value"}
     assert redact(data) == data

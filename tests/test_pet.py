@@ -38,7 +38,7 @@ async def test_pet_setup(mock_aiointercept: aiointercept) -> None:
     assert pet.diet == PetDiet.BOTH
     assert pet.environment_type == PetEnvironment.INDOOR
     assert pet.health_concerns == []
-    assert pet.image_url is None
+    assert pet.image_url == "s3ImageURL"
     assert pet.is_active
     assert pet.is_fixed
     assert pet.is_healthy
@@ -75,6 +75,13 @@ async def test_pet_breeds(
     pet._data |= {"breeds": breeds}
     assert pet.breeds == breeds
     assert pet.breed == breed
+
+
+async def test_pet_without_profile_image(mock_aiointercept: aiointercept) -> None:
+    """Tests that a pet with no profile image has no image url."""
+    pet = await get_pet()
+    pet._data["profileImage"] = None
+    assert pet.image_url is None
 
 
 async def test_pet_with_unexpected_values(

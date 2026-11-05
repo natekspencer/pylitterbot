@@ -32,7 +32,10 @@ PET_MODEL = """
     age
     birthday
     adoptionDate
-    s3ImageURL
+    profileImage {
+        imagePath
+        s3ImageURL
+    }
     diet
     isFixed
     environmentType
@@ -254,7 +257,7 @@ class Pet(Event):
     @property
     def image_url(self) -> str | None:
         """Return image url, if any."""
-        return self._data.get("s3ImageURL")
+        return (self._data.get("profileImage") or {}).get("s3ImageURL")
 
     @property
     def is_active(self) -> bool | None:
