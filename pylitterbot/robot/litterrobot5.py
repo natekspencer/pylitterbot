@@ -876,7 +876,7 @@ class LitterRobot5(LitterRobot):
             value: Whether to enable or disable sleep mode.
             sleep_time: Minutes from midnight for sleep start (e.g. 1380 = 11PM).
             wake_time: Minutes from midnight for wake (e.g. 420 = 7AM).
-            day_of_week: Specific day to update (0=Monday, 6=Sunday).
+            day_of_week: Specific day to update (0=Sunday, 6=Saturday).
                 If None, updates all days.
 
         """

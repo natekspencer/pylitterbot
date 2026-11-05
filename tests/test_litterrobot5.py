@@ -1278,19 +1278,19 @@ async def test_litter_robot_5_set_sleep_mode(
     assert await robot.set_sleep_mode(value=False)
     assert not robot.sleep_mode_enabled
 
-    # Enable sleep for a specific day (Sunday=6)
+    # Enable sleep for a specific day (Saturday=6)
     mock_aiointercept.patch(LR5_GET_URL, payload={})
     assert await robot.set_sleep_mode(
         value=True, sleep_time=1380, wake_time=420, day_of_week=6
     )
     schedules = robot._data.get("sleepSchedules", [])
-    sunday = next(s for s in schedules if s["dayOfWeek"] == 6)
-    assert sunday["isEnabled"]
-    assert sunday["sleepTime"] == 1380
-    assert sunday["wakeTime"] == 420
+    saturday = next(s for s in schedules if s["dayOfWeek"] == 6)
+    assert saturday["isEnabled"]
+    assert saturday["sleepTime"] == 1380
+    assert saturday["wakeTime"] == 420
     # Other days should remain disabled
-    monday = next(s for s in schedules if s["dayOfWeek"] == 0)
-    assert not monday["isEnabled"]
+    sunday = next(s for s in schedules if s["dayOfWeek"] == 0)
+    assert not sunday["isEnabled"]
 
     await robot._account.disconnect()
 

@@ -910,19 +910,15 @@ class TestSetSleepMode:
             await set_sleep_mode(robot="Basement", enabled=True, start_time="2230")
 
     @pytest.mark.asyncio()
-    async def test_rejects_lr4(self, mock_account: MagicMock) -> None:
-        """set_sleep_mode raises ValueError for LR4 which cannot set sleep mode via API.
-
-        The isinstance guard fires before the device call, so set_sleep_mode is never awaited.
-        """
+    async def test_sets_sleep_mode_on_lr4(self, mock_account: MagicMock) -> None:
+        """set_sleep_mode passes the parsed time through to an LR4."""
         from pylitterbot.mcp.tools.settings import set_sleep_mode
 
         lr4 = mock_account.robots[0]
-        lr4.set_sleep_mode = AsyncMock(side_effect=NotImplementedError)
 
-        with (
-            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
-            pytest.raises(ValueError, match="Sleep mode"),
-        ):
-            await set_sleep_mode(robot="Kitchen", enabled=True, start_time="22:30")
-        lr4.set_sleep_mode.assert_not_awaited()
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_sleep_mode(
+                robot="Kitchen", enabled=True, start_time="22:30"
+            )
+        lr4.set_sleep_mode.assert_awaited_once_with(True, time(22, 30))
+        assert "enabled" in result

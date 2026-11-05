@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime, timedelta, timezone
+from copy import deepcopy
+from datetime import datetime, time, timedelta, timezone
 from enum import Enum, unique
 from json import dumps
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -23,7 +24,7 @@ from ..enums import (
     NightLightMode,
 )
 from ..exceptions import InvalidCommandException, LitterRobotException
-from ..sleep_schedule import SleepSchedule
+from ..sleep_schedule import DayOfWeek, SleepSchedule
 from ..transport import WebSocketMonitor, WebSocketProtocol
 from ..utils import calculate_litter_level, encode, to_enum, to_timestamp, utcnow
 from .litterrobot import LitterRobot
@@ -479,6 +480,60 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
         Clears errors and may trigger a cycle. Make sure the globe is clear before proceeding.
         """
         return await self._dispatch_command(LitterRobot4Command.SHORT_RESET_PRESS)
+
+    async def set_sleep_mode(
+        self,
+        value: bool,
+        sleep_time: int | time | None = None,
+        *,
+        wake_time: int | None = None,
+        day_of_week: int | None = None,
+    ) -> bool:
+        """Set the sleep mode schedule.
+
+        Matching sleep and wake times make the robot sleep for the full day.
+
+        Args:
+            value: Whether to enable or disable sleep mode.
+            sleep_time: Minutes from midnight for sleep start (e.g. 1380 = 11PM).
+            wake_time: Minutes from midnight for wake (e.g. 420 = 7AM).
+            day_of_week: Specific day to update (0=Sunday, 6=Saturday).
+                If None, updates all days.
+
+        """
+        if isinstance(sleep_time, time):
+            sleep_time = sleep_time.hour * 60 + sleep_time.minute
+
+        schedule = deepcopy(self._data.get("weekdaySleepModeEnabled") or {})
+        days = []
+        for day in DayOfWeek:
+            name = day.name.capitalize()
+            entry = schedule.get(name) or {
+                "sleepTime": 0,
+                "wakeTime": 0,
+                "isEnabled": False,
+            }
+            schedule[name] = entry
+            if day_of_week is None or day == day_of_week:
+                entry["isEnabled"] = value
+                if sleep_time is not None:
+                    entry["sleepTime"] = sleep_time
+                if wake_time is not None:
+                    entry["wakeTime"] = wake_time
+            days.append(
+                {
+                    "sleepMinutes": entry["sleepTime"],
+                    "wakeMinutes": entry["wakeTime"],
+                    "enabled": entry["isEnabled"],
+                }
+            )
+
+        if not await self._dispatch_command(
+            LitterRobot4Command.SET_SLEEP_WAKE_TIMES, value=dumps({"days": days})
+        ):
+            return False
+        self._update_data({"weekdaySleepModeEnabled": schedule}, partial=True)
+        return True
 
     async def set_name(self, name: str) -> bool:
         """Set the name."""

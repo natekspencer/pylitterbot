@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from copy import deepcopy
+from datetime import datetime, time, timedelta, timezone
+from json import loads
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from aiointercept import aiointercept
@@ -465,6 +468,75 @@ async def test_litter_robot_4_laser_dirty(
     data = {**LITTER_ROBOT_4_DATA, "isLaserDirty": value}
     robot = LitterRobot4(data=data, account=mock_account)
     assert robot.is_laser_dirty is expected
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_4_set_sleep_mode(mock_account: Account) -> None:
+    """Tests setting the sleep schedule on a Litter-Robot 4."""
+    data = deepcopy(LITTER_ROBOT_4_DATA)
+    data["weekdaySleepModeEnabled"] = {
+        day: {"sleepTime": 0, "wakeTime": 0, "isEnabled": False}
+        for day in (
+            "Sunday",
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+        )
+    }
+    robot = LitterRobot4(data=data, account=mock_account)
+    assert not robot.sleep_mode_enabled
+    post = AsyncMock(return_value={"data": {"sendLitterRobot4Command": "ok"}})
+    robot._post = post  # type: ignore[method-assign]
+
+    def last_days() -> list[dict]:
+        variables = post.call_args.kwargs["json"]["variables"]
+        assert variables["command"] == LitterRobot4Command.SET_SLEEP_WAKE_TIMES
+        days: list[dict] = loads(variables["value"])["days"]
+        return days
+
+    # Enable sleep for all days
+    assert await robot.set_sleep_mode(True, time(22, 30), wake_time=420)
+    assert robot.sleep_mode_enabled
+    assert (  # type: ignore[unreachable]
+        last_days() == [{"sleepMinutes": 1350, "wakeMinutes": 420, "enabled": True}] * 7
+    )
+
+    # Disable sleep for all days, keeping the times
+    assert await robot.set_sleep_mode(False)
+    assert not robot.sleep_mode_enabled
+    assert (
+        last_days()
+        == [{"sleepMinutes": 1350, "wakeMinutes": 420, "enabled": False}] * 7
+    )
+
+    # Enable sleep for Saturday only, which is the last day sent
+    assert await robot.set_sleep_mode(True, 60, wake_time=120, day_of_week=6)
+    days = last_days()
+    assert days[6] == {"sleepMinutes": 60, "wakeMinutes": 120, "enabled": True}
+    assert (
+        days[:6] == [{"sleepMinutes": 1350, "wakeMinutes": 420, "enabled": False}] * 6
+    )
+    schedule = robot._data["weekdaySleepModeEnabled"]
+    assert schedule["Saturday"] == {"sleepTime": 60, "wakeTime": 120, "isEnabled": True}
+    assert not schedule["Sunday"]["isEnabled"]
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_4_set_sleep_mode_failure(mock_account: Account) -> None:
+    """Tests that a rejected command leaves the schedule unchanged."""
+    robot = LitterRobot4(data=deepcopy(LITTER_ROBOT_4_DATA), account=mock_account)
+    schedule = deepcopy(robot._data["weekdaySleepModeEnabled"])
+
+    robot._post = AsyncMock(  # type: ignore[method-assign]
+        return_value={"data": {"sendLitterRobot4Command": "Error sending a command"}}
+    )
+    assert not await robot.set_sleep_mode(False)
+    assert robot._data["weekdaySleepModeEnabled"] == schedule
 
     await robot._account.disconnect()
 

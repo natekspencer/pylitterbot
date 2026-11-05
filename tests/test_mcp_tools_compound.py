@@ -392,9 +392,9 @@ class TestSyncSettingsLR4SleepModeCrash:
     async def test_sync_settings_completes_when_lr4_target_raises_on_sleep_mode(
         self, mock_account: MagicMock
     ) -> None:
-        """sync_settings does not crash when an LR4 target raises NotImplementedError on set_sleep_mode.
+        """sync_settings does not crash when a target raises NotImplementedError on set_sleep_mode.
 
-        LR4 inherits the raising stub from the base LitterRobot class.
+        A model can inherit the raising stub from the base LitterRobot class.
         The call must complete and report the target as skipped with a reason.
         """
         from pylitterbot.mcp.tools.compound import sync_settings
@@ -408,7 +408,7 @@ class TestSyncSettingsLR4SleepModeCrash:
         bedroom.sleep_mode_enabled = False
         bedroom.sleep_mode_start_time = None
 
-        # Simulate LR4 not overriding set_sleep_mode: it raises NotImplementedError.
+        # Simulate a model not overriding set_sleep_mode.
         bedroom.set_sleep_mode = AsyncMock(
             side_effect=NotImplementedError("not supported on this model")
         )
