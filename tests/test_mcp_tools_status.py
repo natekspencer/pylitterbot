@@ -117,10 +117,11 @@ class TestToolDispatch:
         with patch(
             "pylitterbot.mcp.tools.status.get_account",
             side_effect=RuntimeError("no account"),
-        ):
+        ) as mock_get_account:
             async with Client(mcp) as client:
                 result = await client.call_tool("get_robots")
 
+        mock_get_account.assert_awaited_once_with()
         assert result.is_error
 
 
