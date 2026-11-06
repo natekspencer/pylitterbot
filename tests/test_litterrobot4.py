@@ -834,6 +834,10 @@ async def test_litter_hopper_toggle(
             LitterBoxStatus.OFFLINE,
         ),
         (
+            {"displayCode": "DC_MTR_FAULT_PINCH", "unitPowerStatus": "OFF"},
+            LitterBoxStatus.OFF,
+        ),
+        (
             {"displayCode": "DC_MODE_IDLE", "globeMotorFaultStatus": "FAULT_TIMEOUT"},
             LitterBoxStatus.READY,
         ),
@@ -849,3 +853,30 @@ async def test_litter_robot_4_status(
     # update data and assert expected result
     robot._update_data(updated_data, partial=True)
     assert robot.status == status
+
+
+async def test_litter_robot_4_status_fault_clears(mock_account: Account) -> None:
+    """Tests that a fault status ends when the panel returns to idle."""
+    robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
+
+    robot._update_data({"displayCode": "DC_MTR_FAULT_PINCH"}, partial=True)
+    statuses = [robot.status]
+
+    robot._update_data({"displayCode": "DC_MODE_IDLE"}, partial=True)
+    statuses.append(robot.status)
+
+    assert statuses == [LitterBoxStatus.PINCH_DETECT, LitterBoxStatus.READY]
+
+    await robot._account.disconnect()
+
+
+async def test_litter_robot_4_status_without_display_code(
+    mock_account: Account,
+) -> None:
+    """Tests that a missing display code doesn't prevent reporting a status."""
+    data = {**LITTER_ROBOT_4_DATA, "robotCycleState": "CYCLE_STATE_PAUSE"}
+    del data["displayCode"]
+    robot = LitterRobot4(data=data, account=mock_account)
+    assert robot.status == LitterBoxStatus.PAUSED
+
+    await robot._account.disconnect()
