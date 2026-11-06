@@ -37,6 +37,7 @@ PET_MODEL = """
         s3ImageURL
     }
     diet
+    personality
     isFixed
     environmentType
     healthConcerns
@@ -54,6 +55,8 @@ PET_MODEL = """
         timestamp
     }
     weightHistoryErrorType
+    isDeceased
+    dateOfDeath
 }
 """
 
@@ -94,6 +97,28 @@ class PetGender(Enum):
     def __str__(self) -> str:
         """Return str(self)."""
         return self.name.lower()
+
+
+@unique
+class PetPersonality(Enum):
+    """Pet personality."""
+
+    AFFECTIONATE = "affectionate"
+    ANXIOUS = "anxious"
+    BOSSY = "bossy"
+    CURIOUS = "curious"
+    FRIENDLY = "friendly with other pets"
+    HUNTER = "hunter"
+    INDEPENDENT = "independent"
+    LAID_BACK = "laid-back"
+    PLAYFUL = "playful"
+    PREFERS_TO_BE_ALONE = "prefers to be alone"
+    SHY = "shy"
+    VOCAL = "vocal"
+
+    def __str__(self) -> str:
+        """Return str(self)."""
+        return str(self.value)
 
 
 @unique
@@ -232,6 +257,16 @@ class Pet(Event):
         )
 
     @property
+    def deceased_date(self) -> date | None:
+        """Return the date of death, if any."""
+        deceased_date_str = self._data.get("dateOfDeath")
+        return (
+            datetime.fromisoformat(deceased_date_str).date()
+            if deceased_date_str
+            else None
+        )
+
+    @property
     def diet(self) -> PetDiet | None:
         """Return the diet, if any."""
         if (diet := self._data.get("diet")) not in PetDiet.__members__:
@@ -265,6 +300,11 @@ class Pet(Event):
         return cast(bool, self._data.get("isActive", False))
 
     @property
+    def is_deceased(self) -> bool:
+        """Return `True` if the pet is deceased."""
+        return self._data.get("isDeceased") is True
+
+    @property
     def is_fixed(self) -> bool | None:
         """Return `True` if the pet is fixed."""
         return cast(bool, self._data.get("isFixed", False))
@@ -273,6 +313,15 @@ class Pet(Event):
     def is_healthy(self) -> bool | None:
         """Return `True` if the pet is healthy."""
         return cast(bool, self._data.get("isHealthy", False))
+
+    @property
+    def personality(self) -> list[str]:
+        """Return the personality traits, keeping any that aren't recognized."""
+        return [
+            str(PetPersonality[trait]) if trait in PetPersonality.__members__ else trait
+            for trait in self._data.get("personality") or []
+            if trait
+        ]
 
     @property
     def pet_tag_id(self) -> str | None:

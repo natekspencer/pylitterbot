@@ -37,6 +37,7 @@ async def test_pet_setup(mock_aiointercept: aiointercept) -> None:
     assert pet.age == 0
     assert pet.birthday == date(2016, 7, 2)
     assert pet.adoption_date is None
+    assert pet.deceased_date is None
     assert pet.diet == PetDiet.BOTH
     assert pet.environment_type == PetEnvironment.INDOOR
     assert pet.health_concerns == []
@@ -44,8 +45,13 @@ async def test_pet_setup(mock_aiointercept: aiointercept) -> None:
     query = list(mock_aiointercept.requests.items())[-1][-1][-1].kwargs["json"]["query"]
     assert re.search(r"profileImage\s*{[^}]*s3ImageURL", query)
     assert pet.is_active
+    assert not pet.is_deceased
     assert pet.is_fixed
     assert pet.is_healthy
+    assert pet.personality == []
+    assert re.search(r"\bpersonality\b", query)
+    assert re.search(r"\bisDeceased\b", query)
+    assert re.search(r"\bdateOfDeath\b", query)
     assert pet.pet_tag_id is None
     assert pet.weight_id_feature_enabled
     assert len(pet.weight_history) == 2
@@ -54,6 +60,51 @@ async def test_pet_setup(mock_aiointercept: aiointercept) -> None:
     )
     assert pet.weight_history[0].weight == 8.68
     assert pet.get_visits_since(datetime(2024, 4, 17, 9, tzinfo=timezone.utc)) == 1
+
+
+@pytest.mark.parametrize(
+    "traits,personality",
+    [
+        (None, []),
+        ([], []),
+        (["AFFECTIONATE"], ["affectionate"]),
+        (["FRIENDLY", "LAID_BACK"], ["friendly with other pets", "laid-back"]),
+        (["PLAYFUL", None, "NEW_TRAIT"], ["playful", "NEW_TRAIT"]),
+    ],
+)
+async def test_pet_personality(
+    mock_aiointercept: aiointercept,
+    traits: list[str | None] | None,
+    personality: list[str],
+) -> None:
+    """Tests that personality traits are readable and tolerate unknown values."""
+    pet = await get_pet()
+    pet._data["personality"] = traits
+    assert pet.personality == personality
+
+
+@pytest.mark.parametrize(
+    "is_deceased,date_of_death,deceased,deceased_date",
+    [
+        (None, None, False, None),
+        (False, None, False, None),
+        (True, None, True, None),
+        (True, "2024-03-01", True, date(2024, 3, 1)),
+        (True, "2024-03-01T12:00:00.000Z", True, date(2024, 3, 1)),
+    ],
+)
+async def test_pet_deceased(
+    mock_aiointercept: aiointercept,
+    is_deceased: bool | None,
+    date_of_death: str | None,
+    deceased: bool,
+    deceased_date: date | None,
+) -> None:
+    """Tests the deceased status and date."""
+    pet = await get_pet()
+    pet._data |= {"isDeceased": is_deceased, "dateOfDeath": date_of_death}
+    assert pet.is_deceased is deceased
+    assert pet.deceased_date == deceased_date
 
 
 @pytest.mark.parametrize(
