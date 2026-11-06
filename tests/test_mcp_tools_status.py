@@ -82,6 +82,49 @@ class TestGetRobots:
         mock_account.refresh_robots.assert_awaited_once()
 
 
+class TestToolDispatch:
+    """Tests for calling tools through the MCP server."""
+
+    @pytest.mark.asyncio()
+    async def test_calls_tool_through_server(self, mock_account: MagicMock) -> None:
+        """A tools/call request reaches the handler and returns its result."""
+        from mcp import Client
+
+        import pylitterbot.mcp.tools  # noqa: F401
+        from pylitterbot.mcp.server import mcp
+
+        with patch(
+            "pylitterbot.mcp.tools.status.get_account", return_value=mock_account
+        ):
+            async with Client(mcp) as client:
+                result = await client.call_tool("get_robots")
+
+        assert not result.is_error
+        assert result.structured_content
+        robots = result.structured_content["result"]
+        assert [robot["name"] for robot in robots] == [
+            robot.name for robot in mock_account.robots
+        ]
+
+    @pytest.mark.asyncio()
+    async def test_reports_tool_errors_through_server(self) -> None:
+        """A tool that raises is returned as an error result."""
+        from mcp import Client
+
+        import pylitterbot.mcp.tools  # noqa: F401
+        from pylitterbot.mcp.server import mcp
+
+        with patch(
+            "pylitterbot.mcp.tools.status.get_account",
+            side_effect=RuntimeError("no account"),
+        ) as mock_get_account:
+            async with Client(mcp) as client:
+                result = await client.call_tool("get_robots")
+
+        mock_get_account.assert_awaited_once_with()
+        assert result.is_error
+
+
 class TestGetRobotsRefreshStale:
     """Tests for get_robots refresh_stale flag."""
 

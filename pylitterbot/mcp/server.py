@@ -1,4 +1,4 @@
-"""FastMCP server instance and Account lifecycle management.
+"""MCP server instance and Account lifecycle management.
 
 Note:
     This server does not re-authenticate on session expiry. For long-running
@@ -13,11 +13,11 @@ from __future__ import annotations
 import asyncio
 import os
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from pylitterbot import Account
 
-mcp = FastMCP("litter-robot")
+mcp = MCPServer("litter-robot")
 
 _account: Account | None = None
 _account_lock = asyncio.Lock()
