@@ -636,6 +636,39 @@ async def test_litter_robot_4_sleep_time_full_day(
     await robot._account.disconnect()
 
 
+@pytest.mark.parametrize(
+    ("high", "low", "brightness"),
+    [
+        (15, 25, BrightnessLevel.LOW),
+        (40, 50, BrightnessLevel.MEDIUM),
+        (90, 100, BrightnessLevel.HIGH),
+        (25, 15, BrightnessLevel.LOW),
+        (50, 40, BrightnessLevel.MEDIUM),
+        (100, 90, BrightnessLevel.HIGH),
+        (None, 50, BrightnessLevel.MEDIUM),
+        (50, None, BrightnessLevel.MEDIUM),
+        (None, None, None),
+        (15, 20, None),
+    ],
+)
+async def test_litter_robot_4_panel_brightness(
+    mock_account: Account,
+    high: int | None,
+    low: int | None,
+    brightness: BrightnessLevel | None,
+) -> None:
+    """Tests that the panel brightness is read from either field."""
+    data = {
+        **LITTER_ROBOT_4_DATA,
+        "panelBrightnessHigh": high,
+        "panelBrightnessLow": low,
+    }
+    robot = LitterRobot4(data=data, account=mock_account)
+    assert robot.panel_brightness == brightness
+
+    await robot._account.disconnect()
+
+
 async def test_litter_robot_4_cleaning(mock_account: Account) -> None:
     """Tests Litter-Robot 4 in clean mode."""
     robot = LitterRobot4(data=LITTER_ROBOT_4_DATA, account=mock_account)
