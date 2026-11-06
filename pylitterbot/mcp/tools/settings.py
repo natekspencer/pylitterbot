@@ -202,9 +202,9 @@ async def set_sleep_mode(
         if not start_time:
             raise ValueError("start_time is required when enabling sleep mode.")
         sleep_time = _parse_time("start_time", start_time)
-        if wake_time:
-            wake = _parse_time("wake_time", wake_time)
-            wake_minutes = wake.hour * 60 + wake.minute
+    if wake_time is not None:
+        wake = _parse_time("wake_time", wake_time)
+        wake_minutes = wake.hour * 60 + wake.minute
     if wake_minutes is None:
         ok = await resolved.set_sleep_mode(enabled, sleep_time)
     elif isinstance(resolved, (LitterRobot4, LitterRobot5)):

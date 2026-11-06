@@ -6,6 +6,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import datetime
 from typing import Any
+from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -1266,8 +1267,11 @@ async def test_litter_robot_5_set_sleep_mode_invalid_day(
 ) -> None:
     """Tests that an invalid day is rejected before anything is sent."""
     robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    send = AsyncMock()
+    robot._patch = send  # type: ignore[method-assign]
     with pytest.raises(InvalidCommandException, match="day_of_week"):
         await robot.set_sleep_mode(True, day_of_week=day_of_week)
+    send.assert_not_awaited()
 
 
 async def test_litter_robot_5_set_sleep_mode(
