@@ -11,6 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from aiohttp import ClientConnectionError
 from aiointercept import aiointercept
 from freezegun.api import FrozenDateTimeFactory
 
@@ -537,6 +538,28 @@ async def test_litter_robot_4_set_sleep_mode_failure(mock_account: Account) -> N
     )
     assert not await robot.set_sleep_mode(False)
     assert robot._data["weekdaySleepModeEnabled"] == schedule
+
+    robot._post = AsyncMock(  # type: ignore[method-assign]
+        side_effect=ClientConnectionError("down")
+    )
+    assert not await robot.set_sleep_mode(False)
+    assert robot._data["weekdaySleepModeEnabled"] == schedule
+
+    await robot._account.disconnect()
+
+
+@pytest.mark.parametrize("day_of_week", [-1, 7])
+async def test_litter_robot_4_set_sleep_mode_invalid_day(
+    mock_account: Account, day_of_week: int
+) -> None:
+    """Tests that an invalid day is rejected before anything is sent."""
+    robot = LitterRobot4(data=deepcopy(LITTER_ROBOT_4_DATA), account=mock_account)
+    post = AsyncMock()
+    robot._post = post  # type: ignore[method-assign]
+
+    with pytest.raises(InvalidCommandException, match="day_of_week"):
+        await robot.set_sleep_mode(True, day_of_week=day_of_week)
+    post.assert_not_awaited()
 
     await robot._account.disconnect()
 

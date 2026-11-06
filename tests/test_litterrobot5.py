@@ -1260,6 +1260,16 @@ async def test_litter_robot_5_bonnet_removed_state(
     await robot._account.disconnect()
 
 
+@pytest.mark.parametrize("day_of_week", [-1, 7])
+async def test_litter_robot_5_set_sleep_mode_invalid_day(
+    mock_account: Account, day_of_week: int
+) -> None:
+    """Tests that an invalid day is rejected before anything is sent."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    with pytest.raises(InvalidCommandException, match="day_of_week"):
+        await robot.set_sleep_mode(True, day_of_week=day_of_week)
+
+
 async def test_litter_robot_5_set_sleep_mode(
     mock_aiointercept: aiointercept,
     mock_account: Account,

@@ -880,6 +880,10 @@ class LitterRobot5(LitterRobot):
                 If None, updates all days.
 
         """
+        if day_of_week is not None and not 0 <= day_of_week <= 6:
+            raise InvalidCommandException(
+                f"Invalid day_of_week {day_of_week!r}: must be 0-6."
+            )
         schedules = deepcopy(self._data.get(SLEEP_SCHEDULES, []))
         if not schedules:
             schedules = [

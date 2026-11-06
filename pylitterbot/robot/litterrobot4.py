@@ -501,6 +501,10 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                 If None, updates all days.
 
         """
+        if day_of_week is not None and not 0 <= day_of_week <= 6:
+            raise InvalidCommandException(
+                f"Invalid day_of_week {day_of_week!r}: must be 0-6."
+            )
         if isinstance(sleep_time, time):
             sleep_time = sleep_time.hour * 60 + sleep_time.minute
 
@@ -528,9 +532,13 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
                 }
             )
 
-        if not await self._dispatch_command(
-            LitterRobot4Command.SET_SLEEP_WAKE_TIMES, value=dumps({"days": days})
-        ):
+        try:
+            if not await self._dispatch_command(
+                LitterRobot4Command.SET_SLEEP_WAKE_TIMES, value=dumps({"days": days})
+            ):
+                return False
+        except Exception as ex:
+            _LOGGER.error("Failed to set sleep mode: %s", ex)
             return False
         self._update_data({"weekdaySleepModeEnabled": schedule}, partial=True)
         return True
