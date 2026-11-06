@@ -645,6 +645,8 @@ async def test_litter_robot_4_sleep_time_full_day(
         (25, 15, BrightnessLevel.LOW),
         (50, 40, BrightnessLevel.MEDIUM),
         (100, 90, BrightnessLevel.HIGH),
+        (25, 50, BrightnessLevel.MEDIUM),
+        (50, 25, BrightnessLevel.MEDIUM),
         (None, 50, BrightnessLevel.MEDIUM),
         (50, None, BrightnessLevel.MEDIUM),
         (None, None, None),
