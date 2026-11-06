@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 
 from pylitterbot.enums import BrightnessLevel, NightLightMode
 from pylitterbot.mcp.helpers import (
@@ -11,7 +11,6 @@ from pylitterbot.mcp.helpers import (
     resolve_robot,
 )
 from pylitterbot.mcp.server import mcp
-from pylitterbot.robot.litterrobot3 import LitterRobot3
 from pylitterbot.robot.litterrobot4 import LitterRobot4
 from pylitterbot.robot.litterrobot5 import LitterRobot5
 
@@ -167,9 +166,22 @@ async def set_wait_time(robot: str, minutes: int) -> str:
     return f"Wait time set to {minutes} minutes on '{resolved.name}'."
 
 
+def _parse_time(name: str, value: str) -> time:
+    """Parse a time in HH:MM format."""
+    try:
+        return datetime.strptime(value, "%H:%M").time()
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid {name} '{value}'. Expected HH:MM (24-hour), e.g. '22:30'."
+        ) from exc
+
+
 @mcp.tool()
 async def set_sleep_mode(
-    robot: str, enabled: bool, start_time: str | None = None
+    robot: str,
+    enabled: bool,
+    start_time: str | None = None,
+    wake_time: str | None = None,
 ) -> str:
     """Configure sleep mode on a Litter-Robot.
 
@@ -177,28 +189,30 @@ async def set_sleep_mode(
         robot: Robot name (case-insensitive) or ID.
         enabled: True to enable sleep mode, False to disable.
         start_time: Sleep start time in HH:MM format (24-hour). Required when enabling.
+        wake_time: Wake time in HH:MM format (24-hour). Litter-Robot 4 and 5 only.
+            If omitted, the stored wake time is kept, which is midnight if none is set.
 
     """
     resolved = await resolve_litter_robot(robot)
     if not resolved.is_online:
         raise ValueError(f"'{resolved.name}' is offline; cannot set sleep mode.")
-    if not isinstance(resolved, (LitterRobot3, LitterRobot5)):
-        raise ValueError(
-            f"Sleep mode cannot be set via the API on "
-            f"'{resolved.name}' ({resolved.model}). "
-            f"Supported models: Litter-Robot 3, Litter-Robot 5."
-        )
     sleep_time = None
+    wake_minutes = None
     if enabled:
         if not start_time:
             raise ValueError("start_time is required when enabling sleep mode.")
-        try:
-            sleep_time = datetime.strptime(start_time, "%H:%M").time()
-        except ValueError as exc:
-            raise ValueError(
-                f"Invalid start_time '{start_time}'. Expected HH:MM (24-hour), e.g. '22:30'."
-            ) from exc
-    ok = await resolved.set_sleep_mode(enabled, sleep_time)
+        sleep_time = _parse_time("start_time", start_time)
+    if wake_time is not None:
+        wake = _parse_time("wake_time", wake_time)
+        wake_minutes = wake.hour * 60 + wake.minute
+    if wake_minutes is None:
+        ok = await resolved.set_sleep_mode(enabled, sleep_time)
+    elif isinstance(resolved, (LitterRobot4, LitterRobot5)):
+        ok = await resolved.set_sleep_mode(enabled, sleep_time, wake_time=wake_minutes)
+    else:
+        raise ValueError(
+            f"wake_time is only supported on Litter-Robot 4 and 5, not {resolved.model}."
+        )
     if not ok:
         raise RuntimeError(f"Failed to set sleep mode on '{resolved.name}'.")
     state = "enabled" if enabled else "disabled"

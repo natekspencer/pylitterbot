@@ -56,6 +56,7 @@ class LitterRobot4Command:
     REQUEST_STATE = "requestState"
     SET_CLUMP_TIME = "setClumpTime"
     SET_NIGHT_LIGHT_VALUE = "setNightLightValue"
+    SET_SLEEP_WAKE_TIMES = "setSleepWakeTimes"
     SHORT_RESET_PRESS = "shortResetPress"
 
 

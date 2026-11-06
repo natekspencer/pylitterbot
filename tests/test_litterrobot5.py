@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
+from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 from aiohttp import ClientConnectionError
@@ -966,6 +969,40 @@ async def test_litter_robot_5_sleep_time(
     assert robot.sleep_mode_end_time.isoformat() == "2026-03-28T07:30:00-06:00"
 
 
+async def test_litter_robot_5_sleep_time_matching(
+    freezer: FrozenDateTimeFactory, mock_account: Account
+) -> None:
+    """Tests that matching sleep and wake times are not a period of sleep."""
+    freezer.move_to("2026-03-22 12:00:00-06:00")
+    sleep_schedules = {
+        "sleepSchedules": [
+            {"dayOfWeek": day, "isEnabled": True, "sleepTime": 10, "wakeTime": 10}
+            for day in range(7)
+        ]
+    }
+    data = {**LITTER_ROBOT_5_DATA, **sleep_schedules}
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.sleep_schedule
+    assert not robot.sleep_schedule.is_active(datetime.now(ZoneInfo("America/Denver")))
+
+
+async def test_litter_robot_5_sleep_time_midnight_to_midnight(
+    freezer: FrozenDateTimeFactory, mock_account: Account
+) -> None:
+    """Tests that sleep 0 and wake 1440 are not a period of sleep."""
+    freezer.move_to("2026-03-22 12:00:00-06:00")
+    sleep_schedules = {
+        "sleepSchedules": [
+            {"dayOfWeek": day, "isEnabled": True, "sleepTime": 0, "wakeTime": 1440}
+            for day in range(7)
+        ]
+    }
+    data = {**LITTER_ROBOT_5_DATA, **sleep_schedules}
+    robot = LitterRobot5(data=data, account=mock_account)
+    assert robot.sleep_schedule
+    assert not robot.sleep_schedule.is_active(datetime.now(ZoneInfo("America/Denver")))
+
+
 async def test_litter_robot_5_sleep_mode_disabled(
     mock_account: Account,
 ) -> None:
@@ -1224,6 +1261,19 @@ async def test_litter_robot_5_bonnet_removed_state(
     await robot._account.disconnect()
 
 
+@pytest.mark.parametrize("day_of_week", [-1, 7])
+async def test_litter_robot_5_set_sleep_mode_invalid_day(
+    mock_account: Account, day_of_week: int
+) -> None:
+    """Tests that an invalid day is rejected before anything is sent."""
+    robot = LitterRobot5(data=LITTER_ROBOT_5_DATA, account=mock_account)
+    send = AsyncMock()
+    robot._patch = send  # type: ignore[method-assign]
+    with pytest.raises(InvalidCommandException, match="day_of_week"):
+        await robot.set_sleep_mode(True, day_of_week=day_of_week)
+    send.assert_not_awaited()
+
+
 async def test_litter_robot_5_set_sleep_mode(
     mock_aiointercept: aiointercept,
     mock_account: Account,
@@ -1242,19 +1292,19 @@ async def test_litter_robot_5_set_sleep_mode(
     assert await robot.set_sleep_mode(value=False)
     assert not robot.sleep_mode_enabled
 
-    # Enable sleep for a specific day (Sunday=6)
+    # Enable sleep for a specific day (Saturday=6)
     mock_aiointercept.patch(LR5_GET_URL, payload={})
     assert await robot.set_sleep_mode(
         value=True, sleep_time=1380, wake_time=420, day_of_week=6
     )
     schedules = robot._data.get("sleepSchedules", [])
-    sunday = next(s for s in schedules if s["dayOfWeek"] == 6)
-    assert sunday["isEnabled"]
-    assert sunday["sleepTime"] == 1380
-    assert sunday["wakeTime"] == 420
+    saturday = next(s for s in schedules if s["dayOfWeek"] == 6)
+    assert saturday["isEnabled"]
+    assert saturday["sleepTime"] == 1380
+    assert saturday["wakeTime"] == 420
     # Other days should remain disabled
-    monday = next(s for s in schedules if s["dayOfWeek"] == 0)
-    assert not monday["isEnabled"]
+    sunday = next(s for s in schedules if s["dayOfWeek"] == 0)
+    assert not sunday["isEnabled"]
 
     await robot._account.disconnect()
 

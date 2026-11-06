@@ -859,6 +859,82 @@ class TestSetSleepMode:
             await set_sleep_mode(robot="Basement", enabled=True, start_time="22:30")
 
     @pytest.mark.asyncio()
+    async def test_passes_wake_time(self, mock_account: MagicMock) -> None:
+        """set_sleep_mode sends the wake time as minutes on an LR4."""
+        from pylitterbot.mcp.tools.settings import set_sleep_mode
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            await set_sleep_mode(
+                robot="Kitchen", enabled=True, start_time="22:30", wake_time="07:15"
+            )
+        mock_account.robots[0].set_sleep_mode.assert_awaited_once_with(
+            True, time(22, 30), wake_time=435
+        )
+
+    @pytest.mark.asyncio()
+    async def test_passes_wake_time_on_lr5(self, mock_account: MagicMock) -> None:
+        """set_sleep_mode sends the wake time as minutes on an LR5."""
+        from pylitterbot.mcp.tools.settings import set_sleep_mode
+
+        lr5 = mock_account.robots[2]
+        lr5.set_sleep_mode = AsyncMock(return_value=True)
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            await set_sleep_mode(
+                robot="Living Room",
+                enabled=True,
+                start_time="22:30",
+                wake_time="07:15",
+            )
+        lr5.set_sleep_mode.assert_awaited_once_with(True, time(22, 30), wake_time=435)
+
+    @pytest.mark.asyncio()
+    async def test_passes_wake_time_when_disabling(
+        self, mock_account: MagicMock
+    ) -> None:
+        """set_sleep_mode keeps a midnight wake time when disabling."""
+        from pylitterbot.mcp.tools.settings import set_sleep_mode
+
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            await set_sleep_mode(robot="Kitchen", enabled=False, wake_time="00:00")
+        mock_account.robots[0].set_sleep_mode.assert_awaited_once_with(
+            False, None, wake_time=0
+        )
+
+    @pytest.mark.asyncio()
+    @pytest.mark.parametrize("wake_time", ["7am", ""])
+    async def test_rejects_invalid_wake_time(
+        self, mock_account: MagicMock, wake_time: str
+    ) -> None:
+        """set_sleep_mode raises ValueError for a badly formatted wake time."""
+        from pylitterbot.mcp.tools.settings import set_sleep_mode
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="Invalid wake_time"),
+        ):
+            await set_sleep_mode(
+                robot="Kitchen", enabled=True, start_time="22:30", wake_time=wake_time
+            )
+        mock_account.robots[0].set_sleep_mode.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    @pytest.mark.parametrize("enabled", [True, False])
+    async def test_rejects_wake_time_on_lr3(
+        self, mock_account: MagicMock, enabled: bool
+    ) -> None:
+        """set_sleep_mode rejects a wake time on an LR3 instead of dropping it."""
+        from pylitterbot.mcp.tools.settings import set_sleep_mode
+
+        with (
+            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
+            pytest.raises(ValueError, match="only supported"),
+        ):
+            await set_sleep_mode(
+                robot="Basement", enabled=enabled, start_time="22:30", wake_time="07:00"
+            )
+        mock_account.robots[1].set_sleep_mode.assert_not_awaited()
+
+    @pytest.mark.asyncio()
     async def test_enables_sleep_mode_with_time(self, mock_account: MagicMock) -> None:
         """set_sleep_mode parses HH:MM and calls robot.set_sleep_mode on LR3."""
         from pylitterbot.mcp.tools.settings import set_sleep_mode
@@ -910,19 +986,15 @@ class TestSetSleepMode:
             await set_sleep_mode(robot="Basement", enabled=True, start_time="2230")
 
     @pytest.mark.asyncio()
-    async def test_rejects_lr4(self, mock_account: MagicMock) -> None:
-        """set_sleep_mode raises ValueError for LR4 which cannot set sleep mode via API.
-
-        The isinstance guard fires before the device call, so set_sleep_mode is never awaited.
-        """
+    async def test_sets_sleep_mode_on_lr4(self, mock_account: MagicMock) -> None:
+        """set_sleep_mode passes the parsed time through to an LR4."""
         from pylitterbot.mcp.tools.settings import set_sleep_mode
 
         lr4 = mock_account.robots[0]
-        lr4.set_sleep_mode = AsyncMock(side_effect=NotImplementedError)
 
-        with (
-            patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account),
-            pytest.raises(ValueError, match="Sleep mode"),
-        ):
-            await set_sleep_mode(robot="Kitchen", enabled=True, start_time="22:30")
-        lr4.set_sleep_mode.assert_not_awaited()
+        with patch("pylitterbot.mcp.helpers.get_account", return_value=mock_account):
+            result = await set_sleep_mode(
+                robot="Kitchen", enabled=True, start_time="22:30"
+            )
+        lr4.set_sleep_mode.assert_awaited_once_with(True, time(22, 30))
+        assert "enabled" in result
