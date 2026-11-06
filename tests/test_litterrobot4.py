@@ -812,6 +812,31 @@ async def test_litter_hopper_toggle(
             {"robotCycleState": "CYCLE_STATE_PAUSE", "unitPowerStatus": "OFF"},
             LitterBoxStatus.OFF,
         ),
+        ({"displayCode": "DC_MTR_FAULT_PINCH"}, LitterBoxStatus.PINCH_DETECT),
+        ({"displayCode": "DC_MTR_FAULT_OT_AMP"}, LitterBoxStatus.OVER_TORQUE_FAULT),
+        ({"displayCode": "DC_MTR_FAULT_OT_SLP"}, LitterBoxStatus.OVER_TORQUE_FAULT),
+        (
+            {
+                "displayCode": "DC_CAT_DETECT_30M",
+                "robotStatus": "ROBOT_CAT_DETECT_DELAY",
+            },
+            LitterBoxStatus.CAT_SENSOR_FAULT,
+        ),
+        (
+            {
+                "displayCode": "DC_MTR_FAULT_PINCH",
+                "robotCycleState": "CYCLE_STATE_CAT_DETECT",
+            },
+            LitterBoxStatus.PINCH_DETECT,
+        ),
+        (
+            {"displayCode": "DC_MTR_FAULT_PINCH", "isOnline": False},
+            LitterBoxStatus.OFFLINE,
+        ),
+        (
+            {"displayCode": "DC_MODE_IDLE", "globeMotorFaultStatus": "FAULT_TIMEOUT"},
+            LitterBoxStatus.READY,
+        ),
     ],
 )
 async def test_litter_robot_4_status(

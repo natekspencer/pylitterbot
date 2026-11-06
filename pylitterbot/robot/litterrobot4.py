@@ -71,6 +71,13 @@ CYCLE_STATE_STATUS_MAP = {
     "CYCLE_STATE_PAUSE": LitterBoxStatus.PAUSED,
 }
 DISPLAY_CODE_STATUS_MAP = {"DC_CAT_DETECT": LitterBoxStatus.CAT_DETECTED}
+# `robotStatus` can stay at idle or a cat delay while the panel shows these faults.
+FAULT_DISPLAY_CODE_STATUS_MAP = {
+    "DC_CAT_DETECT_30M": LitterBoxStatus.CAT_SENSOR_FAULT,
+    "DC_MTR_FAULT_OT_AMP": LitterBoxStatus.OVER_TORQUE_FAULT,
+    "DC_MTR_FAULT_OT_SLP": LitterBoxStatus.OVER_TORQUE_FAULT,
+    "DC_MTR_FAULT_PINCH": LitterBoxStatus.PINCH_DETECT,
+}
 
 LITTER_LEVEL_EMPTY = 500
 
@@ -358,6 +365,8 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
             return LitterBoxStatus.OFFLINE
         if not self.is_on:
             return LitterBoxStatus.OFF
+        if status := FAULT_DISPLAY_CODE_STATUS_MAP.get(self._data["displayCode"]):
+            return status
         if status := CYCLE_STATE_STATUS_MAP.get(self._data["robotCycleState"]):
             return status
         status = LR4_STATUS_MAP.get(self._data["robotStatus"], LitterBoxStatus.UNKNOWN)
