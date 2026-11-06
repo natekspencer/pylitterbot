@@ -308,8 +308,16 @@ class LitterRobot4(LitterRobot):  # pylint: disable=abstract-method
 
     @property
     def panel_brightness(self) -> BrightnessLevel | None:
-        """Return the panel brightness."""
-        brightness = self._data.get("panelBrightnessHigh")
+        """Return the panel brightness.
+
+        Firmware versions disagree on which of these fields holds the level and
+        which holds a lower value, so use the higher of the two.
+        """
+        values = (
+            self._data.get("panelBrightnessHigh"),
+            self._data.get("panelBrightnessLow"),
+        )
+        brightness = max((v for v in values if v is not None), default=None)
         if brightness in list(BrightnessLevel):
             return BrightnessLevel(brightness)
         return None
