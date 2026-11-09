@@ -19,12 +19,12 @@ repos:
       # Type check, as CI does. pre-commit.ci skips this, as it can't run system hooks.
       - id: mypy
         name: mypy
-        # Sync dependencies without building the package: a build rewrites __version__,
-        # which pre-commit treats as the hook changing files.
-        entry: sh -c 'uv sync --quiet --inexact --no-install-project && uv run --no-sync mypy .'
+        # Sync dependencies, with every extra as CI does, without building the package:
+        # a build rewrites __version__, which pre-commit treats as the hook changing files.
+        entry: sh -c 'uv sync --quiet --inexact --no-install-project --all-extras && uv run --no-sync mypy .'
         language: system
-        # Python code, plus mypy's settings (setup.cfg) and version
-        files: (\.pyi?$|^(pyproject\.toml|setup\.cfg|uv\.lock)$)
+        # Python code, mypy's settings (setup.cfg) and version, and this hook's own config
+        files: (\.pyi?$|^(pyproject\.toml|setup\.cfg|uv\.lock|\.pre-commit-config\.yaml)$)
         pass_filenames: false
 
 ci:
