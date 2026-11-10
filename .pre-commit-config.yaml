@@ -25,8 +25,9 @@ repos:
         # (uv-lock runs first and keeps it current).
         entry: sh -c 'uv sync --quiet --locked --inexact --no-install-project --all-extras && uv run --no-sync mypy .'
         language: system
-        # Python code, mypy's settings (setup.cfg) and version, and this hook's own config
-        files: (\.pyi?$|^(pyproject\.toml|setup\.cfg|uv\.lock|\.pre-commit-config\.yaml)$)
+        # Every commit, as a files filter skips commits that only delete files, and
+        # deleting a module can break the code that imported it.
+        always_run: true
         pass_filenames: false
 
 ci:
