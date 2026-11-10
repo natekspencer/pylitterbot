@@ -14,3 +14,21 @@ repos:
         args: [--fix]
       # Run the formatter.
       - id: ruff-format
+  - repo: local
+    hooks:
+      # Type check, as CI does. pre-commit.ci skips this, as it can't run system hooks.
+      - id: mypy
+        name: mypy
+        # Sync dependencies, with every extra as CI does, without building the package:
+        # a build rewrites __version__, and pre-commit fails a hook that changes files.
+        # --locked fails rather than rewriting uv.lock if it's out of date, as in CI
+        # (uv-lock runs first and keeps it current).
+        entry: sh -c 'uv sync --quiet --locked --inexact --no-install-project --all-extras && uv run --no-sync mypy .'
+        language: system
+        # Every commit, as a files filter skips commits that only delete files, and
+        # deleting a module can break the code that imported it.
+        always_run: true
+        pass_filenames: false
+
+ci:
+  skip: [mypy]
