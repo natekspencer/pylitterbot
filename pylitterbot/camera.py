@@ -1,7 +1,7 @@
 """Camera support for Litter-Robot 5 Pro.
 
-Provides REST API access to camera sessions, settings, videos, and events
-via `CameraClient`, and WebRTC live streaming via `CameraStream`.
+Provides REST API access to camera sessions, settings, videos (including
+direct MP4 download of recorded clips), and events via `CameraClient`, and WebRTC live streaming via `CameraStream`.
 
 WebRTC streaming requires the optional ``aiortc`` dependency::
 
@@ -14,6 +14,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import quote
 
@@ -23,6 +24,7 @@ from aiohttp import (
     ClientWebSocketResponse,
     WSMsgType,
 )
+from yarl import URL
 
 from .exceptions import CameraStreamException, InvalidCommandException
 from .session import DEFAULT_USER_AGENT
@@ -198,6 +200,36 @@ class VideoPlayback:
     def cookie_header(self) -> str:
         """Return the cookies formatted as an HTTP ``Cookie`` header value."""
         return "; ".join(f"{name}={value}" for name, value in self.cookies.items())
+
+    @property
+    def chunks(self) -> list[VideoChunk]:
+        """Return the clip's MP4 chunks, in playback order.
+
+        These are the same segments the HLS playlist references, but exposed
+        as presigned S3 URLs that need no cookies or auth headers.
+        """
+        chunks = self.raw.get("chunks")
+        if not isinstance(chunks, list):
+            return []
+        return [
+            VideoChunk(id=str(chunk.get("id", "")), download_url=url)
+            for chunk in chunks
+            if isinstance(chunk, dict)
+            and isinstance(url := chunk.get("downloadUrl"), str)
+            and url
+        ]
+
+
+@dataclass
+class VideoChunk:
+    """One MP4 chunk of a recorded clip.
+
+    ``download_url`` is a presigned S3 URL that expires roughly 15 minutes after
+    :meth:`CameraClient.get_video_playback` is called, so download promptly.
+    """
+
+    id: str
+    download_url: str
 
 
 class CameraClient:
@@ -411,6 +443,78 @@ class CameraClient:
             cookies=cookies,
             raw=data,
         )
+
+    async def fetch_video_chunks(self, clip_id: str) -> list[bytes] | None:
+        """Download a recorded clip's MP4 chunks directly from S3.
+
+        Uses the presigned ``chunks[].downloadUrl`` values from the clip-detail
+        endpoint rather than the CloudFront HLS stream, so no cookies or
+        playlist parsing are needed.  Chunks are separate MP4 files in playback
+        order; concatenate them (e.g. ``ffmpeg -f concat -c copy``) for a
+        single file.
+
+        Args:
+            clip_id: The :attr:`VideoClip.id` of the clip to download.
+
+        Returns:
+            The chunk contents in playback order, an empty list if the clip has
+            no chunks yet, or ``None`` if the clip details could not be fetched.
+
+        Raises:
+            aiohttp.ClientResponseError: If any chunk download fails.  Nothing
+                is returned for a partially downloaded clip.
+
+        """
+        if (playback := await self.get_video_playback(clip_id)) is None:
+            return None
+        contents: list[bytes] = []
+        for chunk in playback.chunks:
+            # Presigned S3 URL: send no auth headers (S3 rejects a second auth
+            # mechanism) and keep the query string exactly as signed.
+            async with self.websession.get(
+                URL(chunk.download_url, encoded=True)
+            ) as resp:
+                resp.raise_for_status()
+                contents.append(await resp.read())
+        return contents
+
+    async def download_video(
+        self, clip_id: str, directory: str | Path
+    ) -> list[Path] | None:
+        """Download a recorded clip's MP4 chunks to ``directory``.
+
+        Files are named ``{clip_id}_{index:02d}.mp4`` in playback order.  All
+        chunks are fetched before anything is written, so a failed download
+        leaves no partial files behind.  The directory is created if needed.
+
+        Args:
+            clip_id: The :attr:`VideoClip.id` of the clip to download.
+            directory: Where to write the chunk files.
+
+        Returns:
+            The written file paths in playback order, an empty list if the clip
+            has no chunks yet, or ``None`` if the clip details could not be
+            fetched.
+
+        Raises:
+            aiohttp.ClientResponseError: If any chunk download fails.
+
+        """
+        if (contents := await self.fetch_video_chunks(clip_id)) is None:
+            return None
+        directory = Path(directory)
+        paths = [
+            directory / f"{clip_id}_{index:02d}.mp4" for index in range(len(contents))
+        ]
+
+        def _write() -> None:
+            directory.mkdir(parents=True, exist_ok=True)
+            for path, data in zip(paths, contents):
+                path.write_bytes(data)
+
+        if contents:
+            await asyncio.to_thread(_write)
+        return paths
 
     async def get_events(self, *, limit: int | None = None) -> list[dict[str, Any]]:
         """Fetch camera events (AI detections, etc.).
