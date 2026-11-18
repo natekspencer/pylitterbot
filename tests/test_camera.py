@@ -1245,7 +1245,9 @@ class TestAnswerTimeout:
         try:
             await asyncio.sleep(0)
             with pytest.raises(CameraStreamException, match="already started"):
-                await relay.start("v=0 other", lambda a: None, lambda c: None)
+                # a regressed guard would block on the session; fail promptly
+                async with asyncio.timeout(1):
+                    await relay.start("v=0 other", lambda a: None, lambda c: None)
 
             release.set()
             with pytest.raises(CameraStreamException, match="session failed"):
@@ -1299,6 +1301,29 @@ class TestAnswerTimeout:
         assert answers == [self.ANSWER_SDP]
         assert reconnect.sent[0]["candidate"] == "candidate:early"
         await relay.close()
+
+    async def test_relay_close_cancels_offer_setup(self) -> None:
+        """Test close() during the offer write closes that socket before returning."""
+        sending = asyncio.Event()
+
+        class _StalledWebSocket(_FakeWebSocket):
+            async def send_json(self, data: dict[str, Any]) -> None:
+                sending.set()
+                await asyncio.Event().wait()  # never completes
+
+        ws = _StalledWebSocket([])
+        relay = CameraSignalingRelay(_fake_client([ws]))
+        task = asyncio.ensure_future(
+            relay.start("v=0 offer", lambda a: None, lambda c: None)
+        )
+        try:
+            await _wait_for_event_or_task(sending, task)
+            await asyncio.wait_for(relay.close(), timeout=1)
+            assert ws.closed  # closed before close() returned
+            with pytest.raises(CameraStreamException, match="closed"):
+                await asyncio.wait_for(task, timeout=1)
+        finally:
+            await _cancel_pending(task)
 
     async def test_relay_close_wakes_start(
         self, monkeypatch: pytest.MonkeyPatch
@@ -1371,6 +1396,106 @@ class TestAnswerTimeout:
 
         assert attempts == 2
         await stream.stop()
+
+
+class TestRelayReconnect:
+    """Tests for delivering late ICE candidates over a fresh connection."""
+
+    @pytest.fixture(autouse=True)
+    def _fast_backoff(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(camera, "RECONNECT_BACKOFF", 0.01)
+
+    @staticmethod
+    def _relay(ws_connect: Any) -> CameraSignalingRelay:
+        client = _fake_client([])
+        client.websession = SimpleNamespace(ws_connect=ws_connect)
+        relay = CameraSignalingRelay(client)
+        relay._session = CameraSession(
+            session_id="s",
+            session_token="t",
+            session_expiration=None,
+            signaling_url="wss://host/sig",
+        )
+        return relay
+
+    async def test_retries_failed_handshake(self) -> None:
+        """Test a transient reconnect failure is retried."""
+        ws = _FakeWebSocket([])
+        attempts = 0
+
+        async def flaky_ws_connect(*args: Any, **kwargs: Any) -> _FakeWebSocket:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise ConnectionError("handshake failed")
+            return ws
+
+        relay = self._relay(flaky_ws_connect)
+        relay._pending_candidates.append({"candidate": "candidate:late"})
+        await asyncio.wait_for(relay._reconnect_and_flush(), timeout=1)
+
+        assert attempts == 2
+        assert ws.sent == [{"candidate": "candidate:late"}]
+        assert relay._pending_candidates == []
+
+    async def test_retries_only_unsent_after_partial_flush(self) -> None:
+        """Test a flush that fails partway resends only the unsent candidates."""
+
+        class _FailsSecondSend(_FakeWebSocket):
+            async def send_json(self, data: dict[str, Any]) -> None:
+                if self.sent:
+                    raise ConnectionResetError("closing transport")
+                await super().send_json(data)
+
+        sockets: list[_FakeWebSocket] = [_FailsSecondSend([]), _FakeWebSocket([])]
+
+        async def ws_connect(*args: Any, **kwargs: Any) -> _FakeWebSocket:
+            return sockets.pop(0)
+
+        first, second = sockets
+        relay = self._relay(ws_connect)
+        relay._pending_candidates.extend(
+            [{"candidate": "candidate:a"}, {"candidate": "candidate:b"}]
+        )
+        await asyncio.wait_for(relay._reconnect_and_flush(), timeout=1)
+
+        assert first.sent == [{"candidate": "candidate:a"}]
+        assert second.sent == [{"candidate": "candidate:b"}]
+        assert first.closed and second.closed
+
+    async def test_gives_up_after_max_attempts(self) -> None:
+        """Test the flush stops after RECONNECT_ATTEMPTS, keeping the candidates."""
+        attempts = 0
+
+        async def failing_ws_connect(*args: Any, **kwargs: Any) -> Any:
+            nonlocal attempts
+            attempts += 1
+            raise ConnectionError("handshake failed")
+
+        relay = self._relay(failing_ws_connect)
+        relay._pending_candidates.append({"candidate": "candidate:late"})
+        await asyncio.wait_for(relay._reconnect_and_flush(), timeout=1)
+
+        assert attempts == camera.RECONNECT_ATTEMPTS
+        assert relay._pending_candidates == [{"candidate": "candidate:late"}]
+
+    async def test_bounded_close(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test a reconnect socket whose close hangs does not stall the flush."""
+        monkeypatch.setattr(camera, "WS_CLOSE_TIMEOUT", 0.05)
+
+        class _HangingCloseWebSocket(_FakeWebSocket):
+            async def close(self) -> None:
+                await asyncio.Event().wait()
+
+        ws = _HangingCloseWebSocket([])
+
+        async def ws_connect(*args: Any, **kwargs: Any) -> _FakeWebSocket:
+            return ws
+
+        relay = self._relay(ws_connect)
+        relay._pending_candidates.append({"candidate": "candidate:late"})
+        await asyncio.wait_for(relay._reconnect_and_flush(), timeout=1)
+        assert ws.sent == [{"candidate": "candidate:late"}]
 
 
 class TestCameraStreamLifecycle:
@@ -1516,6 +1641,38 @@ class TestCameraStreamLifecycle:
             await asyncio.wait_for(stream.start(), timeout=1)
         assert ws.closed
         assert stream._ws is None
+
+    async def test_cancelled_teardown_still_closes_peer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test a cancellation during teardown still closes the detached peer."""
+        monkeypatch.setattr(camera, "WS_CLOSE_TIMEOUT", 60)
+        closing = asyncio.Event()
+
+        class _HangingCloseWebSocket(_FakeWebSocket):
+            async def close(self) -> None:
+                closing.set()
+                await asyncio.Event().wait()
+
+        peer_closed = asyncio.Event()
+
+        class _Peer:
+            async def close(self) -> None:
+                peer_closed.set()
+
+        stream = CameraStream(_fake_client([]))
+        stream._pc = _Peer()
+        stream._ws = _HangingCloseWebSocket([])
+        task = asyncio.ensure_future(stream.stop())
+        try:
+            await _wait_for_event_or_task(closing, task)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        finally:
+            await _cancel_pending(task)
+        assert peer_closed.is_set()
+        assert stream._pc is None
 
     async def test_stop_bounded_when_close_hangs(
         self, monkeypatch: pytest.MonkeyPatch

@@ -14,7 +14,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Coroutine
 from urllib.parse import quote
 
 from aiohttp import (
@@ -53,6 +53,9 @@ ANSWER_TIMEOUT = 10  # seconds
 ANSWER_ATTEMPTS = 2
 # aiohttp waits up to 10s for the server's close frame; cleanup should not
 WS_CLOSE_TIMEOUT = 2  # seconds
+# late ICE candidates: retries after a failed reconnect, with linear backoff
+RECONNECT_ATTEMPTS = 3
+RECONNECT_BACKOFF = 0.5  # seconds
 
 # session.request converts HTTP 500 responses into InvalidCommandException, so
 # graceful-fallback handling must catch it alongside other client errors.
@@ -94,11 +97,13 @@ def _append_bounded(buffer: list[dict[str, Any]], msg: dict[str, Any]) -> None:
 async def _close_ws(ws: ClientWebSocketResponse) -> None:
     """Close a websocket, aborting the connection after ``WS_CLOSE_TIMEOUT``.
 
-    Cancelling aiohttp's close (as ``wait_for`` does on timeout) releases the
-    underlying connection instead of waiting for the server's close frame.
+    Cancelling aiohttp's close (as the timeout does) releases the underlying
+    connection instead of waiting for the server's close frame.
     """
     try:
-        await asyncio.wait_for(ws.close(), timeout=WS_CLOSE_TIMEOUT)
+        # asyncio.wait_for can swallow a cancellation on 3.11
+        async with asyncio.timeout(WS_CLOSE_TIMEOUT):
+            await ws.close()
     except asyncio.TimeoutError:
         _LOGGER.debug("Signaling: websocket close timed out; connection aborted")
 
@@ -572,6 +577,7 @@ class CameraSignalingRelay(_SignalingMixin):
         self._receive_task: asyncio.Task[None] | None = None
         self._closed = False
         self._closed_event = asyncio.Event()  # wakes start() on close()
+        self._setup_task: asyncio.Task[CameraSession] | None = None
         self._starting = False
         self._started = False  # set once the camera has answered
         self._offer_candidates: list[dict[str, Any]] = []
@@ -648,8 +654,10 @@ class CameraSignalingRelay(_SignalingMixin):
             for attempt in range(1, ANSWER_ATTEMPTS + 1):
                 current_attempt = attempt
                 answered = asyncio.Event()
-                session = await self._connect_and_offer(
-                    offer_sdp, *_attempt_handlers(attempt, answered)
+                session = await self._run_setup(
+                    self._connect_and_offer(
+                        offer_sdp, *_attempt_handlers(attempt, answered)
+                    )
                 )
                 try:
                     # asyncio.wait_for can swallow a cancellation on 3.11
@@ -690,6 +698,26 @@ class CameraSignalingRelay(_SignalingMixin):
             raise
         finally:
             self._starting = False
+
+    async def _run_setup(
+        self, setup: Coroutine[Any, Any, CameraSession]
+    ) -> CameraSession:
+        """Run offer setup as a task that close() can cancel and wait for.
+
+        Cancelling it lets its own cleanup close a socket that isn't yet in
+        ``self._ws``, so no socket outlives close().
+        """
+        self._setup_task = task = asyncio.ensure_future(setup)
+        try:
+            return await task
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if task.cancelled() and self._closed and not current.cancelling():  # type: ignore[union-attr]
+                # cancelled by close(), not by start()'s caller
+                raise CameraStreamException("Relay has been closed") from None
+            raise
+        finally:
+            self._setup_task = None
 
     async def _connect_and_offer(
         self,
@@ -809,7 +837,8 @@ class CameraSignalingRelay(_SignalingMixin):
         self._closed = True
         self._closed_event.set()
 
-        await cancel_task(self._reconnect_task)
+        # an in-flight offer setup closes its own socket when cancelled
+        await cancel_task(self._setup_task, self._reconnect_task)
         await self._disconnect()
 
     async def _receive_loop(
@@ -859,8 +888,10 @@ class CameraSignalingRelay(_SignalingMixin):
         allowing the camera to complete ICE negotiation.
 
         Loops until the pending queue is empty, so candidates arriving during an
-        in-flight flush are not stranded.
+        in-flight flush are not stranded. A failed reconnect or send is retried
+        up to ``RECONNECT_ATTEMPTS`` times, resending only unsent candidates.
         """
+        failures = 0
         while self._pending_candidates and not self._closed and self._session:
             _LOGGER.debug(
                 "Signaling relay: reconnecting to forward %d late ICE candidate(s)",
@@ -885,15 +916,21 @@ class CameraSignalingRelay(_SignalingMixin):
                         self._pending_candidates = (
                             pending[sent:] + self._pending_candidates
                         )
-                    await ws.close()
+                    await _close_ws(ws)
             except Exception:
-                if not self._closed:
+                # close() cancels this task, so a closed relay never sleeps here
+                failures += 1
+                if failures >= RECONNECT_ATTEMPTS:
                     _LOGGER.warning(
                         "Signaling relay: failed to forward %d late ICE candidate(s)",
                         len(self._pending_candidates),
                         exc_info=True,
                     )
-                break
+                    break
+                _LOGGER.debug(
+                    "Signaling relay: reconnect failed, retrying", exc_info=True
+                )
+                await asyncio.sleep(RECONNECT_BACKOFF * failures)
 
 
 try:
@@ -1104,18 +1141,20 @@ class CameraStream(_SignalingMixin):
         """Stop the media and signaling tasks and close the connections."""
         # detach the peer first, so its events are ignored while we await
         pc, self._pc = self._pc, None
-        await cancel_task(*self._media_tasks, self._ping_task, self._receive_task)
-        self._media_tasks.clear()
-        self._tracks.clear()
-        self._consuming.clear()
-        self._ping_task = self._receive_task = None
+        try:
+            await cancel_task(*self._media_tasks, self._ping_task, self._receive_task)
+            self._media_tasks.clear()
+            self._tracks.clear()
+            self._consuming.clear()
+            self._ping_task = self._receive_task = None
 
-        if self._ws and not self._ws.closed:
-            await _close_ws(self._ws)
-        self._ws = None
-
-        if pc:
-            await pc.close()
+            if self._ws and not self._ws.closed:
+                await _close_ws(self._ws)
+            self._ws = None
+        finally:
+            # detached, so nothing else would close it if teardown is cancelled
+            if pc:
+                await pc.close()
 
     async def stop(self) -> None:
         """Stop the WebRTC streaming session and clean up resources."""
