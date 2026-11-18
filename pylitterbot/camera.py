@@ -147,10 +147,11 @@ class CameraSession:
 
     @property
     def is_expired(self) -> bool:
-        """Return `True` once the session's signaling token has expired.
+        """Return `True` once the session is past its ``sessionExpiration``.
 
-        Sessions are short-lived (observed: 60 seconds after generation), after
-        which the signaling websocket rejects the token.
+        Sessions are short-lived (observed: 60 seconds after generation).
+        Observed live, the signaling server still accepts the token after
+        that, so this does not mean the session can no longer be used.
         """
         return (
             self.session_expiration is not None and utcnow() >= self.session_expiration
@@ -764,13 +765,6 @@ class CameraSignalingRelay(_SignalingMixin):
         in-flight flush are not stranded.
         """
         while self._pending_candidates and not self._closed and self._session:
-            if self._session.is_expired:
-                _LOGGER.debug(
-                    "Signaling relay: session expired -- dropping %d late ICE candidate(s)",
-                    len(self._pending_candidates),
-                )
-                self._pending_candidates.clear()
-                break
             _LOGGER.debug(
                 "Signaling relay: reconnecting to forward %d late ICE candidate(s)",
                 len(self._pending_candidates),

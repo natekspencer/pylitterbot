@@ -788,14 +788,13 @@ class TestSignalingHelpers:
             )
             assert session.is_expired is expired
 
-    async def test_relay_drops_candidates_after_session_expiry(self) -> None:
-        """Test late candidates are dropped (not reconnected) once expired."""
+    async def test_relay_reconnects_after_session_expiry(self) -> None:
+        """Test late candidates are still forwarded past sessionExpiration.
 
-        def _no_connect() -> Any:
-            raise AssertionError("must not reconnect with an expired token")
-
-        client = SimpleNamespace(websession=SimpleNamespace(ws_connect=_no_connect))
-        relay = CameraSignalingRelay(client)  # type: ignore[arg-type]
+        Observed live: the signaling server accepts an expired session token.
+        """
+        ws = _FakeWebSocket([])
+        relay = CameraSignalingRelay(_fake_client([ws]))
         relay._session = CameraSession(
             session_id="s",
             session_token="t",
@@ -804,6 +803,7 @@ class TestSignalingHelpers:
         )
         relay._pending_candidates.append({"candidate": "candidate:1"})
         await relay._reconnect_and_flush()
+        assert ws.sent == [{"candidate": "candidate:1"}]
         assert relay._pending_candidates == []
 
     def test_ws_url_encodes_token(self) -> None:
