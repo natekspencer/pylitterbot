@@ -922,6 +922,28 @@ class TestAnswerTimeout:
         assert candidate["candidate"] == "candidate:9"
         await relay.close()
 
+    async def test_relay_closes_socket_when_cancelled_during_offer(self) -> None:
+        """Test cancelling start() while the offer is sent closes the socket."""
+        sending = asyncio.Event()
+
+        class _StalledWebSocket(_FakeWebSocket):
+            async def send_json(self, data: dict[str, Any]) -> None:
+                sending.set()
+                await asyncio.Event().wait()  # never completes
+
+        ws = _StalledWebSocket([])
+        relay = CameraSignalingRelay(_fake_client([ws]))
+        task = asyncio.ensure_future(
+            relay.start("v=0 offer", lambda a: None, lambda c: None)
+        )
+        await sending.wait()
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert ws.closed
+        assert relay.session is None
+
     async def test_relay_raises_when_never_answered(self) -> None:
         """Test the relay gives up after ANSWER_ATTEMPTS unanswered offers."""
         sockets = [_FakeWebSocket([]), _FakeWebSocket([])]

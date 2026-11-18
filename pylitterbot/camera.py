@@ -633,7 +633,8 @@ class CameraSignalingRelay(_SignalingMixin):
         try:
             _LOGGER.debug("Signaling relay: sending offer (%d bytes)", len(offer_sdp))
             await ws.send_json({"type": "offer", "sdp": encode(offer_sdp)})
-        except Exception:
+        except BaseException:
+            # not yet in self._ws, so start()'s cleanup can't close it
             await ws.close()
             raise
 
