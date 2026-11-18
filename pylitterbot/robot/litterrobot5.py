@@ -1190,6 +1190,29 @@ class LitterRobot5(LitterRobot):
         client = self.get_camera_client()
         return await client.get_video_settings()
 
+    async def get_camera_status(self) -> str | None:
+        """Return the camera's connection status (e.g. ``"ONLINE"``).
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        client = self.get_camera_client()
+        return await client.get_camera_status()
+
+    async def get_camera_view(self) -> str | None:
+        """Return the current camera live-view: ``"front"``, ``"globe"`` or `None`.
+
+        Raises:
+            CameraNotAvailableException: If the robot has no camera.
+
+        """
+        client = self.get_camera_client()
+        canvas = await client.get_camera_canvas()
+        return {CAMERA_CANVAS_FRONT: "front", CAMERA_CANVAS_GLOBE: "globe"}.get(
+            canvas or ""
+        )
+
     async def set_camera_view(self, view: str) -> bool:
         """Switch the camera live-view canvas.
 

@@ -3,6 +3,7 @@
 # pylint: disable=protected-access
 from __future__ import annotations
 
+from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any
 
@@ -19,6 +20,7 @@ from pylitterbot.camera import (
     CAMERA_INVENTORY_API,
     CameraClient,
     CameraSession,
+    CameraSignalingRelay,
     VideoClip,
     VideoPlayback,
     _decode_sdp,
@@ -30,7 +32,7 @@ from pylitterbot.exceptions import (
     InvalidCommandException,
 )
 from pylitterbot.robot.litterrobot5 import LitterRobot5
-from pylitterbot.utils import encode
+from pylitterbot.utils import encode, utcnow
 
 from .common import (
     CAMERA_DEVICE_ID,
@@ -250,7 +252,52 @@ class TestCameraClient:
         )
         info = await client.get_camera_info()
         assert info is not None
-        assert info["deviceId"] == CAMERA_DEVICE_ID
+        assert info["serial"] == CAMERA_DEVICE_ID
+
+        await mock_account.disconnect()
+
+    async def test_get_camera_status(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """Test fetching the camera connection status."""
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        assert await client.get_camera_status() == "ONLINE"
+
+        await mock_account.disconnect()
+
+    async def test_get_camera_canvas(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """Test reading the reported live-view canvas."""
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        assert await client.get_camera_canvas() == CAMERA_CANVAS_FRONT
+
+        await mock_account.disconnect()
+
+    async def test_validate_device_ownership(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """Test validating camera ownership (empty 200 response)."""
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        assert await client.validate_device_ownership() is True
 
         await mock_account.disconnect()
 
@@ -556,6 +603,44 @@ class TestLitterRobot5Camera:
 
         await robot._account.disconnect()
 
+    async def test_get_camera_view(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """Test get_camera_view maps the reported canvas to a view name."""
+        robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+        assert await robot.get_camera_view() == "front"
+
+        await robot._account.disconnect()
+
+    async def test_get_camera_view_unknown_canvas(
+        self,
+        mock_account: Account,
+    ) -> None:
+        """Test get_camera_view returns None for an unrecognized canvas."""
+        robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+        client = robot.get_camera_client()
+
+        async def _canvas() -> str:
+            return "sensor_9_4k"
+
+        client.get_camera_canvas = _canvas  # type: ignore[method-assign]
+        assert await robot.get_camera_view() is None
+
+        await robot._account.disconnect()
+
+    async def test_get_camera_status(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """Test get_camera_status on the robot."""
+        robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+        assert await robot.get_camera_status() == "ONLINE"
+
+        await robot._account.disconnect()
+
     async def test_no_camera_raises(
         self,
         mock_account: Account,
@@ -653,6 +738,72 @@ class TestSignalingHelpers:
         raw = encode("hello world")
         assert _decode_sdp(raw) == raw
 
+    def test_parse_captured_answer(self) -> None:
+        """Test an answer shaped like the live camera's (extra metadata keys)."""
+        parsed = _parse_signaling_message(
+            {
+                "payload": encode(self.ANSWER_SDP),
+                "type": "answer",
+                "sessionId": "00000000-0000-4000-8000-000000000001",
+                "originatior": "00000000-0000-4000-8000-000000000002",
+            }
+        )
+        assert parsed == ("answer", self.ANSWER_SDP)
+
+    def test_parse_captured_candidate(self) -> None:
+        """Test a camera candidate without a ``type`` key, as sent live."""
+        candidate = (
+            "candidate:4048538384 1 udp 2122194687 192.168.1.10 50109 "
+            "typ host generation 0 ufrag Y2Cx network-id 3 network-cost 10"
+        )
+        parsed = _parse_signaling_message(
+            {
+                "candidate": candidate,
+                "sdpMLineIndex": 0,
+                "sdpMid": "0",
+                "sessionId": "00000000-0000-4000-8000-000000000001",
+                "originatior": "00000000-0000-4000-8000-000000000002",
+            }
+        )
+        assert parsed == (
+            "candidate",
+            {"candidate": candidate, "sdpMid": "0", "sdpMLineIndex": 0},
+        )
+
+    def test_session_is_expired(self) -> None:
+        """Test CameraSession.is_expired against the session expiration."""
+        now = utcnow()
+        for expiration, expired in (
+            (now - timedelta(seconds=1), True),
+            (now + timedelta(seconds=60), False),
+            (None, False),
+        ):
+            session = CameraSession(
+                session_id="s",
+                session_token="t",
+                session_expiration=expiration,
+                signaling_url="wss://host/sig",
+            )
+            assert session.is_expired is expired
+
+    async def test_relay_drops_candidates_after_session_expiry(self) -> None:
+        """Test late candidates are dropped (not reconnected) once expired."""
+
+        def _no_connect() -> Any:
+            raise AssertionError("must not reconnect with an expired token")
+
+        client = SimpleNamespace(websession=SimpleNamespace(ws_connect=_no_connect))
+        relay = CameraSignalingRelay(client)  # type: ignore[arg-type]
+        relay._session = CameraSession(
+            session_id="s",
+            session_token="t",
+            session_expiration=utcnow() - timedelta(seconds=1),
+            signaling_url="wss://host/sig",
+        )
+        relay._pending_candidates.append({"candidate": "candidate:1"})
+        await relay._reconnect_and_flush()
+        assert relay._pending_candidates == []
+
     def test_ws_url_encodes_token(self) -> None:
         """Test that the session token is URL-encoded in the ws URL."""
         session = CameraSession(
@@ -676,6 +827,7 @@ class TestCameraClientErrorFallbacks:
 
         session.get = _raise
         session.patch = _raise
+        session.post = _raise
         return session
 
     async def test_get_videos_invalid_command_returns_empty(self) -> None:
@@ -705,6 +857,9 @@ class TestCameraClientErrorFallbacks:
         )
         assert await client.set_audio_enabled(True) is False
         assert await client.set_camera_canvas(CAMERA_CANVAS_FRONT) is False
+        assert await client.validate_device_ownership() is False
+        assert await client.get_camera_canvas() is None
+        assert await client.get_camera_status() is None
 
     async def test_generate_session_wraps_invalid_command(self) -> None:
         """Test generate_session wraps InvalidCommandException."""

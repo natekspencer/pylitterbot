@@ -133,6 +133,17 @@ class CameraSession:
         """Return the signaling websocket URL with the URL-encoded session token."""
         return f"{self.signaling_url}?accessToken={quote(self.session_token, safe='')}"
 
+    @property
+    def is_expired(self) -> bool:
+        """Return `True` once the session's signaling token has expired.
+
+        Sessions are short-lived (observed: 60 seconds after generation), after
+        which the signaling websocket rejects the token.
+        """
+        return (
+            self.session_expiration is not None and utcnow() >= self.session_expiration
+        )
+
     @classmethod
     def from_response(cls, data: dict[str, Any]) -> CameraSession:
         """Create a CameraSession from the generate-session API response."""
@@ -291,6 +302,26 @@ class CameraClient:
             )
         return CameraSession.from_response(data)
 
+    async def validate_device_ownership(self) -> bool:
+        """Check that the account owns this camera.
+
+        The Whisker app makes this call immediately before generating a live
+        view session. A successful response has an empty body.
+        """
+        url = f"{CAMERA_INVENTORY_API}/prod/v1/auth/validate-token"
+        payload = {
+            "device_id": self._device_id,
+            "validation_type": "device_ownership",
+        }
+        try:
+            await self._session.post(
+                url, json=payload, headers=self._settings_headers()
+            )
+        except _API_ERRORS as err:
+            _LOGGER.debug("Camera ownership validation failed: %s", err)
+            return False
+        return True
+
     async def get_video_settings(
         self, settings_type: str = "videoSettings"
     ) -> dict[str, Any] | None:
@@ -323,6 +354,15 @@ class CameraClient:
         }
         return await self._patch(url, payload)
 
+    async def get_camera_canvas(self) -> str | None:
+        """Return the reported live-view canvas (camera view selection)."""
+        settings = await self.get_video_settings()
+        if not settings:
+            return None
+        live_view = settings.get("streams", {}).get("live-view", {})
+        canvas = live_view.get("canvas") if isinstance(live_view, dict) else None
+        return canvas if isinstance(canvas, str) else None
+
     async def set_audio_enabled(self, enabled: bool) -> bool:
         """Enable or disable the camera microphone.
 
@@ -344,6 +384,16 @@ class CameraClient:
         """Fetch camera device information from the inventory API."""
         data = await self._get(self._inventory_base)
         return data if isinstance(data, dict) else None
+
+    async def get_camera_status(self) -> str | None:
+        """Return the camera's connection status from the inventory API.
+
+        The Whisker app polls this before offering live view; ``"ONLINE"``
+        indicates the camera can accept a streaming session.
+        """
+        info = await self.get_camera_info()
+        status = info.get("status") if info else None
+        return status if isinstance(status, str) else None
 
     async def get_videos(
         self, *, date: str | None = None, limit: int | None = None
@@ -651,6 +701,13 @@ class CameraSignalingRelay(_SignalingMixin):
         in-flight flush are not stranded.
         """
         while self._pending_candidates and not self._closed and self._session:
+            if self._session.is_expired:
+                _LOGGER.debug(
+                    "Signaling relay: session expired -- dropping %d late ICE candidate(s)",
+                    len(self._pending_candidates),
+                )
+                self._pending_candidates.clear()
+                break
             _LOGGER.debug(
                 "Signaling relay: reconnecting to forward %d late ICE candidate(s)",
                 len(self._pending_candidates),

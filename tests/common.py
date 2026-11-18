@@ -431,11 +431,19 @@ CAMERA_VIDEOS_RESPONSE: list[dict[str, Any]] = [
 ]
 
 CAMERA_INFO_RESPONSE: dict[str, Any] = {
-    "deviceId": CAMERA_DEVICE_ID,
-    "serialNumber": "E0510076020EBFV",
-    "model": "LR5_PRO_CAMERA",
-    "status": "online",
-    "firmwareVersion": "1.2.2-1233",
+    "serial": CAMERA_DEVICE_ID,
+    "spaceId": "69261e737e1f43011f75b804",
+    "name": "Litter-Robot 5 Pro",
+    "status": "ONLINE",
+    "settings": {
+        "motionRecordingType": "ALL_MOTION",
+        "listenToGlassBreak": True,
+        "listenToSmokeAlarm": True,
+    },
+    "createdAt": 1769303825.828521,
+    "updatedAt": 1773813918.014369,
+    "deviceType": "WC1",
+    "unitSerial": "LR5-00-00-00-0000-000000",
 }
 
 CAMERA_EVENTS_RESPONSE: list[dict[str, Any]] = [
