@@ -1302,27 +1302,78 @@ class TestAnswerTimeout:
         assert reconnect.sent[0]["candidate"] == "candidate:early"
         await relay.close()
 
-    async def test_relay_close_cancels_offer_setup(self) -> None:
-        """Test close() during the offer write closes that socket before returning."""
-        sending = asyncio.Event()
+    @staticmethod
+    def _stalled_setup_socket() -> Any:
+        """Return a socket whose offer write stalls and whose close blocks.
+
+        ``sending`` is set when the offer write starts, ``closing`` when its
+        close starts; the close completes once ``release`` is set.
+        """
 
         class _StalledWebSocket(_FakeWebSocket):
+            sending = asyncio.Event()
+            closing = asyncio.Event()
+            release = asyncio.Event()
+
             async def send_json(self, data: dict[str, Any]) -> None:
-                sending.set()
+                self.sending.set()
                 await asyncio.Event().wait()  # never completes
 
-        ws = _StalledWebSocket([])
+            async def close(self) -> None:
+                self.closing.set()
+                await self.release.wait()
+                await super().close()
+
+        return _StalledWebSocket([])
+
+    async def test_relay_close_cancels_offer_setup(self) -> None:
+        """Test close() during the offer write waits for that socket's cleanup."""
+        ws = self._stalled_setup_socket()
         relay = CameraSignalingRelay(_fake_client([ws]))
         task = asyncio.ensure_future(
             relay.start("v=0 offer", lambda a: None, lambda c: None)
         )
+        close: asyncio.Future[None] | None = None
         try:
-            await _wait_for_event_or_task(sending, task)
-            await asyncio.wait_for(relay.close(), timeout=1)
-            assert ws.closed  # closed before close() returned
+            await _wait_for_event_or_task(ws.sending, task)
+            close = asyncio.ensure_future(relay.close())
+            await _wait_for_event_or_task(ws.closing, close)
+            await asyncio.sleep(0)
+            assert not close.done()  # still waiting for the socket cleanup
+
+            ws.release.set()
+            await asyncio.wait_for(close, timeout=1)
+            assert ws.closed
             with pytest.raises(CameraStreamException, match="closed"):
                 await asyncio.wait_for(task, timeout=1)
         finally:
+            if close is not None:
+                await _cancel_pending(close)
+            await _cancel_pending(task)
+
+    async def test_relay_close_cancelled_still_finishes_setup_cleanup(self) -> None:
+        """Test cancelling close() propagates, without abandoning setup cleanup."""
+        ws = self._stalled_setup_socket()
+        relay = CameraSignalingRelay(_fake_client([ws]))
+        task = asyncio.ensure_future(
+            relay.start("v=0 offer", lambda a: None, lambda c: None)
+        )
+        close: asyncio.Future[None] | None = None
+        try:
+            await _wait_for_event_or_task(ws.sending, task)
+            close = asyncio.ensure_future(relay.close())
+            await _wait_for_event_or_task(ws.closing, close)
+            close.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await close  # not swallowed
+
+            ws.release.set()
+            with pytest.raises(CameraStreamException, match="closed"):
+                await asyncio.wait_for(task, timeout=1)
+            assert ws.closed  # the setup's cleanup still ran to completion
+        finally:
+            if close is not None:
+                await _cancel_pending(close)
             await _cancel_pending(task)
 
     async def test_relay_close_wakes_start(
@@ -1462,6 +1513,33 @@ class TestRelayReconnect:
         assert first.sent == [{"candidate": "candidate:a"}]
         assert second.sent == [{"candidate": "candidate:b"}]
         assert first.closed and second.closed
+
+    async def test_restored_batch_stays_bounded(self) -> None:
+        """Test a failed batch plus new arrivals keeps only the newest candidates."""
+        limit = camera.MAX_PENDING_CANDIDATES
+        relay: CameraSignalingRelay
+
+        class _ArrivalsThenFail(_FakeWebSocket):
+            async def send_json(self, data: dict[str, Any]) -> None:
+                # browser candidates arrive while this send is in flight
+                for i in range(limit):
+                    relay._pending_candidates.append({"candidate": f"new{i}"})
+                raise ConnectionResetError("closing transport")
+
+        sockets: list[_FakeWebSocket] = [_ArrivalsThenFail([])]
+
+        async def ws_connect(*args: Any, **kwargs: Any) -> _FakeWebSocket:
+            if not sockets:
+                raise ConnectionError("handshake failed")
+            return sockets.pop(0)
+
+        relay = self._relay(ws_connect)
+        relay._pending_candidates.extend({"candidate": f"old{i}"} for i in range(limit))
+        await asyncio.wait_for(relay._reconnect_and_flush(), timeout=1)
+
+        queued = [c["candidate"] for c in relay._pending_candidates]
+        assert len(queued) == limit
+        assert queued == [f"new{i}" for i in range(limit)]  # newest, in order
 
     async def test_gives_up_after_max_attempts(self) -> None:
         """Test the flush stops after RECONNECT_ATTEMPTS, keeping the candidates."""
@@ -1606,6 +1684,67 @@ class TestCameraStreamLifecycle:
         assert ws.closed
         assert stream._pc is None
         assert stream._ws is None
+
+    async def test_stop_cancels_in_flight_connect(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test stop() during the signaling handshake ends setup before returning."""
+        stream, client = self._local_stream(monkeypatch, [])
+        connecting = asyncio.Event()
+        opened: list[Any] = []
+
+        async def slow_ws_connect(*args: Any, **kwargs: Any) -> Any:
+            connecting.set()
+            await asyncio.Event().wait()  # the handshake never completes
+            opened.append(object())
+
+        client.websession = SimpleNamespace(ws_connect=slow_ws_connect)
+        task = asyncio.ensure_future(stream.start())
+        try:
+            await _wait_for_event_or_task(connecting, task)
+            await asyncio.wait_for(stream.stop(), timeout=1)
+            assert stream._setup_task is None
+            with pytest.raises(CameraStreamException, match="stopped"):
+                await asyncio.wait_for(task, timeout=1)
+        finally:
+            await _cancel_pending(task)
+        assert opened == []
+        assert stream._pc is None
+
+    async def test_cancelled_stop_cannot_interrupt_peer_close(self) -> None:
+        """Test a cancelled stop() leaves the peer close running; stop() again joins it."""
+        closing, release = asyncio.Event(), asyncio.Event()
+        closes = 0
+
+        class _SlowPeer:
+            async def close(self) -> None:
+                nonlocal closes
+                closes += 1
+                closing.set()
+                await release.wait()
+
+        stream = CameraStream(_fake_client([]))
+        stream._pc = _SlowPeer()
+        first = asyncio.ensure_future(stream.stop())
+        second: asyncio.Future[None] | None = None
+        try:
+            await _wait_for_event_or_task(closing, first)
+            first.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+
+            second = asyncio.ensure_future(stream.stop())
+            await asyncio.sleep(0)
+            assert not second.done()  # waits for the same peer close
+
+            release.set()
+            await asyncio.wait_for(second, timeout=1)
+        finally:
+            await _cancel_pending(first)
+            if second is not None:
+                await _cancel_pending(second)
+        assert closes == 1
+        assert stream._pc_close_task is not None and stream._pc_close_task.done()
 
     async def test_stop_wakes_start(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test stop() ends a start() that is waiting for the answer."""

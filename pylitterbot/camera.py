@@ -14,7 +14,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Coroutine
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, TypeVar
 from urllib.parse import quote
 
 from aiohttp import (
@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     from .session import Session
 
 _LOGGER = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
 
 WATFORD_API = "https://watford.ienso-dev.com"  # vendor-maintained URL; the -dev suffix is intentional
 CAMERA_SETTINGS_API = "https://7mnuil943l.execute-api.us-east-1.amazonaws.com"
@@ -106,6 +108,19 @@ async def _close_ws(ws: ClientWebSocketResponse) -> None:
             await ws.close()
     except asyncio.TimeoutError:
         _LOGGER.debug("Signaling: websocket close timed out; connection aborted")
+
+
+async def _cancel_and_wait(*tasks: asyncio.Task[Any] | None) -> None:
+    """Cancel tasks and wait for their cleanup to finish.
+
+    Unlike ``cancel_task``, a cancellation of the caller still propagates, and
+    it doesn't interrupt the tasks' own cleanup.
+    """
+    pending = {task for task in tasks if task is not None and not task.done()}
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.wait(pending)
 
 
 async def _wait_for_either(first: asyncio.Event, second: asyncio.Event) -> None:
@@ -532,11 +547,36 @@ class _SignalingMixin:
     """Shared signaling-websocket plumbing for relay and stream classes."""
 
     _ws: ClientWebSocketResponse | None
+    _setup_task: asyncio.Task[Any] | None
 
     @property
     def _finished(self) -> bool:
         """Return `True` once the owner has been closed/stopped."""
         raise NotImplementedError
+
+    async def _run_setup(
+        self, setup: Coroutine[Any, Any, _T], finished_message: str
+    ) -> _T:
+        """Run offer setup as a task that close()/stop() can cancel and wait for.
+
+        Cancelling it lets its own cleanup release a socket that isn't yet
+        tracked, so no setup socket outlives close()/stop().
+        """
+        self._setup_task = task = asyncio.ensure_future(setup)
+        try:
+            return await task
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if (
+                task.cancelled()
+                and self._finished
+                and not (current and current.cancelling())
+            ):
+                # cancelled by close()/stop(), not by our caller
+                raise CameraStreamException(finished_message) from None
+            raise
+        finally:
+            self._setup_task = None
 
     async def _ping_loop(self) -> None:
         """Send periodic pings to keep the signaling connection alive."""
@@ -657,7 +697,8 @@ class CameraSignalingRelay(_SignalingMixin):
                 session = await self._run_setup(
                     self._connect_and_offer(
                         offer_sdp, *_attempt_handlers(attempt, answered)
-                    )
+                    ),
+                    "Relay has been closed",
                 )
                 try:
                     # asyncio.wait_for can swallow a cancellation on 3.11
@@ -698,26 +739,6 @@ class CameraSignalingRelay(_SignalingMixin):
             raise
         finally:
             self._starting = False
-
-    async def _run_setup(
-        self, setup: Coroutine[Any, Any, CameraSession]
-    ) -> CameraSession:
-        """Run offer setup as a task that close() can cancel and wait for.
-
-        Cancelling it lets its own cleanup close a socket that isn't yet in
-        ``self._ws``, so no socket outlives close().
-        """
-        self._setup_task = task = asyncio.ensure_future(setup)
-        try:
-            return await task
-        except asyncio.CancelledError:
-            current = asyncio.current_task()
-            if task.cancelled() and self._closed and not current.cancelling():  # type: ignore[union-attr]
-                # cancelled by close(), not by start()'s caller
-                raise CameraStreamException("Relay has been closed") from None
-            raise
-        finally:
-            self._setup_task = None
 
     async def _connect_and_offer(
         self,
@@ -838,7 +859,7 @@ class CameraSignalingRelay(_SignalingMixin):
         self._closed_event.set()
 
         # an in-flight offer setup closes its own socket when cancelled
-        await cancel_task(self._setup_task, self._reconnect_task)
+        await _cancel_and_wait(self._setup_task, self._reconnect_task)
         await self._disconnect()
 
     async def _receive_loop(
@@ -913,9 +934,10 @@ class CameraSignalingRelay(_SignalingMixin):
                         )
                 finally:
                     if sent < len(pending):
+                        # unsent ones first, then new arrivals; keep the newest
                         self._pending_candidates = (
                             pending[sent:] + self._pending_candidates
-                        )
+                        )[-MAX_PENDING_CANDIDATES:]
                     await _close_ws(ws)
             except Exception:
                 # close() cancels this task, so a closed relay never sleeps here
@@ -998,6 +1020,8 @@ class CameraStream(_SignalingMixin):
         self._starting = False
         self._stopped = False
         self._stopped_event = asyncio.Event()  # wakes start() on stop()
+        self._setup_task: asyncio.Task[None] | None = None
+        self._pc_close_task: asyncio.Task[None] | None = None
 
     @property
     def _finished(self) -> bool:
@@ -1040,7 +1064,9 @@ class CameraStream(_SignalingMixin):
             for attempt in range(1, ANSWER_ATTEMPTS + 1):
                 self._answered = asyncio.Event()
                 self._connected.clear()
-                await self._connect_and_offer()
+                await self._run_setup(
+                    self._connect_and_offer(), "Stream has been stopped"
+                )
                 self._check_stopped()
                 try:
                     # asyncio.wait_for can swallow a cancellation on 3.11
@@ -1152,15 +1178,22 @@ class CameraStream(_SignalingMixin):
                 await _close_ws(self._ws)
             self._ws = None
         finally:
-            # detached, so nothing else would close it if teardown is cancelled
+            # Detached, so nothing else would close it. Run the close as an
+            # owned task: a cancelled caller can't interrupt it, and a later
+            # stop() waits for it.
             if pc:
-                await pc.close()
+                self._pc_close_task = closing = asyncio.ensure_future(pc.close())
+                await asyncio.wait({closing})
 
     async def stop(self) -> None:
         """Stop the WebRTC streaming session and clean up resources."""
         self._stopped = True
         self._stopped_event.set()
+        # setup closes a socket it hasn't published yet when cancelled
+        await _cancel_and_wait(self._setup_task)
         await self._disconnect()
+        if self._pc_close_task is not None and not self._pc_close_task.done():
+            await asyncio.wait({self._pc_close_task})
 
     async def wait_for_connection(self, timeout: float = 30) -> bool:
         """Wait until the WebRTC connection is established.
