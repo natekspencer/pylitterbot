@@ -974,6 +974,38 @@ class TestAnswerTimeout:
         await stream.stop()
 
 
+class TestCameraStreamTracks:
+    """Tests for delivering track frames to callbacks."""
+
+    async def test_callback_registered_after_track(self) -> None:
+        """Test a callback registered after the track arrived gets its frames.
+
+        Tracks arrive while ``start()`` waits for the answer, i.e. before an
+        ``async with`` body can register callbacks.
+        """
+        if not camera.HAS_AIORTC:
+            pytest.skip("aiortc not installed")
+        stream = CameraStream(_fake_client([]))
+        frames: asyncio.Queue[int] = asyncio.Queue()
+        for frame in (1, 2, 3):
+            frames.put_nowait(frame)
+
+        # what the peer connection's "track" handler does
+        stream._tracks["video"] = SimpleNamespace(kind="video", recv=frames.get)
+        stream._start_consumer("video")
+        assert not stream._media_tasks  # no callback yet: not consumed
+
+        received: list[int] = []
+        stream.on_video_frame(received.append)
+        stream.on_video_frame(received.append)  # re-registering adds no consumer
+        for _ in range(5):
+            await asyncio.sleep(0)
+
+        assert received == [1, 2, 3]
+        assert len(stream._media_tasks) == 1
+        await stream.stop()
+
+
 class TestCameraClientErrorFallbacks:
     """Tests that API errors degrade per the documented contracts."""
 

@@ -858,6 +858,8 @@ class CameraStream(_SignalingMixin):
         self._ping_task: asyncio.Task[None] | None = None
         self._receive_task: asyncio.Task[None] | None = None
         self._media_tasks: list[asyncio.Task[None]] = []
+        self._tracks: dict[str, Any] = {}
+        self._consuming: set[str] = set()
 
         self._video_callback: Callable | None = None
         self._audio_callback: Callable | None = None
@@ -874,10 +876,12 @@ class CameraStream(_SignalingMixin):
     def on_video_frame(self, callback: Callable) -> None:
         """Register a callback for incoming video frames."""
         self._video_callback = callback
+        self._start_consumer("video")
 
     def on_audio_frame(self, callback: Callable) -> None:
         """Register a callback for incoming audio frames."""
         self._audio_callback = callback
+        self._start_consumer("audio")
 
     def on_connection_state_change(self, callback: Callable) -> None:
         """Register a callback for peer connection state changes."""
@@ -942,16 +946,8 @@ class CameraStream(_SignalingMixin):
         @pc.on("track")
         def on_track(track: Any) -> None:
             _LOGGER.debug("Received %s track: %s", track.kind, track.id)
-            if track.kind == "video" and self._video_callback:
-                task = asyncio.ensure_future(
-                    self._consume_track(track, self._video_callback)
-                )
-                self._media_tasks.append(task)
-            elif track.kind == "audio" and self._audio_callback:
-                task = asyncio.ensure_future(
-                    self._consume_track(track, self._audio_callback)
-                )
-                self._media_tasks.append(task)
+            self._tracks[track.kind] = track
+            self._start_consumer(track.kind)
 
         @pc.on("connectionstatechange")
         async def on_state_change() -> None:
@@ -988,6 +984,8 @@ class CameraStream(_SignalingMixin):
         """Stop the media and signaling tasks and close the connections."""
         await cancel_task(*self._media_tasks, self._ping_task, self._receive_task)
         self._media_tasks.clear()
+        self._tracks.clear()
+        self._consuming.clear()
         self._ping_task = self._receive_task = None
 
         if self._ws and not self._ws.closed:
@@ -1064,11 +1062,35 @@ class CameraStream(_SignalingMixin):
             servers.append(RTCIceServer(urls=FALLBACK_STUN_URL))
         return servers
 
-    async def _consume_track(self, track: Any, callback: Callable) -> None:
+    def _frame_callback(self, kind: str) -> Callable | None:
+        """Return the registered callback for a track kind."""
+        if kind == "video":
+            return self._video_callback
+        if kind == "audio":
+            return self._audio_callback
+        return None
+
+    def _start_consumer(self, kind: str) -> None:
+        """Consume a track once both it and its callback exist.
+
+        Tracks arrive while ``start()`` is waiting for the answer, so a
+        callback registered after ``start()`` must still pick them up.
+        """
+        track = self._tracks.get(kind)
+        if track is None or self._frame_callback(kind) is None:
+            return
+        if kind in self._consuming:
+            return
+        self._consuming.add(kind)
+        self._media_tasks.append(asyncio.ensure_future(self._consume_track(track)))
+
+    async def _consume_track(self, track: Any) -> None:
         """Read frames from a media track and deliver via callback."""
         try:
             while not self._stopped:
                 frame = await track.recv()
+                if (callback := self._frame_callback(track.kind)) is None:
+                    continue
                 try:
                     callback(frame)
                 except Exception:
