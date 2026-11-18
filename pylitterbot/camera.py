@@ -1,7 +1,8 @@
 """Camera support for Litter-Robot 5 Pro.
 
 Provides REST API access to camera sessions, settings, videos (including
-direct MP4 download of recorded clips), and events via `CameraClient`, and WebRTC live streaming via `CameraStream`.
+direct MP4 download of recorded clips), and events via `CameraClient`, and
+WebRTC live streaming via `CameraStream`.
 
 WebRTC streaming requires the optional ``aiortc`` dependency::
 
@@ -22,7 +23,6 @@ from aiohttp import (
     ClientResponseError,
     ClientSession,
     ClientWebSocketResponse,
-    DummyCookieJar,
     WSMsgType,
 )
 from yarl import URL
@@ -468,18 +468,17 @@ class CameraClient:
         """
         if (playback := await self.get_video_playback(clip_id)) is None:
             return None
-        # Presigned S3 URLs need no credentials, and the caller's session may
-        # carry some that per-request options can't remove (default headers,
-        # session-wide auth, cookies).  Download through a dedicated session
-        # with no cookie jar, and keep each query string exactly as signed.
         contents: list[bytes] = []
-        if not playback.chunks:
-            return contents
-        async with ClientSession(cookie_jar=DummyCookieJar()) as session:
-            for chunk in playback.chunks:
-                async with session.get(URL(chunk.download_url, encoded=True)) as resp:
-                    resp.raise_for_status()
-                    contents.append(await resp.read())
+        for chunk in playback.chunks:
+            # Presigned S3 URL: pylitterbot adds its auth per request, so none is
+            # sent here (S3 rejects a second auth mechanism), and the session's
+            # cookies stay scoped to the domains that set them.  Keep the query
+            # string exactly as signed.
+            async with self.websession.get(
+                URL(chunk.download_url, encoded=True)
+            ) as resp:
+                resp.raise_for_status()
+                contents.append(await resp.read())
         return contents
 
     async def download_video(
@@ -487,9 +486,10 @@ class CameraClient:
     ) -> list[Path] | None:
         """Download a recorded clip's MP4 chunks to ``directory``.
 
-        Files are named ``{clip_id}_{index:02d}.mp4`` in playback order.  All
-        chunks are fetched before anything is written, so a failed download
-        leaves no partial files behind.  The directory is created if needed.
+        Files are named ``{clip_id}_{index:02d}.mp4`` in playback order, and
+        existing files with those names are overwritten.  All chunks are
+        fetched before anything is written, so a failed download leaves no
+        partial files behind.  The directory is created if needed.
 
         Args:
             clip_id: The :attr:`VideoClip.id` of the clip to download.
@@ -501,9 +501,13 @@ class CameraClient:
             fetched.
 
         Raises:
+            ValueError: If ``clip_id`` isn't a plain file name (e.g. contains
+                a path separator), so files can't land outside ``directory``.
             aiohttp.ClientResponseError: If any chunk download fails.
 
         """
+        if not clip_id or Path(clip_id).name != clip_id:
+            raise ValueError(f"Invalid clip ID for a file name: {clip_id!r}")
         if (contents := await self.fetch_video_chunks(clip_id)) is None:
             return None
         directory = Path(directory)

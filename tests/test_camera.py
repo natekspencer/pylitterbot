@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from aiohttp import ClientResponseError, ClientSession, RequestInfo
+from aiohttp import ClientResponseError, RequestInfo
 from aiointercept import aiointercept
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
@@ -392,22 +392,13 @@ class TestCameraClient:
 
         await mock_account.disconnect()
 
-    @pytest.mark.parametrize(
-        "session_kwargs",
-        [
-            {"headers": {"Authorization": "Bearer secret", "X-Api-Key": "k"}},
-            {"cookies": {"session": "secret"}},
-        ],
-        ids=["default-headers", "cookie-jar"],
-    )
-    async def test_fetch_video_chunks_sends_no_caller_credentials(
+    async def test_fetch_video_chunks_uses_caller_session(
         self,
         mock_account: Account,
         mock_aiointercept: aiointercept,
         monkeypatch: pytest.MonkeyPatch,
-        session_kwargs: dict[str, Any],
     ) -> None:
-        """Credentials on the caller's session never reach S3."""
+        """Chunks go through the caller's session, without pylitterbot's auth."""
         clip_id = "12345"
         url = "https://s3.example/vid-12345/a.mp4?Signature=a%2Bb%3D"
         mock_aiointercept.get(
@@ -415,17 +406,22 @@ class TestCameraClient:
             payload={"id": clip_id, "chunks": [{"id": 1, "downloadUrl": url}]},
         )
         mock_aiointercept.get(url, body=b"chunk-a")
-        caller_session = ClientSession(**session_kwargs)
-        monkeypatch.setattr(mock_account.session, "_websession", caller_session)
         client = CameraClient(
             session=mock_account.session,
             device_id=CAMERA_DEVICE_ID,
             api_key="test-key",
         )
-        try:
-            assert await client.fetch_video_chunks(clip_id) == [b"chunk-a"]
-        finally:
-            await caller_session.close()
+        websession = client.websession
+        requested: list[str] = []
+        original_get = websession.get
+
+        def _spy_get(url: Any, **kwargs: Any) -> Any:
+            requested.append(str(url))
+            return original_get(url, **kwargs)
+
+        monkeypatch.setattr(websession, "get", _spy_get)
+        assert await client.fetch_video_chunks(clip_id) == [b"chunk-a"]
+        assert url in requested
         chunk_requests = [
             req
             for (method, req_url), reqs in mock_aiointercept.requests.items()
@@ -433,42 +429,31 @@ class TestCameraClient:
             for req in reqs
         ]
         assert len(chunk_requests) == 1
-        for header in ("Authorization", "X-Api-Key", "Cookie"):
+        for header in ("Authorization", "X-Api-Key"):
             assert header not in chunk_requests[0].headers
 
         await mock_account.disconnect()
 
-    async def test_fetch_video_chunks_closes_download_session(
+    @pytest.mark.parametrize("clip_id", ["../12345", "a/b", "", "/tmp/x"])
+    async def test_download_video_rejects_path_like_clip_id(
         self,
         mock_account: Account,
         mock_aiointercept: aiointercept,
-        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+        clip_id: str,
     ) -> None:
-        """The dedicated download session is closed, even when a chunk fails."""
-        clip_id = "12345"
-        url = "https://s3.example/vid-12345/a.mp4"
-        mock_aiointercept.get(
-            f"{CAMERA_INVENTORY_API}/prod/v1/camera-videos/{clip_id}",
-            payload={"id": clip_id, "chunks": [{"id": 1, "downloadUrl": url}]},
-        )
-        mock_aiointercept.get(url, status=403)
-        created: list[ClientSession] = []
-
-        def _tracked_session(*args: Any, **kwargs: Any) -> ClientSession:
-            session = ClientSession(*args, **kwargs)
-            created.append(session)
-            return session
-
-        monkeypatch.setattr("pylitterbot.camera.ClientSession", _tracked_session)
+        """A clip ID that isn't a plain file name is rejected before any request."""
         client = CameraClient(
             session=mock_account.session,
             device_id=CAMERA_DEVICE_ID,
             api_key="test-key",
         )
-        with pytest.raises(ClientResponseError):
-            await client.fetch_video_chunks(clip_id)
-        assert len(created) == 1
-        assert created[0].closed
+        with pytest.raises(ValueError):
+            await client.download_video(clip_id, tmp_path)
+        assert not any(
+            url.path.startswith("/prod/v1/camera-videos")
+            for (_, url) in mock_aiointercept.requests
+        )
 
         await mock_account.disconnect()
 
