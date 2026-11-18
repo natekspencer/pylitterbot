@@ -44,6 +44,8 @@ Alternatively, clone the repository and run
 uv sync
 ```
 
+adding `--extra camera` (`uv sync --extra camera`) for live camera video.
+
 ## Usage
 
 ```python
