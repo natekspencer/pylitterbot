@@ -3,17 +3,18 @@
 # pylint: disable=protected-access
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from aiohttp import ClientResponseError, RequestInfo
+from aiohttp import ClientResponseError, RequestInfo, WSMsgType
 from aiointercept import aiointercept
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
-from pylitterbot import Account
+from pylitterbot import Account, camera
 from pylitterbot.camera import (
     CAMERA_CANVAS_FRONT,
     CAMERA_CANVAS_GLOBE,
@@ -21,6 +22,7 @@ from pylitterbot.camera import (
     CameraClient,
     CameraSession,
     CameraSignalingRelay,
+    CameraStream,
     VideoClip,
     VideoPlayback,
     _decode_sdp,
@@ -813,6 +815,163 @@ class TestSignalingHelpers:
             signaling_url="wss://host/sig",
         )
         assert session.ws_url == "wss://host/sig?accessToken=ab%2Bc%2Fd%3D"
+
+
+class _FakeWebSocket:
+    """Signaling websocket stand-in that replays scripted camera messages."""
+
+    def __init__(self, incoming: list[dict[str, Any]]) -> None:
+        self.sent: list[dict[str, Any]] = []
+        self.closed = False
+        self._queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+        for msg in incoming:
+            self._queue.put_nowait(msg)
+
+    async def send_json(self, data: dict[str, Any]) -> None:
+        self.sent.append(data)
+
+    async def ping(self) -> None:
+        """Accept keepalive pings."""
+
+    async def close(self) -> None:
+        self.closed = True
+        self._queue.put_nowait(None)
+
+    def __aiter__(self) -> _FakeWebSocket:
+        return self
+
+    async def __anext__(self) -> Any:
+        if (msg := await self._queue.get()) is None:
+            raise StopAsyncIteration
+        return SimpleNamespace(type=WSMsgType.TEXT, json=lambda: msg)
+
+
+def _fake_client(sockets: list[_FakeWebSocket]) -> Any:
+    """Return a CameraClient stand-in that hands out ``sockets`` in order."""
+    remaining = list(sockets)
+    sessions: list[CameraSession] = []
+
+    async def generate_session() -> CameraSession:
+        sessions.append(
+            CameraSession(
+                session_id=f"s{len(sessions)}",
+                session_token="t",
+                session_expiration=utcnow() + timedelta(seconds=60),
+                signaling_url="wss://host/sig",
+            )
+        )
+        return sessions[-1]
+
+    async def ws_connect(*args: Any, **kwargs: Any) -> _FakeWebSocket:
+        return remaining.pop(0)
+
+    return SimpleNamespace(
+        device_id=CAMERA_DEVICE_ID,
+        generate_session=generate_session,
+        websession=SimpleNamespace(ws_connect=ws_connect),
+        sessions=sessions,
+    )
+
+
+class TestAnswerTimeout:
+    """Tests for retrying an offer the camera never answers."""
+
+    ANSWER_SDP = TestSignalingHelpers.ANSWER_SDP
+    ANSWER = {"type": "answer", "payload": encode(ANSWER_SDP)}
+    CANDIDATE = {"candidate": "candidate:1 1 udp 2 1.2.3.4 5 typ host"}
+
+    @pytest.fixture(autouse=True)
+    def _short_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(camera, "ANSWER_TIMEOUT", 0.05)
+
+    async def test_relay_answer_first_attempt(self) -> None:
+        """Test the relay returns once the camera answers."""
+        ws = _FakeWebSocket([self.ANSWER, self.CANDIDATE])
+        client = _fake_client([ws])
+        answers: list[str] = []
+        candidates: list[dict[str, Any]] = []
+        relay = CameraSignalingRelay(client)
+
+        session = await relay.start("v=0 offer", answers.append, candidates.append)
+        await asyncio.sleep(0)
+
+        assert session is client.sessions[0]
+        assert answers == [self.ANSWER_SDP]
+        assert candidates[0]["candidate"] == self.CANDIDATE["candidate"]
+        assert ws.sent[0] == {"type": "offer", "sdp": encode("v=0 offer")}
+        await relay.close()
+        assert ws.closed
+
+    async def test_relay_retries_on_fresh_session(self) -> None:
+        """Test an unanswered offer is resent, with early candidates, on a new session."""
+        silent, answering = _FakeWebSocket([]), _FakeWebSocket([self.ANSWER])
+        client = _fake_client([silent, answering])
+        answers: list[str] = []
+        relay = CameraSignalingRelay(client)
+        browser_candidate = {"candidate": "candidate:9", "sdpMid": "0"}
+        await relay.send_candidate(browser_candidate)
+
+        session = await relay.start("v=0 offer", answers.append, lambda c: None)
+
+        assert len(client.sessions) == 2
+        assert session is client.sessions[1]
+        assert silent.closed
+        assert answers == [self.ANSWER_SDP]
+        offer, candidate = answering.sent
+        assert offer["type"] == "offer"
+        assert candidate["candidate"] == "candidate:9"
+        await relay.close()
+
+    async def test_relay_raises_when_never_answered(self) -> None:
+        """Test the relay gives up after ANSWER_ATTEMPTS unanswered offers."""
+        sockets = [_FakeWebSocket([]), _FakeWebSocket([])]
+        relay = CameraSignalingRelay(_fake_client(sockets))
+
+        with pytest.raises(CameraStreamException, match="did not answer"):
+            await relay.start("v=0 offer", lambda a: None, lambda c: None)
+
+        assert all(ws.closed for ws in sockets)
+        assert relay.session is None
+
+    async def test_stream_retries_then_raises(self) -> None:
+        """Test CameraStream retries an unanswered offer, then raises."""
+        if not camera.HAS_AIORTC:
+            pytest.skip("aiortc not installed")
+        stream = CameraStream(_fake_client([]))
+        closed: list[Any] = []
+        attempts = 0
+
+        async def connect_and_offer() -> None:
+            nonlocal attempts
+            attempts += 1
+            stream._ws = _FakeWebSocket([])
+            closed.append(stream._ws)
+
+        stream._connect_and_offer = connect_and_offer  # type: ignore[method-assign]
+        with pytest.raises(CameraStreamException, match="did not answer"):
+            await stream.start()
+
+        assert attempts == 2
+        assert all(ws.closed for ws in closed)
+
+    async def test_stream_answer_on_retry(self) -> None:
+        """Test CameraStream returns once a retried offer is answered."""
+        if not camera.HAS_AIORTC:
+            pytest.skip("aiortc not installed")
+        stream = CameraStream(_fake_client([]))
+        attempts = 0
+
+        async def connect_and_offer() -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 2:
+                stream._answered.set()
+
+        stream._connect_and_offer = connect_and_offer  # type: ignore[method-assign]
+        await stream.start()
+
+        assert attempts == 2
+        await stream.stop()
 
 
 class TestCameraClientErrorFallbacks:

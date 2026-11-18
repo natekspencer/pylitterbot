@@ -47,6 +47,10 @@ FALLBACK_STUN_URL = "stun:stun.l.google.com:19302"
 
 PING_INTERVAL = 5  # seconds -- ping frequently to prevent server idle timeout (~18s)
 MAX_PENDING_CANDIDATES = 50
+# The camera normally answers within ~1-2s; observed live, it occasionally
+# ignores an offer entirely, so the offer is retried on a fresh session.
+ANSWER_TIMEOUT = 10  # seconds
+ANSWER_ATTEMPTS = 2
 
 # session.request converts HTTP 500 responses into InvalidCommandException, so
 # graceful-fallback handling must catch it alongside other client errors.
@@ -75,6 +79,14 @@ def _is_complete_sdp(sdp: str) -> bool:
     return sdp.startswith("v=") and any(
         line.startswith("m=") for line in sdp.splitlines()
     )
+
+
+def _append_bounded(buffer: list[dict[str, Any]], msg: dict[str, Any]) -> None:
+    """Append an ICE candidate message, dropping the oldest when full."""
+    if len(buffer) >= MAX_PENDING_CANDIDATES:
+        _LOGGER.warning("Signaling relay: candidate buffer full -- dropping oldest")
+        buffer.pop(0)
+    buffer.append(msg)
 
 
 def _parse_signaling_message(data: dict[str, Any]) -> tuple[str, Any] | None:
@@ -526,7 +538,8 @@ class CameraSignalingRelay(_SignalingMixin):
         self._ping_task: asyncio.Task[None] | None = None
         self._receive_task: asyncio.Task[None] | None = None
         self._closed = False
-        self._started = False
+        self._started = False  # set once the camera has answered
+        self._offer_candidates: list[dict[str, Any]] = []
         self._pending_candidates: list[dict[str, Any]] = []
         self._reconnect_task: asyncio.Task[None] | None = None
 
@@ -545,7 +558,12 @@ class CameraSignalingRelay(_SignalingMixin):
         on_answer: Callable[[str], None],
         on_candidate: Callable[[dict[str, Any]], None],
     ) -> CameraSession:
-        """Connect to signaling WS, send offer, relay answer and ICE candidates.
+        """Send the offer and wait for the camera's answer.
+
+        The answer and the camera's ICE candidates are delivered through the
+        callbacks; ICE candidates may continue to arrive after this returns.
+        If the camera does not answer within ``ANSWER_TIMEOUT`` seconds, the
+        offer is retried on a fresh session, up to ``ANSWER_ATTEMPTS`` times.
 
         Args:
             offer_sdp: The browser's SDP offer (plain text, not base64).
@@ -556,8 +574,8 @@ class CameraSignalingRelay(_SignalingMixin):
             The ``CameraSession`` with TURN credentials.
 
         Raises:
-            CameraStreamException: If the relay is closed/started or the
-                camera session could not be generated.
+            CameraStreamException: If the relay is closed/started, the camera
+                session could not be generated, or the camera never answered.
 
         """
         if self._closed:
@@ -565,45 +583,90 @@ class CameraSignalingRelay(_SignalingMixin):
         if self._session is not None:
             raise CameraStreamException("Relay already started")
 
-        self._session = await self._client.generate_session()
+        answered = asyncio.Event()
+
+        def _on_answer(sdp: str) -> None:
+            self._started = True
+            answered.set()
+            on_answer(sdp)
 
         try:
-            websession = self._client.websession
-            self._ws = await websession.ws_connect(
-                self._session.ws_url, headers=_WS_HEADERS
-            )
-
-            _LOGGER.debug("Signaling relay: sending offer (%d bytes)", len(offer_sdp))
-            await self._ws.send_json({"type": "offer", "sdp": encode(offer_sdp)})
-
-            if self._pending_candidates:
-                _LOGGER.debug(
-                    "Signaling relay: flushing %d buffered ICE candidates",
-                    len(self._pending_candidates),
+            for attempt in range(1, ANSWER_ATTEMPTS + 1):
+                session = await self._connect_and_offer(
+                    offer_sdp, _on_answer, on_candidate
                 )
-                for msg in self._pending_candidates:
-                    await self._ws.send_json(msg)
-                self._pending_candidates.clear()
-
-            self._receive_task = asyncio.ensure_future(
-                self._receive_loop(on_answer, on_candidate)
+                try:
+                    await asyncio.wait_for(answered.wait(), timeout=ANSWER_TIMEOUT)
+                except asyncio.TimeoutError:
+                    _LOGGER.warning(
+                        "Signaling relay: camera did not answer within %ss (attempt %d of %d)",
+                        ANSWER_TIMEOUT,
+                        attempt,
+                        ANSWER_ATTEMPTS,
+                    )
+                    await self._disconnect()
+                    if self._closed:
+                        raise CameraStreamException("Relay has been closed") from None
+                    continue
+                return session
+            raise CameraStreamException(
+                f"Camera {self._client.device_id} did not answer the offer "
+                f"after {ANSWER_ATTEMPTS} attempts"
             )
-            self._ping_task = asyncio.ensure_future(self._ping_loop())
-            self._started = True
-        except Exception:
-            if self._ws is not None and not self._ws.closed:
-                await self._ws.close()
-            self._ws = None
+        except BaseException:
+            await self._disconnect()
             self._session = None
             raise
 
-        return self._session
+    async def _connect_and_offer(
+        self,
+        offer_sdp: str,
+        on_answer: Callable[[str], None],
+        on_candidate: Callable[[dict[str, Any]], None],
+    ) -> CameraSession:
+        """Open a fresh session and send the offer plus early ICE candidates."""
+        self._session = session = await self._client.generate_session()
+        ws = await self._client.websession.ws_connect(
+            session.ws_url, headers=_WS_HEADERS
+        )
+        try:
+            _LOGGER.debug("Signaling relay: sending offer (%d bytes)", len(offer_sdp))
+            await ws.send_json({"type": "offer", "sdp": encode(offer_sdp)})
+        except Exception:
+            await ws.close()
+            raise
+
+        # Publish the socket and snapshot the early candidates with no await in
+        # between, so each is sent exactly once and only after the offer.
+        self._ws = ws
+        early = list(self._offer_candidates)
+        if early:
+            _LOGGER.debug(
+                "Signaling relay: sending %d early ICE candidate(s)", len(early)
+            )
+        for msg in early:
+            await ws.send_json(msg)
+
+        self._receive_task = asyncio.ensure_future(
+            self._receive_loop(on_answer, on_candidate)
+        )
+        self._ping_task = asyncio.ensure_future(self._ping_loop())
+        return session
+
+    async def _disconnect(self) -> None:
+        """Stop the signaling tasks and close the websocket."""
+        await cancel_task(self._ping_task, self._receive_task)
+        self._ping_task = self._receive_task = None
+        if self._ws is not None and not self._ws.closed:
+            await self._ws.close()
+        self._ws = None
 
     async def send_candidate(self, candidate: dict[str, Any]) -> None:
         """Forward a browser ICE candidate to the camera.
 
-        If the signaling WebSocket is not yet connected, the candidate is
-        buffered and will be flushed once ``start()`` completes.
+        Until the camera answers, candidates are kept and sent with each offer
+        attempt. After that, candidates that arrive once the signaling
+        WebSocket has closed are delivered over a fresh connection.
 
         Args:
             candidate: ICE candidate dict with ``candidate``, ``sdpMid``,
@@ -616,25 +679,27 @@ class CameraSignalingRelay(_SignalingMixin):
             "sdpMid": candidate.get("sdpMid", "0"),
             "sdpMLineIndex": candidate.get("sdpMLineIndex", 0),
         }
+        if not self._started:
+            _append_bounded(self._offer_candidates, msg)
         if self._ws and not self._ws.closed:
             try:
                 await self._ws.send_json(msg)
                 return
             except Exception:
                 _LOGGER.debug(
-                    "Signaling relay: send failed -- buffering ICE candidate for reconnect",
+                    "Signaling relay: send failed -- buffering ICE candidate",
                     exc_info=True,
                 )
+        if not self._started:
+            # the next offer attempt sends it
+            return
 
         _LOGGER.debug(
             "Signaling relay: WS closed -- buffering ICE candidate for reconnect"
         )
-        if len(self._pending_candidates) >= MAX_PENDING_CANDIDATES:
-            _LOGGER.warning("Signaling relay: candidate buffer full -- dropping oldest")
-            self._pending_candidates.pop(0)
-        self._pending_candidates.append(msg)
-        # Only reconnect once start() has completed; before that, start()'s own
-        # flush delivers the buffer (a parallel socket here would race the offer).
+        _append_bounded(self._pending_candidates, msg)
+        # Only reconnect once the camera has answered; before that, each offer
+        # attempt sends the early candidates (a parallel socket would race it).
         if (
             self._started
             and not self._closed
@@ -646,10 +711,8 @@ class CameraSignalingRelay(_SignalingMixin):
         """Cancel tasks and close the signaling WebSocket."""
         self._closed = True
 
-        await cancel_task(self._ping_task, self._receive_task, self._reconnect_task)
-
-        if self._ws and not self._ws.closed:
-            await self._ws.close()
+        await cancel_task(self._reconnect_task)
+        await self._disconnect()
 
     async def _receive_loop(
         self,
@@ -800,6 +863,7 @@ class CameraStream(_SignalingMixin):
         self._audio_callback: Callable | None = None
         self._state_callback: Callable | None = None
 
+        self._answered = asyncio.Event()
         self._connected = asyncio.Event()
         self._stopped = False
 
@@ -820,11 +884,15 @@ class CameraStream(_SignalingMixin):
         self._state_callback = callback
 
     async def start(self) -> None:
-        """Start the WebRTC streaming session.
+        """Start the WebRTC streaming session and wait for the camera's answer.
+
+        If the camera does not answer within ``ANSWER_TIMEOUT`` seconds, the
+        offer is retried on a fresh session, up to ``ANSWER_ATTEMPTS`` times.
 
         Raises:
-            CameraStreamException: If the stream is stopped/started or the
-                camera session could not be generated.
+            CameraStreamException: If the stream is stopped/started, the
+                camera session could not be generated, or the camera never
+                answered.
 
         """
         if self._stopped:
@@ -832,14 +900,46 @@ class CameraStream(_SignalingMixin):
         if self._pc is not None:
             raise CameraStreamException("Stream already started")
 
+        try:
+            for attempt in range(1, ANSWER_ATTEMPTS + 1):
+                self._answered = asyncio.Event()
+                await self._connect_and_offer()
+                try:
+                    await asyncio.wait_for(
+                        self._answered.wait(), timeout=ANSWER_TIMEOUT
+                    )
+                except asyncio.TimeoutError:
+                    _LOGGER.warning(
+                        "Camera did not answer within %ss (attempt %d of %d)",
+                        ANSWER_TIMEOUT,
+                        attempt,
+                        ANSWER_ATTEMPTS,
+                    )
+                    await self._disconnect()
+                    if self._stopped:
+                        raise CameraStreamException("Stream has been stopped") from None
+                    continue
+                return
+            raise CameraStreamException(
+                f"Camera {self._client.device_id} did not answer the offer "
+                f"after {ANSWER_ATTEMPTS} attempts"
+            )
+        except BaseException:
+            await self._disconnect()
+            raise
+
+    async def _connect_and_offer(self) -> None:
+        """Open a fresh session and peer connection, then send the offer."""
         self._session = await self._client.generate_session()
 
         ice_servers = self._build_ice_servers(self._session.turn_servers)
 
         config = RTCConfiguration(iceServers=ice_servers)
-        self._pc = RTCPeerConnection(configuration=config)
+        # handlers use this attempt's connection, not self._pc, which is
+        # cleared on teardown before aiortc emits the final state change
+        self._pc = pc = RTCPeerConnection(configuration=config)
 
-        @self._pc.on("track")
+        @pc.on("track")
         def on_track(track: Any) -> None:
             _LOGGER.debug("Received %s track: %s", track.kind, track.id)
             if track.kind == "video" and self._video_callback:
@@ -853,58 +953,55 @@ class CameraStream(_SignalingMixin):
                 )
                 self._media_tasks.append(task)
 
-        @self._pc.on("connectionstatechange")
+        @pc.on("connectionstatechange")
         async def on_state_change() -> None:
-            state = self._pc.connectionState  # type: ignore[union-attr]
+            state = pc.connectionState
             _LOGGER.debug("Connection state: %s", state)
             if state in ("connected", "completed"):
                 self._connected.set()
             if self._state_callback:
                 self._state_callback(state)
 
-        self._pc.addTransceiver("video", direction="recvonly")
-        self._pc.addTransceiver("audio", direction="recvonly")
+        pc.addTransceiver("video", direction="recvonly")
+        pc.addTransceiver("audio", direction="recvonly")
 
-        try:
-            websession = self._client.websession
-            self._ws = await websession.ws_connect(
-                self._session.ws_url, headers=_WS_HEADERS
-            )
+        websession = self._client.websession
+        self._ws = await websession.ws_connect(
+            self._session.ws_url, headers=_WS_HEADERS
+        )
 
-            # localDescription.sdp includes gathered ICE candidates; offer.sdp has none
-            offer = await self._pc.createOffer()
-            await self._pc.setLocalDescription(offer)
+        # localDescription.sdp includes gathered ICE candidates; offer.sdp has none
+        offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
 
-            await self._ws.send_json(
-                {
-                    "type": "offer",
-                    "sdp": encode(self._pc.localDescription.sdp),
-                }
-            )
-        except Exception:
-            if self._ws and not self._ws.closed:
-                await self._ws.close()
-            if self._pc:
-                await self._pc.close()
-            self._ws = None
-            self._pc = None
-            raise
+        await self._ws.send_json(
+            {
+                "type": "offer",
+                "sdp": encode(pc.localDescription.sdp),
+            }
+        )
 
         self._receive_task = asyncio.ensure_future(self._receive_loop())
         self._ping_task = asyncio.ensure_future(self._ping_loop())
 
-    async def stop(self) -> None:
-        """Stop the WebRTC streaming session and clean up resources."""
-        self._stopped = True
-
+    async def _disconnect(self) -> None:
+        """Stop the media and signaling tasks and close the connections."""
         await cancel_task(*self._media_tasks, self._ping_task, self._receive_task)
         self._media_tasks.clear()
+        self._ping_task = self._receive_task = None
 
         if self._ws and not self._ws.closed:
             await self._ws.close()
+        self._ws = None
 
         if self._pc:
-            await self._pc.close()
+            pc, self._pc = self._pc, None
+            await pc.close()
+
+    async def stop(self) -> None:
+        """Stop the WebRTC streaming session and clean up resources."""
+        self._stopped = True
+        await self._disconnect()
 
     async def wait_for_connection(self, timeout: float = 30) -> bool:
         """Wait until the WebRTC connection is established.
@@ -1014,6 +1111,7 @@ class CameraStream(_SignalingMixin):
             answer = RTCSessionDescription(sdp=payload, type="answer")
             await self._pc.setRemoteDescription(answer)  # type: ignore[union-attr]
             _LOGGER.debug("Set remote description (answer)")
+            self._answered.set()
             return
 
         candidate_str = payload["candidate"]
