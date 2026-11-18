@@ -1173,17 +1173,23 @@ class LitterRobot5(LitterRobot):
         return await client.generate_session()
 
     async def get_camera_videos(
-        self, *, date: str | None = None, limit: int | None = None
+        self,
+        *,
+        date: str | None = None,
+        limit: int | None = None,
+        timezone: str | None = None,
     ) -> list[VideoClip]:
-        """Fetch recorded camera video clips.
+        """Fetch recorded camera video clips, newest first.
 
         Args:
-            date: Optional date (YYYY-MM-DD) filter.
+            date: Optional date (YYYY-MM-DD, in ``timezone``) filter.
             limit: Optional max results.
+            timezone: IANA timezone name; defaults to the system timezone.
+                See :meth:`CameraClient.get_videos`.
 
         """
         client = self.get_camera_client()
-        return await client.get_videos(date=date, limit=limit)
+        return await client.get_videos(date=date, limit=limit, timezone=timezone)
 
     async def get_camera_video_settings(self) -> dict[str, Any] | None:
         """Fetch the camera's reported video settings."""

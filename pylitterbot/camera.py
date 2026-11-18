@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from aiohttp import (
     ClientResponseError,
@@ -51,6 +53,40 @@ MAX_PENDING_CANDIDATES = 50
 # session.request converts HTTP 500 responses into InvalidCommandException, so
 # graceful-fallback handling must catch it alongside other client errors.
 _API_ERRORS = (ClientResponseError, InvalidCommandException)
+
+# Upper bound on pages fetched by ``CameraClient.get_videos`` (the API returns
+# 10 clips per page, and keeps 2 days of clips, or 30 with Whisker+).
+MAX_VIDEO_PAGES = 50
+
+
+def _is_iana_timezone(name: str) -> bool:
+    """Return ``True`` if *name* is a valid IANA timezone key."""
+    try:
+        ZoneInfo(name)
+    except (ValueError, OSError, KeyError):  # incl. ZoneInfoNotFoundError
+        return False
+    return True
+
+
+def local_timezone_name() -> str:
+    """Return this system's IANA timezone name, falling back to ``"UTC"``.
+
+    Checks the ``TZ`` environment variable, then the ``/etc/localtime``
+    symlink (Linux and macOS).  Pass a timezone explicitly where one is
+    configured (e.g. Home Assistant's ``hass.config.time_zone``).
+    """
+    if (tz := os.environ.get("TZ", "").lstrip(":")) and _is_iana_timezone(tz):
+        return tz
+    try:
+        target = os.path.realpath("/etc/localtime")
+    except OSError:
+        target = ""
+    if "zoneinfo/" in target:
+        name = target.split("zoneinfo/", 1)[1]
+        if _is_iana_timezone(name):
+            return name
+    return "UTC"
+
 
 _WS_HEADERS = {"User-Agent": DEFAULT_USER_AGENT}
 
@@ -346,23 +382,53 @@ class CameraClient:
         return data if isinstance(data, dict) else None
 
     async def get_videos(
-        self, *, date: str | None = None, limit: int | None = None
+        self,
+        *,
+        date: str | None = None,
+        limit: int | None = None,
+        timezone: str | None = None,
+        max_pages: int = MAX_VIDEO_PAGES,
     ) -> list[VideoClip]:
-        """Fetch recorded video clips.
+        """Fetch recorded video clips, newest first.
+
+        The API returns clips 10 per page; pages are fetched until one comes
+        back empty (or repeats clips already seen), ``limit`` is reached, or
+        ``max_pages`` have been read.
+
+        The ``timezone`` sent matters: the API does not reliably return the
+        most recent clips unless it is given the account's local timezone
+        (as the Whisker app does), and ``date`` is interpreted as a day in
+        that timezone.
 
         Args:
-            date: Optional date string (YYYY-MM-DD) to filter videos.
+            date: Optional date string (YYYY-MM-DD, in ``timezone``) to filter
+                videos.
             limit: Optional max number of results.
+            timezone: IANA timezone name (e.g. ``"Australia/Sydney"``).
+                Defaults to :func:`local_timezone_name`.
+            max_pages: Safety cap on the number of pages requested.
 
         """
         url = f"{self._inventory_base}/videos" + (f"/{date}" if date else "")
-        params = {"limit": str(limit)} if limit is not None else None
-        data = await self._get(url, params=params)
-        if not isinstance(data, list):
-            return []
-        clips = [
-            VideoClip.from_response(item) for item in data if isinstance(item, dict)
-        ]
+        tz = timezone or local_timezone_name()
+        clips: list[VideoClip] = []
+        seen: set[str] = set()
+        for page in range(1, max_pages + 1):
+            data = await self._get(url, params={"page": str(page), "timezone": tz})
+            if not isinstance(data, list):
+                break
+            new = [
+                clip
+                for item in data
+                if isinstance(item, dict)
+                and (clip := VideoClip.from_response(item)).id not in seen
+            ]
+            if not new:
+                break
+            clips.extend(new)
+            seen.update(clip.id for clip in new)
+            if limit is not None and len(clips) >= limit:
+                break
         return clips[:limit] if limit is not None else clips
 
     async def get_video_playback(self, clip_id: str) -> VideoPlayback | None:
