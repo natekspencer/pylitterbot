@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable
 
 import pytest
 from aiohttp import ClientResponseError, RequestInfo, WSMsgType
@@ -893,6 +893,20 @@ async def _wait_for_event_or_task(
     pytest.fail(f"neither the event nor the task finished within {timeout}s")
 
 
+async def _wait_until(
+    condition: Callable[[], object], task: asyncio.Future[Any], timeout: float = 1
+) -> None:
+    """Poll ``condition``; if ``task`` finishes first, surface its result."""
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not condition():
+        if task.done():
+            task.result()  # raises the startup error, if any
+            pytest.fail("start() returned before reaching the awaited step")
+        if asyncio.get_running_loop().time() > deadline:
+            pytest.fail(f"condition not met within {timeout}s")
+        await asyncio.sleep(0)
+
+
 async def _cancel_pending(task: asyncio.Future[Any]) -> None:
     """Cancel ``task`` if still running and wait for it to finish."""
     if not task.done():
@@ -1083,21 +1097,23 @@ class TestAnswerTimeout:
         task = asyncio.ensure_future(
             relay.start("v=0 offer", answers.append, candidates.append)
         )
-        while len(handlers) < 2:
-            await asyncio.sleep(0.01)
+        try:
+            await _wait_until(lambda: len(handlers) >= 2, task)
 
-        stale_answer, stale_candidate = handlers[0]
-        stale_answer("v=0 stale")
-        stale_candidate({"candidate": "candidate:stale"})
-        await asyncio.sleep(0)
-        assert answers == []
-        assert candidates == []
-        assert not task.done()  # the retry still waits for its own answer
+            stale_answer, stale_candidate = handlers[0]
+            stale_answer("v=0 stale")
+            stale_candidate({"candidate": "candidate:stale"})
+            await asyncio.sleep(0)
+            assert answers == []
+            assert candidates == []
+            assert not task.done()  # the retry still waits for its own answer
 
-        handlers[1][0]("v=0 fresh")
-        session = await task
-        assert session.session_id == "s2"
-        assert answers == ["v=0 fresh"]
+            handlers[1][0]("v=0 fresh")
+            session = await task
+            assert session.session_id == "s2"
+            assert answers == ["v=0 fresh"]
+        finally:
+            await _cancel_pending(task)
 
     async def test_relay_accepts_answer_at_deadline(
         self, monkeypatch: pytest.MonkeyPatch
@@ -1160,8 +1176,7 @@ class TestAnswerTimeout:
             relay.start("v=0 offer", answers.append, lambda c: None)
         )
         try:
-            while not ws.sent:  # wait for the offer
-                await asyncio.sleep(0)
+            await _wait_until(lambda: ws.sent, task)  # the offer was sent
             await relay.send_candidate({"candidate": "candidate:late"})
             ws._queue.put_nowait(self.ANSWER)
             await asyncio.wait_for(task, timeout=1)
@@ -1189,17 +1204,29 @@ class TestAnswerTimeout:
             return cast_session(await generate_session())
 
         client.generate_session = slow_generate_session
+        handed_out: list[_FakeWebSocket] = []
+        ws_connect = client.websession.ws_connect
+
+        async def recording_ws_connect(*args: Any, **kwargs: Any) -> _FakeWebSocket:
+            handed_out.append(await ws_connect(*args, **kwargs))
+            return handed_out[-1]
+
+        client.websession = SimpleNamespace(ws_connect=recording_ws_connect)
         relay = CameraSignalingRelay(client)
         task = asyncio.ensure_future(
             relay.start("v=0 offer", lambda a: None, lambda c: None)
         )
-        await asyncio.sleep(0)
-        await relay.close()
-        release.set()
+        try:
+            await asyncio.sleep(0)
+            await relay.close()
+            release.set()
 
-        with pytest.raises(CameraStreamException, match="closed"):
-            await asyncio.wait_for(task, timeout=1)
-        assert ws.closed
+            with pytest.raises(CameraStreamException, match="closed"):
+                await asyncio.wait_for(task, timeout=1)
+        finally:
+            await _cancel_pending(task)
+        # never opening a socket is fine; one that was opened must be closed
+        assert all(sock.closed for sock in handed_out)
 
     async def test_relay_second_start_rejected_during_setup(self) -> None:
         """Test a second start() is rejected while the first creates its session."""
@@ -1219,10 +1246,13 @@ class TestAnswerTimeout:
             await asyncio.sleep(0)
             with pytest.raises(CameraStreamException, match="already started"):
                 await relay.start("v=0 other", lambda a: None, lambda c: None)
-        finally:
+
             release.set()
+            with pytest.raises(CameraStreamException, match="session failed"):
+                await asyncio.wait_for(task, timeout=1)
+        finally:
             await _cancel_pending(task)
-        # the first start() failed, so the relay can be started again
+        # the first start() failed during setup, so the guard is released
         assert not relay._starting
 
     async def test_relay_resets_answered_state_when_start_aborted(self) -> None:
@@ -1231,12 +1261,14 @@ class TestAnswerTimeout:
         task = asyncio.ensure_future(
             relay.start("v=0 offer", lambda a: None, lambda c: None)
         )
-        while not handlers:
-            await asyncio.sleep(0)
-        handlers[0][0]("v=0 answer")
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
+        try:
+            await _wait_until(lambda: handlers, task)
+            handlers[0][0]("v=0 answer")
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        finally:
+            await _cancel_pending(task)
 
         assert relay._started is False
         await relay.send_candidate({"candidate": "candidate:next-offer"})
@@ -1278,8 +1310,7 @@ class TestAnswerTimeout:
             relay.start("v=0 offer", lambda a: None, lambda c: None)
         )
         try:
-            while not handlers:
-                await asyncio.sleep(0)
+            await _wait_until(lambda: handlers, task)
             await relay.close()
             with pytest.raises(CameraStreamException, match="closed"):
                 await asyncio.wait_for(task, timeout=1)
