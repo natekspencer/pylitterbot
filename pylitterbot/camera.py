@@ -417,16 +417,18 @@ class CameraClient:
             data = await self._get(url, params={"page": str(page), "timezone": tz})
             if not isinstance(data, list):
                 break
-            new = [
-                clip
-                for item in data
-                if isinstance(item, dict)
-                and (clip := VideoClip.from_response(item)).id not in seen
-            ]
-            if not new:
+            added = 0
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                clip = VideoClip.from_response(item)
+                if clip.id in seen:  # duplicate within or across pages
+                    continue
+                seen.add(clip.id)
+                clips.append(clip)
+                added += 1
+            if not added:
                 break
-            clips.extend(new)
-            seen.update(clip.id for clip in new)
             if limit is not None and len(clips) >= limit:
                 break
         return clips[:limit] if limit is not None else clips

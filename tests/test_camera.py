@@ -343,6 +343,27 @@ class TestCameraClient:
 
         await mock_account.disconnect()
 
+    async def test_get_videos_dedupes_within_a_page(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """A clip repeated within one page is kept once and doesn't use up limit."""
+        base = f"{CAMERA_INVENTORY_API}/prod/v1/cameras/{CAMERA_DEVICE_ID}/videos"
+        mock_aiointercept.get(
+            f"{base}?page=1&timezone=UTC",
+            payload=[{"id": 3}, {"id": 3}, {"id": 2}],
+        )
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        videos = await client.get_videos(limit=2, timezone="UTC")
+        assert [v.id for v in videos] == ["3", "2"]
+
+        await mock_account.disconnect()
+
     async def test_get_videos_date_uses_timezone(
         self,
         mock_account: Account,
