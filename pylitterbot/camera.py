@@ -51,6 +51,8 @@ MAX_PENDING_CANDIDATES = 50
 # ignores an offer entirely, so the offer is retried on a fresh session.
 ANSWER_TIMEOUT = 10  # seconds
 ANSWER_ATTEMPTS = 2
+# aiohttp waits up to 10s for the server's close frame; cleanup should not
+WS_CLOSE_TIMEOUT = 2  # seconds
 
 # session.request converts HTTP 500 responses into InvalidCommandException, so
 # graceful-fallback handling must catch it alongside other client errors.
@@ -87,6 +89,18 @@ def _append_bounded(buffer: list[dict[str, Any]], msg: dict[str, Any]) -> None:
         _LOGGER.warning("Signaling relay: candidate buffer full -- dropping oldest")
         buffer.pop(0)
     buffer.append(msg)
+
+
+async def _close_ws(ws: ClientWebSocketResponse) -> None:
+    """Close a websocket, aborting the connection after ``WS_CLOSE_TIMEOUT``.
+
+    Cancelling aiohttp's close (as ``wait_for`` does on timeout) releases the
+    underlying connection instead of waiting for the server's close frame.
+    """
+    try:
+        await asyncio.wait_for(ws.close(), timeout=WS_CLOSE_TIMEOUT)
+    except asyncio.TimeoutError:
+        _LOGGER.debug("Signaling: websocket close timed out; connection aborted")
 
 
 def _parse_signaling_message(data: dict[str, Any]) -> tuple[str, Any] | None:
@@ -659,7 +673,7 @@ class CameraSignalingRelay(_SignalingMixin):
             await ws.send_json({"type": "offer", "sdp": encode(offer_sdp)})
         except BaseException:
             # not yet in self._ws, so start()'s cleanup can't close it
-            await ws.close()
+            await _close_ws(ws)
             raise
 
         # Publish the socket and snapshot the early candidates with no await in
@@ -684,7 +698,7 @@ class CameraSignalingRelay(_SignalingMixin):
         await cancel_task(self._ping_task, self._receive_task)
         self._ping_task = self._receive_task = None
         if self._ws is not None and not self._ws.closed:
-            await self._ws.close()
+            await _close_ws(self._ws)
         self._ws = None
 
     async def send_candidate(self, candidate: dict[str, Any]) -> None:

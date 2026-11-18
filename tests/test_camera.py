@@ -944,6 +944,45 @@ class TestAnswerTimeout:
         assert ws.closed
         assert relay.session is None
 
+    @pytest.mark.parametrize("stall_offer", [True, False])
+    async def test_relay_cancel_bounded_when_close_hangs(
+        self, monkeypatch: pytest.MonkeyPatch, stall_offer: bool
+    ) -> None:
+        """Test cancelling start() is not held up by a socket close that hangs.
+
+        Covers cancellation while sending the offer and while waiting for
+        the answer; either way the original CancelledError propagates.
+        """
+        monkeypatch.setattr(camera, "WS_CLOSE_TIMEOUT", 0.05)
+        monkeypatch.setattr(camera, "ANSWER_TIMEOUT", 60)
+        offered = asyncio.Event()
+
+        class _HangingCloseWebSocket(_FakeWebSocket):
+            close_called = False
+
+            async def send_json(self, data: dict[str, Any]) -> None:
+                offered.set()
+                if stall_offer:
+                    await asyncio.Event().wait()
+
+            async def close(self) -> None:
+                self.close_called = True
+                await asyncio.Event().wait()  # server never answers the close
+
+        ws = _HangingCloseWebSocket([])
+        relay = CameraSignalingRelay(_fake_client([ws]))
+        task = asyncio.ensure_future(
+            relay.start("v=0 offer", lambda a: None, lambda c: None)
+        )
+        await offered.wait()
+        await asyncio.sleep(0)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=1)
+        assert ws.close_called
+        assert relay.session is None
+
     @staticmethod
     def _recording_relay() -> tuple[CameraSignalingRelay, list[tuple[Any, Any]]]:
         """Return a relay whose attempts only record their callbacks."""
