@@ -135,8 +135,9 @@ for robot in account.get_robots(LitterRobot5):
         continue
 
     print(await robot.get_camera_status())  # e.g. "ONLINE"
-    print(await robot.get_camera_view())  # "front" or "globe"
-    await robot.set_camera_view("globe")
+    print(await robot.get_camera_view())  # "front", "globe" or None if unknown
+    if not await robot.set_camera_view("globe"):
+        print("Could not switch the camera view")
 
     # Recorded clips
     for clip in await robot.get_camera_videos(limit=5):
@@ -147,12 +148,15 @@ Live video uses WebRTC. With the `camera` extra installed, `CameraStream`
 receives the video and audio frames in Python:
 
 ```python
-robot = next(r for r in account.get_robots(LitterRobot5) if r.has_camera)
+robot = next((r for r in account.get_robots(LitterRobot5) if r.has_camera), None)
 
-async with robot.create_camera_stream() as stream:
-    stream.on_video_frame(lambda frame: print(frame.width, frame.height))
-    if await stream.wait_for_connection():
-        await asyncio.sleep(10)
+if robot is None:
+    print("No Litter-Robot 5 Pro camera on this account")
+else:
+    async with robot.create_camera_stream() as stream:
+        stream.on_video_frame(lambda frame: print(frame.width, frame.height))
+        if await stream.wait_for_connection():
+            await asyncio.sleep(10)
 ```
 
 To show the stream in a browser instead (for example, Home Assistant's camera
