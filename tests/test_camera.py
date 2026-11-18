@@ -944,6 +944,69 @@ class TestAnswerTimeout:
         assert ws.closed
         assert relay.session is None
 
+    @staticmethod
+    def _recording_relay() -> tuple[CameraSignalingRelay, list[tuple[Any, Any]]]:
+        """Return a relay whose attempts only record their callbacks."""
+        relay = CameraSignalingRelay(_fake_client([]))
+        handlers: list[tuple[Any, Any]] = []
+
+        async def connect_and_offer(
+            offer_sdp: str, on_answer: Any, on_candidate: Any
+        ) -> CameraSession:
+            handlers.append((on_answer, on_candidate))
+            return CameraSession(
+                session_id=f"s{len(handlers)}",
+                session_token="t",
+                session_expiration=None,
+                signaling_url="wss://host/sig",
+            )
+
+        relay._connect_and_offer = connect_and_offer  # type: ignore[method-assign]
+        return relay, handlers
+
+    async def test_relay_ignores_abandoned_attempt(self) -> None:
+        """Test a timed-out attempt's late answer and candidates are dropped."""
+        relay, handlers = self._recording_relay()
+        answers: list[str] = []
+        candidates: list[dict[str, Any]] = []
+        task = asyncio.ensure_future(
+            relay.start("v=0 offer", answers.append, candidates.append)
+        )
+        while len(handlers) < 2:
+            await asyncio.sleep(0.01)
+
+        stale_answer, stale_candidate = handlers[0]
+        stale_answer("v=0 stale")
+        stale_candidate({"candidate": "candidate:stale"})
+        await asyncio.sleep(0)
+        assert answers == []
+        assert candidates == []
+        assert not task.done()  # the retry still waits for its own answer
+
+        handlers[1][0]("v=0 fresh")
+        session = await task
+        assert session.session_id == "s2"
+        assert answers == ["v=0 fresh"]
+
+    async def test_relay_accepts_answer_at_deadline(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test an answer that lands as the timeout fires is not retried."""
+        relay, handlers = self._recording_relay()
+        answers: list[str] = []
+
+        async def wait_for_at_deadline(awaitable: Any, timeout: float) -> None:
+            awaitable.close()
+            handlers[-1][0]("v=0 at deadline")
+            raise asyncio.TimeoutError
+
+        monkeypatch.setattr(asyncio, "wait_for", wait_for_at_deadline)
+        session = await relay.start("v=0 offer", answers.append, lambda c: None)
+
+        assert len(handlers) == 1
+        assert session.session_id == "s1"
+        assert answers == ["v=0 at deadline"]
+
     async def test_relay_raises_when_never_answered(self) -> None:
         """Test the relay gives up after ANSWER_ATTEMPTS unanswered offers."""
         sockets = [_FakeWebSocket([]), _FakeWebSocket([])]

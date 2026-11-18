@@ -584,21 +584,45 @@ class CameraSignalingRelay(_SignalingMixin):
         if self._session is not None:
             raise CameraStreamException("Relay already started")
 
-        answered = asyncio.Event()
+        current_attempt = 0
 
-        def _on_answer(sdp: str) -> None:
-            self._started = True
-            answered.set()
-            on_answer(sdp)
+        def _attempt_handlers(
+            attempt: int, answered: asyncio.Event
+        ) -> tuple[Callable[[str], None], Callable[[dict[str, Any]], None]]:
+            """Return callbacks that only act while ``attempt`` is current."""
+
+            def _on_answer(sdp: str) -> None:
+                if attempt != current_attempt:
+                    _LOGGER.debug(
+                        "Signaling relay: ignoring answer from abandoned attempt %d",
+                        attempt,
+                    )
+                    return
+                self._started = True
+                answered.set()
+                on_answer(sdp)
+
+            def _on_candidate(candidate: dict[str, Any]) -> None:
+                if attempt == current_attempt:
+                    on_candidate(candidate)
+
+            return _on_answer, _on_candidate
 
         try:
             for attempt in range(1, ANSWER_ATTEMPTS + 1):
+                current_attempt = attempt
+                answered = asyncio.Event()
                 session = await self._connect_and_offer(
-                    offer_sdp, _on_answer, on_candidate
+                    offer_sdp, *_attempt_handlers(attempt, answered)
                 )
                 try:
                     await asyncio.wait_for(answered.wait(), timeout=ANSWER_TIMEOUT)
                 except asyncio.TimeoutError:
+                    if answered.is_set():
+                        # answered as the deadline passed; already forwarded
+                        return session
+                    # invalidate before _disconnect() yields to the receive loop
+                    current_attempt = 0
                     _LOGGER.warning(
                         "Signaling relay: camera did not answer within %ss (attempt %d of %d)",
                         ANSWER_TIMEOUT,
