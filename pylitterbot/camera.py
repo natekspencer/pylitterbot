@@ -13,11 +13,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date as _date, datetime
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import quote
-from zoneinfo import ZoneInfo
 
 from aiohttp import (
     ClientResponseError,
@@ -59,23 +59,23 @@ _API_ERRORS = (ClientResponseError, InvalidCommandException)
 MAX_VIDEO_PAGES = 50
 
 
-def _is_iana_timezone(name: str) -> bool:
-    """Return ``True`` if *name* is a valid IANA timezone key."""
-    try:
-        ZoneInfo(name)
-    except (ValueError, OSError, KeyError):  # incl. ZoneInfoNotFoundError
-        return False
-    return True
+# "Area/Location" IANA names, e.g. "America/Denver" or "Etc/GMT-10". Checked by
+# syntax alone: loading the zone would read tzdata from disk, which blocks the
+# event loop. POSIX TZ strings such as "AEST-10" or "EST5EDT,M3.2.0,M11.1.0"
+# don't match.
+_IANA_TIMEZONE = re.compile(r"[A-Za-z][\w+-]*(?:/[\w+-]+)+")
 
 
 def local_timezone_name() -> str:
     """Return this system's IANA timezone name, falling back to ``"UTC"``.
 
     Checks the ``TZ`` environment variable, then the ``/etc/localtime``
-    symlink (Linux and macOS).  Pass a timezone explicitly where one is
-    configured (e.g. Home Assistant's ``hass.config.time_zone``).
+    symlink (Linux and macOS).  Names are checked by syntax only, so this
+    doesn't read tzdata and is safe to call in the event loop.  Pass a
+    timezone explicitly where one is configured (e.g. Home Assistant's
+    ``hass.config.time_zone``).
     """
-    if (tz := os.environ.get("TZ", "").lstrip(":")) and _is_iana_timezone(tz):
+    if (tz := os.environ.get("TZ", "").lstrip(":")) and _IANA_TIMEZONE.fullmatch(tz):
         return tz
     try:
         target = os.path.realpath("/etc/localtime")
@@ -83,7 +83,7 @@ def local_timezone_name() -> str:
         target = ""
     if "zoneinfo/" in target:
         name = target.split("zoneinfo/", 1)[1]
-        if _is_iana_timezone(name):
+        if _IANA_TIMEZONE.fullmatch(name):
             return name
     return "UTC"
 
@@ -384,16 +384,22 @@ class CameraClient:
     async def get_videos(
         self,
         *,
-        date: str | None = None,
+        date: str | _date | None = None,
         limit: int | None = None,
         timezone: str | None = None,
         max_pages: int = MAX_VIDEO_PAGES,
     ) -> list[VideoClip]:
         """Fetch recorded video clips, newest first.
 
-        The API returns clips 10 per page; pages are fetched until one comes
-        back empty (or repeats clips already seen), ``limit`` is reached, or
-        ``max_pages`` have been read.
+        The API returns clips 10 per page; pages are fetched one after another
+        until one comes back empty (or repeats clips already seen), ``limit``
+        is reached, or ``max_pages`` have been read.  Without ``limit`` this
+        always costs one request past the last clip, and 30 days of clips
+        (Whisker+) can take dozens of requests, so avoid calling it on a
+        polling interval.
+
+        If a later page fails, paging stops and the clips gathered so far are
+        returned (the error is logged at debug level).
 
         The ``timezone`` sent matters: the API does not reliably return the
         most recent clips unless it is given the account's local timezone
@@ -401,14 +407,20 @@ class CameraClient:
         that timezone.
 
         Args:
-            date: Optional date string (YYYY-MM-DD, in ``timezone``) to filter
-                videos.
-            limit: Optional max number of results.
+            date: Optional day to filter videos, as a :class:`datetime.date` or
+                a ``YYYY-MM-DD`` string, read in ``timezone``.  A
+                :class:`~datetime.datetime` is rejected, since its time
+                would be ignored.
+            limit: Optional max number of results, applied client-side.
             timezone: IANA timezone name (e.g. ``"Australia/Sydney"``).
                 Defaults to :func:`local_timezone_name`.
             max_pages: Safety cap on the number of pages requested.
 
         """
+        if isinstance(date, datetime):
+            raise TypeError("date must be a datetime.date or string, not a datetime")
+        if isinstance(date, _date):
+            date = date.isoformat()
         url = f"{self._inventory_base}/videos" + (f"/{date}" if date else "")
         tz = timezone or local_timezone_name()
         clips: list[VideoClip] = []

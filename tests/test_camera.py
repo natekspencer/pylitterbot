@@ -3,6 +3,7 @@
 # pylint: disable=protected-access
 from __future__ import annotations
 
+from datetime import date, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -386,6 +387,42 @@ class TestCameraClient:
 
         await mock_account.disconnect()
 
+    async def test_get_videos_accepts_a_date(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """A ``datetime.date`` is sent as YYYY-MM-DD."""
+        base = f"{CAMERA_INVENTORY_API}/prod/v1/cameras/{CAMERA_DEVICE_ID}/videos"
+        mock_aiointercept.get(
+            f"{base}/2026-11-18?page=1&timezone=UTC", payload=[{"id": 7}]
+        )
+        mock_aiointercept.get(f"{base}/2026-11-18?page=2&timezone=UTC", payload=[])
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        videos = await client.get_videos(date=date(2026, 11, 18), timezone="UTC")
+        assert [v.id for v in videos] == ["7"]
+
+        await mock_account.disconnect()
+
+    async def test_get_videos_rejects_a_datetime(
+        self,
+        mock_account: Account,
+    ) -> None:
+        """A datetime is rejected rather than silently dropping its time."""
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        with pytest.raises(TypeError):
+            await client.get_videos(date=datetime(2026, 11, 18, 12))
+
+        await mock_account.disconnect()
+
     async def test_get_video_playback(
         self,
         mock_account: Account,
@@ -615,6 +652,58 @@ class TestLitterRobot5Camera:
         videos = await robot.get_camera_videos()
         assert len(videos) == 2
         assert isinstance(videos[0], VideoClip)
+
+        await robot._account.disconnect()
+
+    @staticmethod
+    def _video_timezones(mock_aiointercept: aiointercept) -> list[str | None]:
+        """Return the ``timezone`` sent with each clip-list request."""
+        return [
+            url.query.get("timezone")
+            for (method, url) in mock_aiointercept.requests
+            if method == "GET" and url.path.endswith("/videos")
+        ]
+
+    async def test_get_camera_videos_uses_robot_timezone(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """Without a timezone, the robot's own timezone is sent."""
+        robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+        assert robot.timezone == "America/Denver"
+        await robot.get_camera_videos()
+        timezones = self._video_timezones(mock_aiointercept)
+        assert timezones and set(timezones) == {"America/Denver"}
+
+        await robot._account.disconnect()
+
+    async def test_get_camera_videos_explicit_timezone_wins(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """An explicit timezone overrides the robot's."""
+        robot = LitterRobot5(data=LITTER_ROBOT_5_PRO_DATA, account=mock_account)
+        await robot.get_camera_videos(timezone="Australia/Sydney")
+        timezones = self._video_timezones(mock_aiointercept)
+        assert timezones and set(timezones) == {"Australia/Sydney"}
+
+        await robot._account.disconnect()
+
+    async def test_get_camera_videos_without_robot_timezone(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A robot with no timezone falls back to the system timezone."""
+        monkeypatch.setenv("TZ", "America/Detroit")
+        data = {**LITTER_ROBOT_5_PRO_DATA, "timezone": None}
+        robot = LitterRobot5(data=data, account=mock_account)
+        await robot.get_camera_videos()
+        timezones = self._video_timezones(mock_aiointercept)
+        assert timezones and set(timezones) == {"America/Detroit"}
 
         await robot._account.disconnect()
 
@@ -913,3 +1002,21 @@ class TestLocalTimezoneName:
             "pylitterbot.camera.os.path.realpath", lambda _: "/etc/localtime"
         )
         assert local_timezone_name() == "UTC"
+
+    @pytest.mark.parametrize(
+        "tz", ["EST5EDT,M3.2.0,M11.1.0", "<+11>-11", "UTC0", "/etc/localtime"]
+    )
+    def test_posix_tz_strings_ignored(
+        self, monkeypatch: pytest.MonkeyPatch, tz: str
+    ) -> None:
+        """``TZ`` values that aren't Area/Location names are skipped."""
+        monkeypatch.setenv("TZ", tz)
+        monkeypatch.setattr(
+            "pylitterbot.camera.os.path.realpath", lambda _: "/etc/localtime"
+        )
+        assert local_timezone_name() == "UTC"
+
+    def test_etc_offset_zone(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """IANA names containing offsets, like ``Etc/GMT-10``, are accepted."""
+        monkeypatch.setenv("TZ", "Etc/GMT-10")
+        assert local_timezone_name() == "Etc/GMT-10"

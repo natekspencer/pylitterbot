@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from copy import deepcopy
-from datetime import datetime, time
+from datetime import date as _date, datetime, time
 from typing import TYPE_CHECKING, Any, cast
 
 from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponseError
@@ -1175,21 +1175,25 @@ class LitterRobot5(LitterRobot):
     async def get_camera_videos(
         self,
         *,
-        date: str | None = None,
+        date: str | _date | None = None,
         limit: int | None = None,
         timezone: str | None = None,
     ) -> list[VideoClip]:
         """Fetch recorded camera video clips, newest first.
 
         Args:
-            date: Optional date (YYYY-MM-DD, in ``timezone``) filter.
+            date: Optional day (``datetime.date`` or YYYY-MM-DD, in
+                ``timezone``) filter.
             limit: Optional max results.
-            timezone: IANA timezone name; defaults to the system timezone.
-                See :meth:`CameraClient.get_videos`.
+            timezone: IANA timezone name; defaults to the robot's
+                :attr:`timezone`, then the system timezone.  See
+                :meth:`CameraClient.get_videos`.
 
         """
         client = self.get_camera_client()
-        return await client.get_videos(date=date, limit=limit, timezone=timezone)
+        return await client.get_videos(
+            date=date, limit=limit, timezone=timezone or self.timezone
+        )
 
     async def get_camera_video_settings(self) -> dict[str, Any] | None:
         """Fetch the camera's reported video settings."""
