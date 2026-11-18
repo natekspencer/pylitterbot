@@ -392,13 +392,22 @@ class TestCameraClient:
 
         await mock_account.disconnect()
 
-    async def test_fetch_video_chunks_skips_session_default_auth_headers(
+    @pytest.mark.parametrize(
+        "session_kwargs",
+        [
+            {"headers": {"Authorization": "Bearer secret", "X-Api-Key": "k"}},
+            {"cookies": {"session": "secret"}},
+        ],
+        ids=["default-headers", "cookie-jar"],
+    )
+    async def test_fetch_video_chunks_sends_no_caller_credentials(
         self,
         mock_account: Account,
         mock_aiointercept: aiointercept,
         monkeypatch: pytest.MonkeyPatch,
+        session_kwargs: dict[str, Any],
     ) -> None:
-        """Default auth headers on the caller's session never reach S3."""
+        """Credentials on the caller's session never reach S3."""
         clip_id = "12345"
         url = "https://s3.example/vid-12345/a.mp4?Signature=a%2Bb%3D"
         mock_aiointercept.get(
@@ -406,9 +415,7 @@ class TestCameraClient:
             payload={"id": clip_id, "chunks": [{"id": 1, "downloadUrl": url}]},
         )
         mock_aiointercept.get(url, body=b"chunk-a")
-        caller_session = ClientSession(
-            headers={"Authorization": "Bearer secret", "X-Api-Key": "k"}
-        )
+        caller_session = ClientSession(**session_kwargs)
         monkeypatch.setattr(mock_account.session, "_websession", caller_session)
         client = CameraClient(
             session=mock_account.session,
@@ -426,36 +433,42 @@ class TestCameraClient:
             for req in reqs
         ]
         assert len(chunk_requests) == 1
-        assert "Authorization" not in chunk_requests[0].headers
-        assert "X-Api-Key" not in chunk_requests[0].headers
+        for header in ("Authorization", "X-Api-Key", "Cookie"):
+            assert header not in chunk_requests[0].headers
 
         await mock_account.disconnect()
 
-    async def test_fetch_video_chunks_reuses_clean_session(
+    async def test_fetch_video_chunks_closes_download_session(
         self,
         mock_account: Account,
         mock_aiointercept: aiointercept,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Without default auth headers, no extra session is created."""
+        """The dedicated download session is closed, even when a chunk fails."""
         clip_id = "12345"
         url = "https://s3.example/vid-12345/a.mp4"
         mock_aiointercept.get(
             f"{CAMERA_INVENTORY_API}/prod/v1/camera-videos/{clip_id}",
             payload={"id": clip_id, "chunks": [{"id": 1, "downloadUrl": url}]},
         )
-        mock_aiointercept.get(url, body=b"chunk-a")
+        mock_aiointercept.get(url, status=403)
+        created: list[ClientSession] = []
+
+        def _tracked_session(*args: Any, **kwargs: Any) -> ClientSession:
+            session = ClientSession(*args, **kwargs)
+            created.append(session)
+            return session
+
+        monkeypatch.setattr("pylitterbot.camera.ClientSession", _tracked_session)
         client = CameraClient(
             session=mock_account.session,
             device_id=CAMERA_DEVICE_ID,
             api_key="test-key",
         )
-
-        def _no_new_session(*_: Any, **__: Any) -> None:
-            raise AssertionError("unexpected ClientSession created")
-
-        monkeypatch.setattr("pylitterbot.camera.ClientSession", _no_new_session)
-        assert await client.fetch_video_chunks(clip_id) == [b"chunk-a"]
+        with pytest.raises(ClientResponseError):
+            await client.fetch_video_chunks(clip_id)
+        assert len(created) == 1
+        assert created[0].closed
 
         await mock_account.disconnect()
 
