@@ -873,6 +873,33 @@ def _fake_client(sockets: list[_FakeWebSocket]) -> Any:
     )
 
 
+async def _wait_for_event_or_task(
+    event: asyncio.Event, task: asyncio.Future[Any], timeout: float = 1
+) -> None:
+    """Wait for ``event``; if ``task`` finishes first, surface its result."""
+    waiter = asyncio.ensure_future(event.wait())
+    try:
+        await asyncio.wait(
+            {waiter, task}, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+        )
+    finally:
+        waiter.cancel()
+        await asyncio.gather(waiter, return_exceptions=True)
+    if event.is_set():
+        return
+    if task.done():
+        task.result()  # raises the startup error, if any
+        pytest.fail("start() returned before reaching the awaited step")
+    pytest.fail(f"neither the event nor the task finished within {timeout}s")
+
+
+async def _cancel_pending(task: asyncio.Future[Any]) -> None:
+    """Cancel ``task`` if still running and wait for it to finish."""
+    if not task.done():
+        task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+
 class TestAnswerTimeout:
     """Tests for retrying an offer the camera never answers."""
 
@@ -936,13 +963,16 @@ class TestAnswerTimeout:
         task = asyncio.ensure_future(
             relay.start("v=0 offer", lambda a: None, lambda c: None)
         )
-        await sending.wait()
-        task.cancel()
+        try:
+            await _wait_for_event_or_task(sending, task)
+            task.cancel()
 
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        assert ws.closed
-        assert relay.session is None
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert ws.closed
+            assert relay.session is None
+        finally:
+            await _cancel_pending(task)
 
     @pytest.mark.parametrize("stall_offer", [True, False])
     async def test_relay_cancel_bounded_when_close_hangs(
@@ -974,14 +1004,17 @@ class TestAnswerTimeout:
         task = asyncio.ensure_future(
             relay.start("v=0 offer", lambda a: None, lambda c: None)
         )
-        await offered.wait()
-        await asyncio.sleep(0)
-        task.cancel()
+        try:
+            await _wait_for_event_or_task(offered, task)
+            await asyncio.sleep(0)
+            task.cancel()
 
-        with pytest.raises(asyncio.CancelledError):
-            await asyncio.wait_for(task, timeout=1)
-        assert ws.close_called
-        assert relay.session is None
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=1)
+            assert ws.close_called
+            assert relay.session is None
+        finally:
+            await _cancel_pending(task)
 
     @staticmethod
     def _recording_relay() -> tuple[CameraSignalingRelay, list[tuple[Any, Any]]]:
