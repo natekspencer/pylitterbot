@@ -368,6 +368,17 @@ class CameraClient:
 
         The Whisker app makes this call immediately before generating a live
         view session. A successful response has an empty body.
+
+        Returns:
+            ``True`` if the account owns the camera, ``False`` if the API
+            refuses it (HTTP 401 or 403).
+
+        Raises:
+            aiohttp.ClientResponseError: For any other HTTP error (e.g. 429),
+                so a failed check isn't mistaken for "not your camera".
+            InvalidCommandException: If the API returns HTTP 500.
+            aiohttp.ClientError: If the request couldn't be made.
+
         """
         url = f"{CAMERA_INVENTORY_API}/prod/v1/auth/validate-token"
         payload = {
@@ -378,8 +389,10 @@ class CameraClient:
             await self._session.post(
                 url, json=payload, headers=self._settings_headers()
             )
-        except _API_ERRORS as err:
-            _LOGGER.debug("Camera ownership validation failed: %s", err)
+        except ClientResponseError as err:
+            if err.status not in (401, 403):
+                raise
+            _LOGGER.debug("Camera ownership validation refused: %s", err)
             return False
         return True
 
@@ -645,6 +658,11 @@ class CameraSignalingRelay(_SignalingMixin):
         callbacks; ICE candidates may continue to arrive after this returns.
         If the camera does not answer within ``ANSWER_TIMEOUT`` seconds, the
         offer is retried on a fresh session, up to ``ANSWER_ATTEMPTS`` times.
+        This usually returns in 1-3 seconds, but can take about 25 seconds
+        before raising.
+
+        If ``start()`` raises (other than because the relay was closed), it
+        can be called again with a new offer to retry.
 
         Args:
             offer_sdp: The browser's SDP offer (plain text, not base64).
@@ -1046,6 +1064,9 @@ class CameraStream(_SignalingMixin):
 
         If the camera does not answer within ``ANSWER_TIMEOUT`` seconds, the
         offer is retried on a fresh session, up to ``ANSWER_ATTEMPTS`` times.
+
+        If ``start()`` raises (other than because the stream was stopped), it
+        can be called again to retry.
 
         Raises:
             CameraStreamException: If the stream is stopped/started, the

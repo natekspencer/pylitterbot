@@ -1448,6 +1448,43 @@ class TestAnswerTimeout:
         assert attempts == 2
         await stream.stop()
 
+    async def test_relay_start_again_after_never_answered(self) -> None:
+        """Test start() can be called again after the camera never answered."""
+        sockets = [_FakeWebSocket([]), _FakeWebSocket([])]
+        answering = _FakeWebSocket([self.ANSWER])
+        client = _fake_client([*sockets, answering])
+        answers: list[str] = []
+        relay = CameraSignalingRelay(client)
+
+        with pytest.raises(CameraStreamException, match="did not answer"):
+            await relay.start("v=0 offer", answers.append, lambda c: None)
+        session = await relay.start("v=0 offer", answers.append, lambda c: None)
+
+        assert session is client.sessions[2]
+        assert answers == [self.ANSWER_SDP]
+        await relay.close()
+
+    async def test_stream_start_again_after_never_answered(self) -> None:
+        """Test CameraStream.start() can be called again after it raised."""
+        if not camera.HAS_AIORTC:
+            pytest.skip("aiortc not installed")
+        stream = CameraStream(_fake_client([]))
+        attempts = 0
+
+        async def connect_and_offer() -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 3:
+                stream._answered.set()
+
+        stream._connect_and_offer = connect_and_offer  # type: ignore[method-assign]
+        with pytest.raises(CameraStreamException, match="did not answer"):
+            await stream.start()
+        await stream.start()
+
+        assert attempts == 3
+        await stream.stop()
+
 
 class TestRelayReconnect:
     """Tests for delivering late ICE candidates over a fresh connection."""
@@ -1930,7 +1967,8 @@ class TestCameraClientErrorFallbacks:
         )
         assert await client.set_audio_enabled(True) is False
         assert await client.set_camera_canvas(CAMERA_CANVAS_FRONT) is False
-        assert await client.validate_device_ownership() is False
+        with pytest.raises(InvalidCommandException):
+            await client.validate_device_ownership()
         assert await client.get_camera_canvas() is None
         assert await client.get_camera_status() is None
 
@@ -1942,6 +1980,43 @@ class TestCameraClientErrorFallbacks:
         )
         with pytest.raises(CameraStreamException, match="Failed to generate"):
             await client.generate_session()
+
+    @pytest.mark.parametrize(("status", "owned"), [(401, False), (403, False)])
+    async def test_validate_device_ownership_refused(
+        self, status: int, owned: bool
+    ) -> None:
+        """Test 401/403 from the ownership check mean "not your camera"."""
+        client = CameraClient(
+            session=self._failing_session(self._response_error(status)),
+            device_id=CAMERA_DEVICE_ID,
+        )
+        assert await client.validate_device_ownership() is owned
+
+    @pytest.mark.parametrize("status", [404, 429, 503])
+    async def test_validate_device_ownership_other_errors_raise(
+        self, status: int
+    ) -> None:
+        """Test other HTTP errors raise instead of looking like "not owned"."""
+        client = CameraClient(
+            session=self._failing_session(self._response_error(status)),
+            device_id=CAMERA_DEVICE_ID,
+        )
+        with pytest.raises(ClientResponseError) as err:
+            await client.validate_device_ownership()
+        assert err.value.status == status
+
+    @staticmethod
+    def _response_error(status: int) -> ClientResponseError:
+        url = URL("https://camera.example/validate-token")
+        request_info = RequestInfo(
+            url=url,
+            method="POST",
+            headers=CIMultiDictProxy(CIMultiDict()),
+            real_url=url,
+        )
+        return ClientResponseError(
+            request_info=request_info, history=(), status=status, message="error"
+        )
 
     async def test_generate_session_wraps_client_response_error(self) -> None:
         """Test generate_session wraps ClientResponseError (e.g. 403)."""
