@@ -35,7 +35,7 @@ pip install pylitterbot[mcp]
 To include live video streaming for the Litter-Robot 5 Pro camera:
 
 ```bash
-pip install pylitterbot[camera]
+pip install 'pylitterbot[camera]'
 ```
 
 Alternatively, clone the repository and run
@@ -147,6 +147,8 @@ Live video uses WebRTC. With the `camera` extra installed, `CameraStream`
 receives the video and audio frames in Python:
 
 ```python
+robot = next(r for r in account.get_robots(LitterRobot5) if r.has_camera)
+
 async with robot.create_camera_stream() as stream:
     stream.on_video_frame(lambda frame: print(frame.width, frame.height))
     if await stream.wait_for_connection():
