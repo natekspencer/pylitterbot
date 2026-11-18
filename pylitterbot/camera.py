@@ -386,7 +386,8 @@ class CameraClient:
         settings = await self.get_video_settings()
         if not settings:
             return None
-        live_view = settings.get("streams", {}).get("live-view", {})
+        streams = settings.get("streams")
+        live_view = streams.get("live-view") if isinstance(streams, dict) else None
         canvas = live_view.get("canvas") if isinstance(live_view, dict) else None
         return canvas if isinstance(canvas, str) else None
 
@@ -629,14 +630,22 @@ class CameraSignalingRelay(_SignalingMixin):
                 session = await self._connect_and_offer(
                     offer_sdp, *_attempt_handlers(attempt, answered)
                 )
+                if self._closed:
+                    # closed while the session was being set up
+                    raise CameraStreamException("Relay has been closed")
                 try:
-                    await asyncio.wait_for(answered.wait(), timeout=ANSWER_TIMEOUT)
+                    # asyncio.wait_for can swallow a cancellation on 3.11
+                    async with asyncio.timeout(ANSWER_TIMEOUT):
+                        await answered.wait()
                 except asyncio.TimeoutError:
                     if answered.is_set():
                         # answered as the deadline passed; already forwarded
+                        self._schedule_flush()
                         return session
                     # invalidate before _disconnect() yields to the receive loop
                     current_attempt = 0
+                    # the next attempt replays these with its offer
+                    self._pending_candidates.clear()
                     _LOGGER.warning(
                         "Signaling relay: camera did not answer within %ss (attempt %d of %d)",
                         ANSWER_TIMEOUT,
@@ -647,6 +656,7 @@ class CameraSignalingRelay(_SignalingMixin):
                     if self._closed:
                         raise CameraStreamException("Relay has been closed") from None
                     continue
+                self._schedule_flush()
                 return session
             raise CameraStreamException(
                 f"Camera {self._client.device_id} did not answer the offer "
@@ -655,6 +665,9 @@ class CameraSignalingRelay(_SignalingMixin):
         except BaseException:
             await self._disconnect()
             self._session = None
+            # a later start() is a new offer; don't replay this one's candidates
+            self._offer_candidates.clear()
+            self._pending_candidates.clear()
             raise
 
     async def _connect_and_offer(
@@ -730,6 +743,11 @@ class CameraSignalingRelay(_SignalingMixin):
                     "Signaling relay: send failed -- buffering ICE candidate",
                     exc_info=True,
                 )
+                if not self._started:
+                    # the socket may already hold the answer (the server closes
+                    # it right after), so start() flushes this once answered
+                    _append_bounded(self._pending_candidates, msg)
+                    return
         if not self._started:
             # the next offer attempt sends it
             return
@@ -738,10 +756,17 @@ class CameraSignalingRelay(_SignalingMixin):
             "Signaling relay: WS closed -- buffering ICE candidate for reconnect"
         )
         _append_bounded(self._pending_candidates, msg)
-        # Only reconnect once the camera has answered; before that, each offer
-        # attempt sends the early candidates (a parallel socket would race it).
+        self._schedule_flush()
+
+    def _schedule_flush(self) -> None:
+        """Deliver pending ICE candidates over a fresh connection.
+
+        Only once the camera has answered; before that, each offer attempt
+        sends the early candidates (a parallel socket would race it).
+        """
         if (
-            self._started
+            self._pending_candidates
+            and self._started
             and not self._closed
             and (self._reconnect_task is None or self._reconnect_task.done())
         ):
@@ -900,6 +925,7 @@ class CameraStream(_SignalingMixin):
 
         self._answered = asyncio.Event()
         self._connected = asyncio.Event()
+        self._starting = False
         self._stopped = False
 
     @property
@@ -934,18 +960,26 @@ class CameraStream(_SignalingMixin):
         """
         if self._stopped:
             raise CameraStreamException("Stream has been stopped")
-        if self._pc is not None:
+        # _pc is cleared between attempts, so it can't serve as the guard alone
+        if self._starting or self._pc is not None:
             raise CameraStreamException("Stream already started")
 
+        self._starting = True
         try:
             for attempt in range(1, ANSWER_ATTEMPTS + 1):
                 self._answered = asyncio.Event()
                 await self._connect_and_offer()
+                if self._stopped:
+                    # stopped while the session was being set up
+                    raise CameraStreamException("Stream has been stopped")
                 try:
-                    await asyncio.wait_for(
-                        self._answered.wait(), timeout=ANSWER_TIMEOUT
-                    )
+                    # asyncio.wait_for can swallow a cancellation on 3.11
+                    async with asyncio.timeout(ANSWER_TIMEOUT):
+                        await self._answered.wait()
                 except asyncio.TimeoutError:
+                    if self._answered.is_set():
+                        # answered as the deadline passed
+                        return
                     _LOGGER.warning(
                         "Camera did not answer within %ss (attempt %d of %d)",
                         ANSWER_TIMEOUT,
@@ -964,6 +998,8 @@ class CameraStream(_SignalingMixin):
         except BaseException:
             await self._disconnect()
             raise
+        finally:
+            self._starting = False
 
     async def _connect_and_offer(self) -> None:
         """Open a fresh session and peer connection, then send the offer."""
@@ -1022,7 +1058,7 @@ class CameraStream(_SignalingMixin):
         self._ping_task = self._receive_task = None
 
         if self._ws and not self._ws.closed:
-            await self._ws.close()
+            await _close_ws(self._ws)
         self._ws = None
 
         if self._pc:

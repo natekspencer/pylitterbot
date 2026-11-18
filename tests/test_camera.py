@@ -900,6 +900,45 @@ async def _cancel_pending(task: asyncio.Future[Any]) -> None:
     await asyncio.gather(task, return_exceptions=True)
 
 
+def _deadline_with(on_deadline: Any) -> Any:
+    """Return an ``asyncio.timeout`` stand-in that fires as an answer lands.
+
+    Entering schedules ``on_deadline`` (the answer arriving) and then the
+    timeout's cancellation in the same loop iteration, as a real deadline
+    racing a real answer would.
+    """
+
+    class _Deadline:
+        def __init__(self, delay: float) -> None:
+            self._task: asyncio.Task[Any] | None = None
+
+        async def __aenter__(self) -> _Deadline:
+            self._task = task = asyncio.current_task()
+            assert task is not None
+
+            def fire() -> None:
+                on_deadline()
+                task.cancel()
+
+            asyncio.get_running_loop().call_soon(fire)
+            return self
+
+        async def __aexit__(self, exc_type: Any, *exc: Any) -> bool:
+            if exc_type is asyncio.CancelledError:
+                assert self._task is not None
+                self._task.uncancel()
+                raise TimeoutError
+            return False
+
+    return _Deadline
+
+
+def cast_session(session: Any) -> CameraSession:
+    """Narrow a fake client's session for mypy."""
+    assert isinstance(session, CameraSession)
+    return session
+
+
 class TestAnswerTimeout:
     """Tests for retrying an offer the camera never answers."""
 
@@ -1066,29 +1105,116 @@ class TestAnswerTimeout:
         """Test an answer that lands as the timeout fires is not retried."""
         relay, handlers = self._recording_relay()
         answers: list[str] = []
+        monkeypatch.setattr(
+            asyncio,
+            "timeout",
+            _deadline_with(lambda: handlers[-1][0]("v=0 at deadline")),
+        )
 
-        async def wait_for_at_deadline(awaitable: Any, timeout: float) -> None:
-            awaitable.close()
-            handlers[-1][0]("v=0 at deadline")
-            raise asyncio.TimeoutError
-
-        monkeypatch.setattr(asyncio, "wait_for", wait_for_at_deadline)
         session = await relay.start("v=0 offer", answers.append, lambda c: None)
 
         assert len(handlers) == 1
         assert session.session_id == "s1"
         assert answers == ["v=0 at deadline"]
 
+    async def test_stream_accepts_answer_at_deadline(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test CameraStream keeps a peer whose answer lands at the deadline."""
+        if not camera.HAS_AIORTC:
+            pytest.skip("aiortc not installed")
+        stream = CameraStream(_fake_client([]))
+        attempts = 0
+
+        async def connect_and_offer() -> None:
+            nonlocal attempts
+            attempts += 1
+
+        stream._connect_and_offer = connect_and_offer  # type: ignore[method-assign]
+        # start() replaces _answered per attempt, so look it up when firing
+        monkeypatch.setattr(
+            asyncio, "timeout", _deadline_with(lambda: stream._answered.set())
+        )
+        await stream.start()
+
+        assert attempts == 1
+        await stream.stop()
+
+    async def test_relay_flushes_failed_send_once_answered(self) -> None:
+        """Test a candidate whose send failed before the answer is still delivered.
+
+        The server closes the socket right after the answer, so a send can
+        fail while the answer is already on its way.
+        """
+
+        class _ClosingWebSocket(_FakeWebSocket):
+            async def send_json(self, data: dict[str, Any]) -> None:
+                if data.get("type") == "candidate":
+                    raise ConnectionResetError("closing transport")
+                await super().send_json(data)
+
+        ws, reconnect = _ClosingWebSocket([]), _FakeWebSocket([])
+        relay = CameraSignalingRelay(_fake_client([ws, reconnect]))
+        answers: list[str] = []
+        task = asyncio.ensure_future(
+            relay.start("v=0 offer", answers.append, lambda c: None)
+        )
+        try:
+            while not ws.sent:  # wait for the offer
+                await asyncio.sleep(0)
+            await relay.send_candidate({"candidate": "candidate:late"})
+            ws._queue.put_nowait(self.ANSWER)
+            await asyncio.wait_for(task, timeout=1)
+            await asyncio.wait_for(relay._reconnect_task, timeout=1)  # type: ignore[arg-type]
+        finally:
+            await _cancel_pending(task)
+
+        assert answers == [self.ANSWER_SDP]
+        assert reconnect.sent[0]["candidate"] == "candidate:late"
+        await relay.close()
+
+    async def test_relay_close_during_setup(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test close() while the session is being created leaves no socket open."""
+        # a long answer wait, so only an immediate closed check can pass
+        monkeypatch.setattr(camera, "ANSWER_TIMEOUT", 60)
+        ws = _FakeWebSocket([])
+        client = _fake_client([ws])
+        release = asyncio.Event()
+        generate_session = client.generate_session
+
+        async def slow_generate_session() -> CameraSession:
+            await release.wait()
+            return cast_session(await generate_session())
+
+        client.generate_session = slow_generate_session
+        relay = CameraSignalingRelay(client)
+        task = asyncio.ensure_future(
+            relay.start("v=0 offer", lambda a: None, lambda c: None)
+        )
+        await asyncio.sleep(0)
+        await relay.close()
+        release.set()
+
+        with pytest.raises(CameraStreamException, match="closed"):
+            await asyncio.wait_for(task, timeout=1)
+        assert ws.closed
+
     async def test_relay_raises_when_never_answered(self) -> None:
         """Test the relay gives up after ANSWER_ATTEMPTS unanswered offers."""
         sockets = [_FakeWebSocket([]), _FakeWebSocket([])]
         relay = CameraSignalingRelay(_fake_client(sockets))
+        await relay.send_candidate({"candidate": "candidate:old-offer"})
 
         with pytest.raises(CameraStreamException, match="did not answer"):
             await relay.start("v=0 offer", lambda a: None, lambda c: None)
 
         assert all(ws.closed for ws in sockets)
         assert relay.session is None
+        # both attempts replayed it; a new offer must not
+        assert all(ws.sent[1]["candidate"] == "candidate:old-offer" for ws in sockets)
+        assert relay._offer_candidates == []
 
     async def test_stream_retries_then_raises(self) -> None:
         """Test CameraStream retries an unanswered offer, then raises."""
@@ -1129,6 +1255,72 @@ class TestAnswerTimeout:
 
         assert attempts == 2
         await stream.stop()
+
+
+class TestCameraStreamLifecycle:
+    """Tests for CameraStream start/stop edge cases."""
+
+    @pytest.fixture(autouse=True)
+    def _require_aiortc(self) -> None:
+        if not camera.HAS_AIORTC:
+            pytest.skip("aiortc not installed")
+
+    async def test_second_start_rejected_during_retry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test the start() guard holds between retry attempts."""
+        monkeypatch.setattr(camera, "ANSWER_TIMEOUT", 0.05)
+        stream = CameraStream(_fake_client([]))
+        retrying = asyncio.Event()
+        attempts = 0
+
+        async def connect_and_offer() -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 2:
+                retrying.set()
+                await asyncio.Event().wait()
+
+        stream._connect_and_offer = connect_and_offer  # type: ignore[method-assign]
+        task = asyncio.ensure_future(stream.start())
+        try:
+            await _wait_for_event_or_task(retrying, task)
+            assert stream._pc is None  # the old guard alone would pass here
+            with pytest.raises(CameraStreamException, match="already started"):
+                await stream.start()
+        finally:
+            await _cancel_pending(task)
+        await stream.stop()
+
+    async def test_stop_during_setup(self) -> None:
+        """Test stop() while the session is being set up leaves no socket open."""
+        stream = CameraStream(_fake_client([]))
+        ws = _FakeWebSocket([])
+
+        async def connect_and_offer() -> None:
+            stream._stopped = True  # stop() ran while this was in progress
+            stream._ws = ws
+
+        stream._connect_and_offer = connect_and_offer  # type: ignore[method-assign]
+        with pytest.raises(CameraStreamException, match="stopped"):
+            await asyncio.wait_for(stream.start(), timeout=1)
+        assert ws.closed
+        assert stream._ws is None
+
+    async def test_stop_bounded_when_close_hangs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test stop() is not held up by a socket close that hangs."""
+        monkeypatch.setattr(camera, "WS_CLOSE_TIMEOUT", 0.05)
+
+        class _HangingCloseWebSocket(_FakeWebSocket):
+            async def close(self) -> None:
+                await asyncio.Event().wait()
+
+        stream = CameraStream(_fake_client([]))
+        stream._ws = _HangingCloseWebSocket([])
+        await asyncio.wait_for(stream.stop(), timeout=1)
+        assert stream._ws is None
 
 
 class TestCameraStreamTracks:
@@ -1196,6 +1388,21 @@ class TestCameraClientErrorFallbacks:
         assert await client.get_video_settings() is None
         assert await client.get_audio_settings() is None
         assert await client.get_camera_info() is None
+
+    async def test_get_camera_canvas_null_streams(self) -> None:
+        """Test a null ``streams`` value yields None instead of raising."""
+        session = SimpleNamespace()
+
+        async def _settings(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            return {
+                "reportedSettings": [
+                    {"settingsType": "videoSettings", "data": {"streams": None}}
+                ]
+            }
+
+        session.get = _settings
+        client = CameraClient(session=session, device_id=CAMERA_DEVICE_ID)  # type: ignore[arg-type]
+        assert await client.get_camera_canvas() is None
 
     async def test_set_audio_enabled_invalid_command_returns_false(self) -> None:
         """Test HTTP 500 (InvalidCommandException) returns False from setters."""
