@@ -54,6 +54,9 @@ MAX_PENDING_CANDIDATES = 50
 # graceful-fallback handling must catch it alongside other client errors.
 _API_ERRORS = (ClientResponseError, InvalidCommandException)
 
+# Session default headers that must not be sent to presigned S3 URLs.
+_S3_UNSAFE_DEFAULT_HEADERS = ("authorization", "x-api-key", "cookie")
+
 _WS_HEADERS = {"User-Agent": DEFAULT_USER_AGENT}
 
 
@@ -467,15 +470,24 @@ class CameraClient:
         """
         if (playback := await self.get_video_playback(clip_id)) is None:
             return None
+        # Presigned S3 URLs must get no auth headers (S3 rejects a second auth
+        # mechanism, and the account's credentials shouldn't leave Whisker's
+        # API).  Per-request headers can't remove a session's defaults, so if
+        # the caller's session has any, download through a clean session.
+        session = self.websession
+        own_session: ClientSession | None = None
+        if any(name in session.headers for name in _S3_UNSAFE_DEFAULT_HEADERS):
+            session = own_session = ClientSession()
         contents: list[bytes] = []
-        for chunk in playback.chunks:
-            # Presigned S3 URL: send no auth headers (S3 rejects a second auth
-            # mechanism) and keep the query string exactly as signed.
-            async with self.websession.get(
-                URL(chunk.download_url, encoded=True)
-            ) as resp:
-                resp.raise_for_status()
-                contents.append(await resp.read())
+        try:
+            for chunk in playback.chunks:
+                # Keep the query string exactly as signed.
+                async with session.get(URL(chunk.download_url, encoded=True)) as resp:
+                    resp.raise_for_status()
+                    contents.append(await resp.read())
+        finally:
+            if own_session is not None:
+                await own_session.close()
         return contents
 
     async def download_video(

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from aiohttp import ClientResponseError, RequestInfo
+from aiohttp import ClientResponseError, ClientSession, RequestInfo
 from aiointercept import aiointercept
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
@@ -389,6 +389,73 @@ class TestCameraClient:
         assert paths is not None
         assert [p.name for p in paths] == ["12345_00.mp4", "12345_01.mp4"]
         assert [p.read_bytes() for p in paths] == [b"chunk-a", b"chunk-b"]
+
+        await mock_account.disconnect()
+
+    async def test_fetch_video_chunks_skips_session_default_auth_headers(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Default auth headers on the caller's session never reach S3."""
+        clip_id = "12345"
+        url = "https://s3.example/vid-12345/a.mp4?Signature=a%2Bb%3D"
+        mock_aiointercept.get(
+            f"{CAMERA_INVENTORY_API}/prod/v1/camera-videos/{clip_id}",
+            payload={"id": clip_id, "chunks": [{"id": 1, "downloadUrl": url}]},
+        )
+        mock_aiointercept.get(url, body=b"chunk-a")
+        caller_session = ClientSession(
+            headers={"Authorization": "Bearer secret", "X-Api-Key": "k"}
+        )
+        monkeypatch.setattr(mock_account.session, "_websession", caller_session)
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        try:
+            assert await client.fetch_video_chunks(clip_id) == [b"chunk-a"]
+        finally:
+            await caller_session.close()
+        chunk_requests = [
+            req
+            for (method, req_url), reqs in mock_aiointercept.requests.items()
+            if method == "GET" and req_url.host == "s3.example"
+            for req in reqs
+        ]
+        assert len(chunk_requests) == 1
+        assert "Authorization" not in chunk_requests[0].headers
+        assert "X-Api-Key" not in chunk_requests[0].headers
+
+        await mock_account.disconnect()
+
+    async def test_fetch_video_chunks_reuses_clean_session(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Without default auth headers, no extra session is created."""
+        clip_id = "12345"
+        url = "https://s3.example/vid-12345/a.mp4"
+        mock_aiointercept.get(
+            f"{CAMERA_INVENTORY_API}/prod/v1/camera-videos/{clip_id}",
+            payload={"id": clip_id, "chunks": [{"id": 1, "downloadUrl": url}]},
+        )
+        mock_aiointercept.get(url, body=b"chunk-a")
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+
+        def _no_new_session(*_: Any, **__: Any) -> None:
+            raise AssertionError("unexpected ClientSession created")
+
+        monkeypatch.setattr("pylitterbot.camera.ClientSession", _no_new_session)
+        assert await client.fetch_video_chunks(clip_id) == [b"chunk-a"]
 
         await mock_account.disconnect()
 
