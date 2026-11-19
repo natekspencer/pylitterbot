@@ -123,6 +123,19 @@ async def _cancel_and_wait(*tasks: asyncio.Task[Any] | None) -> None:
         await asyncio.wait(pending)
 
 
+async def _finish_before_cancelling(coro: Coroutine[Any, Any, _T]) -> _T:
+    """Await ``coro``; if the caller is cancelled, let it finish first.
+
+    The cancellation is raised once ``coro`` is done.
+    """
+    task = asyncio.ensure_future(coro)
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        await asyncio.wait({task})
+        raise
+
+
 async def _wait_for_either(first: asyncio.Event, second: asyncio.Event) -> None:
     """Wait until either event is set."""
     waiters = {
@@ -1174,7 +1187,10 @@ class CameraStream(_SignalingMixin):
         # localDescription.sdp includes gathered ICE candidates; offer.sdp has none
         offer = await pc.createOffer()
         self._check_stopped()
-        await pc.setLocalDescription(offer)
+        # Interrupting ICE gathering orphans aioice's TURN allocation task, so
+        # an allocation that then succeeds leaks its socket; aioice gives up on
+        # gathering after 5 seconds, so let it finish
+        await _finish_before_cancelling(pc.setLocalDescription(offer))
         self._check_stopped()
 
         await ws.send_json(
@@ -1220,7 +1236,11 @@ class CameraStream(_SignalingMixin):
                 await pc.close()
 
     async def stop(self) -> None:
-        """Stop the WebRTC streaming session and clean up resources."""
+        """Stop the WebRTC streaming session and clean up resources.
+
+        If ``start()`` is gathering ICE candidates, this waits for gathering
+        to finish (at most about 5 seconds) so no TURN socket is left open.
+        """
         self._stopped = True
         self._stopped_event.set()
         # setup closes a socket it hasn't published yet when cancelled

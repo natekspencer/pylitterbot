@@ -1722,6 +1722,110 @@ class TestCameraStreamLifecycle:
         assert stream._pc is None
         assert stream._ws is None
 
+    async def test_stop_during_turn_allocation_closes_socket(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test stop() during a TURN allocation leaves no relay socket open.
+
+        aioice runs the allocation in its own task, so interrupting gathering
+        orphaned it: when the server then answered, the relay socket stayed
+        open (and kept refreshing) until the event loop closed.
+        """
+        # pylint: disable=import-outside-toplevel
+        from aioice import stun
+        from aioice.turn import make_integrity_key
+        from aiortc import RTCIceServer
+
+        loop = asyncio.get_running_loop()
+        requested, release = asyncio.Event(), asyncio.Event()
+        realm, nonce = "test", b"nonce"
+        key = make_integrity_key("u", realm, "p")
+
+        class _TurnServer(asyncio.DatagramProtocol):
+            """Grants allocations once ``release`` is set."""
+
+            transport: asyncio.DatagramTransport
+
+            def connection_made(self, transport: Any) -> None:
+                self.transport = transport
+
+            def datagram_received(self, data: bytes, addr: Any) -> None:
+                request = stun.parse_message(data)
+                tid = request.transaction_id
+                if "MESSAGE-INTEGRITY" not in request.attributes:
+                    response = stun.Message(
+                        request.message_method, stun.Class.ERROR, tid
+                    )
+                    response.attributes["ERROR-CODE"] = (401, "Unauthorized")
+                    response.attributes["REALM"] = realm
+                    response.attributes["NONCE"] = nonce
+                    self.transport.sendto(bytes(response), addr)
+                    return
+                response = stun.Message(
+                    request.message_method, stun.Class.RESPONSE, tid
+                )
+                response.attributes["LIFETIME"] = request.attributes["LIFETIME"]
+                if request.message_method == stun.Method.ALLOCATE:
+                    response.attributes["XOR-MAPPED-ADDRESS"] = addr
+                    response.attributes["XOR-RELAYED-ADDRESS"] = ("127.0.0.1", 9)
+                response.add_message_integrity(key)
+                if request.message_method != stun.Method.ALLOCATE:
+                    self.transport.sendto(bytes(response), addr)
+                    return
+                requested.set()
+
+                async def grant() -> None:
+                    await release.wait()
+                    self.transport.sendto(bytes(response), addr)
+
+                grants.append(asyncio.ensure_future(grant()))
+
+        grants: list[asyncio.Future[None]] = []
+        server, _ = await loop.create_datagram_endpoint(
+            _TurnServer, local_addr=("127.0.0.1", 0)
+        )
+        server_addr = server.get_extra_info("sockname")
+        relay_sockets: list[asyncio.BaseTransport] = []
+        create_datagram_endpoint = loop.create_datagram_endpoint
+
+        async def tracking_endpoint(*args: Any, **kwargs: Any) -> Any:
+            transport, protocol = await create_datagram_endpoint(*args, **kwargs)
+            if kwargs.get("remote_addr") == server_addr:
+                relay_sockets.append(transport)
+            return transport, protocol
+
+        monkeypatch.setattr(loop, "create_datagram_endpoint", tracking_endpoint)
+        stream, _ = self._local_stream(monkeypatch, [_FakeWebSocket([])])
+        turn = RTCIceServer(
+            urls=f"turn:{server_addr[0]}:{server_addr[1]}",
+            username="u",
+            credential="p",
+        )
+        monkeypatch.setattr(
+            CameraStream, "_build_ice_servers", staticmethod(lambda creds: [turn])
+        )
+        task = asyncio.ensure_future(stream.start())
+        stop: asyncio.Future[None] | None = None
+        try:
+            await _wait_for_event_or_task(requested, task, timeout=5)
+            assert requested.is_set()
+            stop = asyncio.ensure_future(stream.stop())
+            await asyncio.sleep(0.05)
+            release.set()  # the allocation succeeds after stop() was called
+            await asyncio.wait_for(stop, timeout=5)
+            with pytest.raises(CameraStreamException, match="stopped"):
+                await asyncio.wait_for(task, timeout=1)
+            await asyncio.sleep(0.1)  # time for an orphaned allocation to finish
+        finally:
+            await _cancel_pending(task)
+            if stop is not None:
+                await _cancel_pending(stop)
+            for grant in grants:
+                await _cancel_pending(grant)
+            server.close()
+        assert relay_sockets
+        assert all(sock.is_closing() for sock in relay_sockets)
+
     async def test_stop_cancels_in_flight_connect(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
