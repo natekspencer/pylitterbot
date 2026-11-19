@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import quote
 
 from aiohttp import (
+    ClientError,
     ClientResponseError,
     ClientSession,
     ClientWebSocketResponse,
@@ -59,11 +60,12 @@ _API_ERRORS = (ClientResponseError, InvalidCommandException)
 MAX_VIDEO_PAGES = 50
 
 
-# "Area/Location" IANA names, e.g. "America/Denver" or "Etc/GMT-10". Checked by
+# "Area/Location" IANA names, e.g. "America/Denver" or "Etc/GMT-10", plus bare
+# "UTC" (a common TZ override, e.g. in containers). Checked by
 # syntax alone: loading the zone would read tzdata from disk, which blocks the
 # event loop. POSIX TZ strings such as "AEST-10" or "EST5EDT,M3.2.0,M11.1.0"
 # don't match.
-_IANA_TIMEZONE = re.compile(r"[A-Za-z][\w+-]*(?:/[\w+-]+)+")
+_IANA_TIMEZONE = re.compile(r"UTC|[A-Za-z][\w+-]*(?:/[\w+-]+)+")
 
 
 def local_timezone_name() -> str:
@@ -398,8 +400,10 @@ class CameraClient:
         (Whisker+) can take dozens of requests, so avoid calling it on a
         polling interval.
 
-        If a later page fails, paging stops and the clips gathered so far are
-        returned (the error is logged at debug level).
+        If a later page fails (an API or connection error, or a timeout),
+        paging stops and the clips gathered so far are returned (the error is
+        logged at debug level).  A connection error or timeout on the first
+        page is raised.
 
         The ``timezone`` sent matters: the API does not reliably return the
         most recent clips unless it is given the account's local timezone
@@ -426,7 +430,13 @@ class CameraClient:
         clips: list[VideoClip] = []
         seen: set[str] = set()
         for page in range(1, max_pages + 1):
-            data = await self._get(url, params={"page": str(page), "timezone": tz})
+            try:
+                data = await self._get(url, params={"page": str(page), "timezone": tz})
+            except (ClientError, asyncio.TimeoutError) as err:
+                if page == 1:
+                    raise
+                _LOGGER.debug("Camera video page %d failed: %s", page, err)
+                break
             if not isinstance(data, list):
                 break
             added = 0

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from aiohttp import ClientResponseError, RequestInfo
+from aiohttp import ClientConnectionError, ClientResponseError, RequestInfo
 from aiointercept import aiointercept
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
@@ -420,6 +420,76 @@ class TestCameraClient:
         )
         with pytest.raises(TypeError):
             await client.get_videos(date=datetime(2026, 11, 18, 12))
+
+        await mock_account.disconnect()
+
+    async def test_get_videos_connection_error_returns_partial(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """A connection error on a later page returns the clips gathered so far."""
+        base = f"{CAMERA_INVENTORY_API}/prod/v1/cameras/{CAMERA_DEVICE_ID}/videos"
+        mock_aiointercept.get(f"{base}?page=1&timezone=UTC", payload=[{"id": 3}])
+        mock_aiointercept.get(
+            f"{base}?page=2&timezone=UTC", exception=True, repeat=True
+        )
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        videos = await client.get_videos(timezone="UTC")
+        assert [v.id for v in videos] == ["3"]
+
+        await mock_account.disconnect()
+
+    async def test_get_videos_connection_error_on_first_page_raises(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """A connection error on the first page is raised."""
+        base = f"{CAMERA_INVENTORY_API}/prod/v1/cameras/{CAMERA_DEVICE_ID}/videos"
+        mock_aiointercept.get(
+            f"{base}?page=1&timezone=UTC", exception=True, repeat=True
+        )
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        with pytest.raises(ClientConnectionError):
+            await client.get_videos(timezone="UTC")
+
+        await mock_account.disconnect()
+
+    async def test_get_videos_uses_tz_env_over_localtime(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Without a timezone, ``TZ`` is sent even when /etc/localtime differs."""
+        monkeypatch.setenv("TZ", "UTC")
+        monkeypatch.setattr(
+            "pylitterbot.camera.os.path.realpath",
+            lambda _: "/usr/share/zoneinfo/America/Detroit",
+        )
+        base = f"{CAMERA_INVENTORY_API}/prod/v1/cameras/{CAMERA_DEVICE_ID}/videos"
+        mock_aiointercept.get(f"{base}?page=1&timezone=UTC", payload=[])
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+            api_key="test-key",
+        )
+        assert await client.get_videos() == []
+        timezones = [
+            url.query.get("timezone")
+            for (method, url) in mock_aiointercept.requests
+            if method == "GET" and url.path.endswith("/videos")
+        ]
+        assert timezones == ["UTC"]
 
         await mock_account.disconnect()
 
@@ -1020,3 +1090,14 @@ class TestLocalTimezoneName:
         """IANA names containing offsets, like ``Etc/GMT-10``, are accepted."""
         monkeypatch.setenv("TZ", "Etc/GMT-10")
         assert local_timezone_name() == "Etc/GMT-10"
+
+    def test_bare_utc_tz_wins_over_localtime(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``TZ=UTC`` overrides a different /etc/localtime zone."""
+        monkeypatch.setenv("TZ", "UTC")
+        monkeypatch.setattr(
+            "pylitterbot.camera.os.path.realpath",
+            lambda _: "/usr/share/zoneinfo/America/Detroit",
+        )
+        assert local_timezone_name() == "UTC"
