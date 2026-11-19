@@ -1781,7 +1781,7 @@ class TestCameraStreamLifecycle:
             if second is not None:
                 await _cancel_pending(second)
         assert closes == 1
-        assert stream._pc_close_task is not None and stream._pc_close_task.done()
+        assert stream._teardown_task is not None and stream._teardown_task.done()
 
     async def test_stop_wakes_start(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test stop() ends a start() that is waiting for the answer."""
@@ -1822,7 +1822,7 @@ class TestCameraStreamLifecycle:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test a cancellation during teardown still closes the detached peer."""
-        monkeypatch.setattr(camera, "WS_CLOSE_TIMEOUT", 60)
+        monkeypatch.setattr(camera, "WS_CLOSE_TIMEOUT", 0.05)
         closing = asyncio.Event()
 
         class _HangingCloseWebSocket(_FakeWebSocket):
@@ -1847,7 +1847,53 @@ class TestCameraStreamLifecycle:
                 await task
         finally:
             await _cancel_pending(task)
-        assert peer_closed.is_set()
+        # the teardown carries on past the socket close timeout
+        await asyncio.wait_for(peer_closed.wait(), timeout=1)
+        assert stream._pc is None
+
+    async def test_stop_waits_for_overlapping_teardown(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test stop() during a retry's teardown returns only once the peer is closed.
+
+        The retry has already detached the peer and the socket reports closed
+        while its close handshake runs, so stop() finds nothing of its own.
+        """
+        monkeypatch.setattr(camera, "WS_CLOSE_TIMEOUT", 60)
+        closing, release = asyncio.Event(), asyncio.Event()
+
+        class _SlowCloseWebSocket(_FakeWebSocket):
+            async def close(self) -> None:
+                self.closed = True  # aiohttp marks it closed before the handshake
+                closing.set()
+                await release.wait()
+
+        peer_closed = asyncio.Event()
+
+        class _Peer:
+            async def close(self) -> None:
+                peer_closed.set()
+
+        stream = CameraStream(_fake_client([]))
+        stream._pc = _Peer()
+        stream._ws = _SlowCloseWebSocket([])
+        retry = asyncio.ensure_future(stream._disconnect())
+        stop: asyncio.Future[None] | None = None
+        try:
+            await _wait_for_event_or_task(closing, retry)
+            stop = asyncio.ensure_future(stream.stop())
+            for _ in range(5):
+                await asyncio.sleep(0)
+            assert not stop.done()  # waits for the retry's teardown
+
+            release.set()
+            await asyncio.wait_for(stop, timeout=1)
+            assert peer_closed.is_set()
+            await asyncio.wait_for(retry, timeout=1)
+        finally:
+            await _cancel_pending(retry)
+            if stop is not None:
+                await _cancel_pending(stop)
         assert stream._pc is None
 
     async def test_stop_bounded_when_close_hangs(
@@ -1991,6 +2037,26 @@ class TestCameraClientErrorFallbacks:
             device_id=CAMERA_DEVICE_ID,
         )
         assert await client.validate_device_ownership() is owned
+
+    async def test_validate_device_ownership_empty_body_without_json_type(
+        self,
+        mock_account: Account,
+        mock_aiointercept: aiointercept,
+    ) -> None:
+        """Test an empty 200 not labelled as JSON still means "owned"."""
+        mock_aiointercept.post(
+            f"{CAMERA_INVENTORY_API}/prod/v1/auth/validate-token",
+            body="",
+            content_type="application/octet-stream",
+            repeat=True,
+        )
+        client = CameraClient(
+            session=mock_account.session,
+            device_id=CAMERA_DEVICE_ID,
+        )
+        assert await client.validate_device_ownership() is True
+
+        await mock_account.disconnect()
 
     @pytest.mark.parametrize("status", [404, 429, 503])
     async def test_validate_device_ownership_other_errors_raise(

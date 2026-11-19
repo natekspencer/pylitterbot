@@ -390,6 +390,10 @@ class CameraClient:
                 url, json=payload, headers=self._settings_headers()
             )
         except ClientResponseError as err:
+            # the empty body can't be decoded as JSON unless the response is
+            # labelled application/json (ContentTypeError carries the 2xx)
+            if 200 <= err.status < 300:
+                return True
             if err.status not in (401, 403):
                 raise
             _LOGGER.debug("Camera ownership validation refused: %s", err)
@@ -1039,7 +1043,7 @@ class CameraStream(_SignalingMixin):
         self._stopped = False
         self._stopped_event = asyncio.Event()  # wakes start() on stop()
         self._setup_task: asyncio.Task[None] | None = None
-        self._pc_close_task: asyncio.Task[None] | None = None
+        self._teardown_task: asyncio.Task[None] | None = None
 
     @property
     def _finished(self) -> bool:
@@ -1185,7 +1189,20 @@ class CameraStream(_SignalingMixin):
         self._ping_task = asyncio.ensure_future(self._ping_loop())
 
     async def _disconnect(self) -> None:
-        """Stop the media and signaling tasks and close the connections."""
+        """Stop the media and signaling tasks and close the connections.
+
+        Teardown runs as an owned task, so a cancelled caller can't interrupt
+        it. An overlapping call (e.g. stop() during a retry's teardown) waits
+        for the one in progress: by then the peer is detached and the socket
+        marked closed, so it would otherwise find nothing left and return early.
+        """
+        while (task := self._teardown_task) is not None and not task.done():
+            await asyncio.wait({task})
+        self._teardown_task = task = asyncio.ensure_future(self._teardown())
+        await asyncio.wait({task})
+
+    async def _teardown(self) -> None:
+        """Release the peer, socket and tasks; run only via ``_disconnect``."""
         # detach the peer first, so its events are ignored while we await
         pc, self._pc = self._pc, None
         try:
@@ -1199,12 +1216,8 @@ class CameraStream(_SignalingMixin):
                 await _close_ws(self._ws)
             self._ws = None
         finally:
-            # Detached, so nothing else would close it. Run the close as an
-            # owned task: a cancelled caller can't interrupt it, and a later
-            # stop() waits for it.
             if pc:
-                self._pc_close_task = closing = asyncio.ensure_future(pc.close())
-                await asyncio.wait({closing})
+                await pc.close()
 
     async def stop(self) -> None:
         """Stop the WebRTC streaming session and clean up resources."""
@@ -1213,8 +1226,6 @@ class CameraStream(_SignalingMixin):
         # setup closes a socket it hasn't published yet when cancelled
         await _cancel_and_wait(self._setup_task)
         await self._disconnect()
-        if self._pc_close_task is not None and not self._pc_close_task.done():
-            await asyncio.wait({self._pc_close_task})
 
     async def wait_for_connection(self, timeout: float = 30) -> bool:
         """Wait until the WebRTC connection is established.
