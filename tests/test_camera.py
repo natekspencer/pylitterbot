@@ -26,6 +26,7 @@ from pylitterbot.camera import (
     VideoClip,
     VideoPlayback,
     _decode_sdp,
+    _finish_before_cancelling,
     _parse_signaling_message,
 )
 from pylitterbot.exceptions import (
@@ -815,6 +816,25 @@ class TestSignalingHelpers:
             signaling_url="wss://host/sig",
         )
         assert session.ws_url == "wss://host/sig?accessToken=ab%2Bc%2Fd%3D"
+
+    async def test_finish_before_cancelling_outlasts_repeated_cancels(self) -> None:
+        """Test repeated cancellations (e.g. overlapping stop()) still wait for the work."""
+        release = asyncio.Event()
+        task = asyncio.ensure_future(_finish_before_cancelling(release.wait()))
+        try:
+            await asyncio.sleep(0)
+            for _ in range(2):  # the second one lands while already waiting
+                task.cancel()
+                for _ in range(3):
+                    await asyncio.sleep(0)
+            assert not task.done()
+
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=1)
+        finally:
+            release.set()
+            await _cancel_pending(task)
 
 
 class _FakeWebSocket:
@@ -1995,10 +2015,43 @@ class TestCameraStreamLifecycle:
             assert peer_closed.is_set()
             await asyncio.wait_for(retry, timeout=1)
         finally:
+            release.set()  # unblock the owned teardown if an assertion failed
             await _cancel_pending(retry)
             if stop is not None:
                 await _cancel_pending(stop)
+            if stream._teardown_task is not None:
+                await asyncio.wait({stream._teardown_task}, timeout=1)
         assert stream._pc is None
+
+    async def test_start_waits_for_pending_teardown(self) -> None:
+        """Test start() waits for a teardown left running by a cancelled start().
+
+        Otherwise the old teardown would clear the new attempt's socket.
+        """
+        stream = CameraStream(_fake_client([]))
+        release = asyncio.Event()
+        stream._teardown_task = asyncio.ensure_future(release.wait())  # type: ignore[arg-type]
+        teardown_done: list[bool] = []
+
+        async def connect_and_offer() -> None:
+            assert stream._teardown_task is not None
+            teardown_done.append(stream._teardown_task.done())
+            stream._answered.set()
+
+        stream._connect_and_offer = connect_and_offer  # type: ignore[method-assign]
+        task = asyncio.ensure_future(stream.start())
+        try:
+            for _ in range(5):
+                await asyncio.sleep(0)
+            assert teardown_done == []
+
+            release.set()
+            await asyncio.wait_for(task, timeout=1)
+            assert teardown_done == [True]
+        finally:
+            release.set()
+            await _cancel_pending(task)
+        await stream.stop()
 
     async def test_stop_bounded_when_close_hangs(
         self, monkeypatch: pytest.MonkeyPatch

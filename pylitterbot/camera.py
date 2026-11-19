@@ -126,13 +126,18 @@ async def _cancel_and_wait(*tasks: asyncio.Task[Any] | None) -> None:
 async def _finish_before_cancelling(coro: Coroutine[Any, Any, _T]) -> _T:
     """Await ``coro``; if the caller is cancelled, let it finish first.
 
-    The cancellation is raised once ``coro`` is done.
+    The cancellation is raised once ``coro`` is done, even if further
+    cancellations (e.g. from overlapping stop() calls) arrive meanwhile.
     """
     task = asyncio.ensure_future(coro)
     try:
         return await asyncio.shield(task)
     except asyncio.CancelledError:
-        await asyncio.wait({task})
+        while not task.done():
+            try:
+                await asyncio.wait({task})
+            except asyncio.CancelledError:
+                pass
         raise
 
 
@@ -1099,6 +1104,10 @@ class CameraStream(_SignalingMixin):
 
         self._starting = True
         try:
+            # a cancelled earlier start() can leave its teardown running, which
+            # would clear this attempt's socket and tasks
+            await self._join_teardown()
+            self._check_stopped()
             for attempt in range(1, ANSWER_ATTEMPTS + 1):
                 self._answered = asyncio.Event()
                 self._connected.clear()
@@ -1212,10 +1221,14 @@ class CameraStream(_SignalingMixin):
         for the one in progress: by then the peer is detached and the socket
         marked closed, so it would otherwise find nothing left and return early.
         """
-        while (task := self._teardown_task) is not None and not task.done():
-            await asyncio.wait({task})
+        await self._join_teardown()
         self._teardown_task = task = asyncio.ensure_future(self._teardown())
         await asyncio.wait({task})
+
+    async def _join_teardown(self) -> None:
+        """Wait for a teardown in progress, if any."""
+        while (task := self._teardown_task) is not None and not task.done():
+            await asyncio.wait({task})
 
     async def _teardown(self) -> None:
         """Release the peer, socket and tasks; run only via ``_disconnect``."""
