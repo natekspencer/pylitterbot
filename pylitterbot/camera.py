@@ -550,8 +550,10 @@ class CameraClient:
             no chunks yet, or ``None`` if the clip details could not be fetched.
 
         Raises:
-            aiohttp.ClientResponseError: If any chunk download fails.  Nothing
-                is returned for a partially downloaded clip.
+            aiohttp.ClientError: If any chunk download fails (an HTTP error
+                status or a connection error).  Nothing is returned for a
+                partially downloaded clip.
+            asyncio.TimeoutError: If a chunk download times out.
 
         """
         if (playback := await self.get_video_playback(clip_id)) is None:
@@ -591,7 +593,9 @@ class CameraClient:
         Raises:
             ValueError: If ``clip_id`` isn't a plain file name (e.g. contains
                 a path separator), so files can't land outside ``directory``.
-            aiohttp.ClientResponseError: If any chunk download fails.
+            aiohttp.ClientError: If any chunk download fails (an HTTP error
+                status or a connection error).
+            asyncio.TimeoutError: If a chunk download times out.
 
         """
         if not clip_id or Path(clip_id).name != clip_id:
