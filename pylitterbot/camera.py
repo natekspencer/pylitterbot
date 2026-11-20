@@ -12,12 +12,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date as _date, datetime
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import quote
 
 from aiohttp import (
+    ClientError,
     ClientResponseError,
     ClientSession,
     ClientWebSocketResponse,
@@ -51,6 +54,41 @@ MAX_PENDING_CANDIDATES = 50
 # session.request converts HTTP 500 responses into InvalidCommandException, so
 # graceful-fallback handling must catch it alongside other client errors.
 _API_ERRORS = (ClientResponseError, InvalidCommandException)
+
+# Upper bound on pages fetched by ``CameraClient.get_videos`` (the API returns
+# 10 clips per page, and keeps 2 days of clips, or 30 with Whisker+).
+MAX_VIDEO_PAGES = 50
+
+
+# "Area/Location" IANA names, e.g. "America/Denver" or "Etc/GMT-10", plus bare
+# "UTC" (a common TZ override, e.g. in containers). Checked by
+# syntax alone: loading the zone would read tzdata from disk, which blocks the
+# event loop. POSIX TZ strings such as "AEST-10" or "EST5EDT,M3.2.0,M11.1.0"
+# don't match.
+_IANA_TIMEZONE = re.compile(r"UTC|[A-Za-z][\w+-]*(?:/[\w+-]+)+")
+
+
+def local_timezone_name() -> str:
+    """Return this system's IANA timezone name, falling back to ``"UTC"``.
+
+    Checks the ``TZ`` environment variable, then the ``/etc/localtime``
+    symlink (Linux and macOS).  Names are checked by syntax only, so this
+    doesn't read tzdata and is safe to call in the event loop.  Pass a
+    timezone explicitly where one is configured (e.g. Home Assistant's
+    ``hass.config.time_zone``).
+    """
+    if (tz := os.environ.get("TZ", "").lstrip(":")) and _IANA_TIMEZONE.fullmatch(tz):
+        return tz
+    try:
+        target = os.path.realpath("/etc/localtime")
+    except OSError:
+        target = ""
+    if "zoneinfo/" in target:
+        name = target.split("zoneinfo/", 1)[1]
+        if _IANA_TIMEZONE.fullmatch(name):
+            return name
+    return "UTC"
+
 
 _WS_HEADERS = {"User-Agent": DEFAULT_USER_AGENT}
 
@@ -346,23 +384,73 @@ class CameraClient:
         return data if isinstance(data, dict) else None
 
     async def get_videos(
-        self, *, date: str | None = None, limit: int | None = None
+        self,
+        *,
+        date: str | _date | None = None,
+        limit: int | None = None,
+        timezone: str | None = None,
+        max_pages: int = MAX_VIDEO_PAGES,
     ) -> list[VideoClip]:
-        """Fetch recorded video clips.
+        """Fetch recorded video clips, newest first.
+
+        The API returns clips 10 per page; pages are fetched one after another
+        until one comes back empty (or repeats clips already seen), ``limit``
+        is reached, or ``max_pages`` have been read.  This can take many
+        requests, so avoid calling it on a polling interval.
+
+        If a later page fails (an API or connection error, or a timeout),
+        paging stops and the clips gathered so far are returned (the error is
+        logged at debug level).  A connection error or timeout on the first
+        page is raised.
+
+        The ``timezone`` sent matters: the API does not reliably return the
+        most recent clips unless it is given the account's local timezone
+        (as the Whisker app does), and ``date`` is interpreted as a day in
+        that timezone.
 
         Args:
-            date: Optional date string (YYYY-MM-DD) to filter videos.
-            limit: Optional max number of results.
+            date: Optional day to filter videos, as a :class:`datetime.date` or
+                a ``YYYY-MM-DD`` string, read in ``timezone``.  A
+                :class:`~datetime.datetime` is rejected, since its time
+                would be ignored.
+            limit: Optional max number of results, applied client-side.
+            timezone: IANA timezone name (e.g. ``"Australia/Sydney"``).
+                Defaults to :func:`local_timezone_name`.
+            max_pages: Safety cap on the number of pages requested.
 
         """
+        if isinstance(date, datetime):
+            raise TypeError("date must be a datetime.date or string, not a datetime")
+        if isinstance(date, _date):
+            date = date.isoformat()
         url = f"{self._inventory_base}/videos" + (f"/{date}" if date else "")
-        params = {"limit": str(limit)} if limit is not None else None
-        data = await self._get(url, params=params)
-        if not isinstance(data, list):
-            return []
-        clips = [
-            VideoClip.from_response(item) for item in data if isinstance(item, dict)
-        ]
+        tz = timezone or local_timezone_name()
+        clips: list[VideoClip] = []
+        seen: set[str] = set()
+        for page in range(1, max_pages + 1):
+            try:
+                data = await self._get(url, params={"page": str(page), "timezone": tz})
+            except (ClientError, asyncio.TimeoutError) as err:
+                if page == 1:
+                    raise
+                _LOGGER.debug("Camera video page %d failed: %s", page, err)
+                break
+            if not isinstance(data, list):
+                break
+            added = 0
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                clip = VideoClip.from_response(item)
+                if clip.id in seen:  # duplicate within or across pages
+                    continue
+                seen.add(clip.id)
+                clips.append(clip)
+                added += 1
+            if not added:
+                break
+            if limit is not None and len(clips) >= limit:
+                break
         return clips[:limit] if limit is not None else clips
 
     async def get_video_playback(self, clip_id: str) -> VideoPlayback | None:
