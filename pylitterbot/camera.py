@@ -49,8 +49,7 @@ FALLBACK_STUN_URL = "stun:stun.l.google.com:19302"
 
 PING_INTERVAL = 5  # seconds -- ping frequently to prevent server idle timeout (~18s)
 MAX_PENDING_CANDIDATES = 50
-# The camera normally answers within ~1-2s; observed live, it occasionally
-# ignores an offer entirely, so the offer is retried on a fresh session.
+# The camera may ignore an offer entirely, so retry it on a fresh session.
 ANSWER_TIMEOUT = 10  # seconds
 ANSWER_ATTEMPTS = 2
 # aiohttp waits up to 10s for the server's close frame; cleanup should not
@@ -215,9 +214,8 @@ class CameraSession:
     def is_expired(self) -> bool:
         """Return `True` once the session is past its ``sessionExpiration``.
 
-        Sessions are short-lived (observed: 60 seconds after generation).
-        Observed live, the signaling server still accepts the token after
-        that, so this does not mean the session can no longer be used.
+        Sessions last about 60 seconds. The signaling server may still accept
+        an expired token, so this does not mean the session is unusable.
         """
         return (
             self.session_expiration is not None and utcnow() >= self.session_expiration

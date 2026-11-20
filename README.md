@@ -146,6 +146,11 @@ for robot in account.get_robots(LitterRobot5):
         print(clip.id, clip.event_type, clip.created_at)
 ```
 
+Clip listings depend on the timezone sent with the request.
+`get_camera_videos()` uses the robot's timezone by default; pass `timezone=`
+to override it. Listing all clips can take many requests, so avoid calling it
+on a polling interval.
+
 Live video uses WebRTC. With the `camera` extra installed, `CameraStream`
 receives the video and audio frames in Python:
 
@@ -163,7 +168,9 @@ else:
 
 To show the stream in a browser instead (for example, Home Assistant's camera
 platform), use `CameraSignalingRelay` from `pylitterbot.camera` to pass the
-browser's WebRTC offer and ICE candidates to the camera.
+browser's WebRTC offer and ICE candidates to the camera. Its `start()`
+returns once the camera has answered (usually within a few seconds), so keep
+accepting the browser's ICE candidates while it runs.
 
 Camera sessions are short-lived. If the camera does not answer an offer
 within 10 seconds, the offer is retried once on a fresh session before a
