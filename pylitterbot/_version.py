@@ -1,3 +1,3 @@
 """pylitterbot version."""
 
-__version__ = "2025.8.0.post9.dev0+59d01a7"
+__version__ = "2025.6.5.post2.dev0+9a93b66"
