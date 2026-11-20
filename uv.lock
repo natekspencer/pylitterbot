@@ -2024,6 +2024,7 @@ dependencies = [
 
 [package.optional-dependencies]
 camera = [
+    { name = "aioice" },
     { name = "aiortc" },
 ]
 mcp = [
@@ -2048,6 +2049,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.8.1" },
+    { name = "aioice", marker = "extra == 'camera'", specifier = ">=0.11.0" },
     { name = "aiortc", marker = "extra == 'camera'", specifier = ">=1.9.0" },
     { name = "mcp", extras = ["cli"], marker = "extra == 'mcp'", specifier = ">=2.0.0,<3" },
     { name = "pycognito", specifier = ">=2024.2.0" },

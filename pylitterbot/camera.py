@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date as _date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, TypeVar
 from urllib.parse import quote
 
 from aiohttp import (
@@ -40,6 +40,8 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+_T = TypeVar("_T")
+
 WATFORD_API = "https://watford.ienso-dev.com"  # vendor-maintained URL; the -dev suffix is intentional
 CAMERA_SETTINGS_API = "https://7mnuil943l.execute-api.us-east-1.amazonaws.com"
 CAMERA_INVENTORY_API = "https://rrntg65uwf.execute-api.us-east-1.amazonaws.com"
@@ -53,6 +55,14 @@ FALLBACK_STUN_URL = "stun:stun.l.google.com:19302"
 
 PING_INTERVAL = 5  # seconds -- ping frequently to prevent server idle timeout (~18s)
 MAX_PENDING_CANDIDATES = 50
+# The camera may ignore an offer entirely, so retry it on a fresh session.
+ANSWER_TIMEOUT = 10  # seconds
+ANSWER_ATTEMPTS = 2
+# aiohttp waits up to 10s for the server's close frame; cleanup should not
+WS_CLOSE_TIMEOUT = 2  # seconds
+# late ICE candidates: retries after a failed reconnect, with linear backoff
+RECONNECT_ATTEMPTS = 3
+RECONNECT_BACKOFF = 0.5  # seconds
 
 # session.request converts HTTP 500 responses into InvalidCommandException, so
 # graceful-fallback handling must catch it alongside other client errors.
@@ -118,6 +128,73 @@ def _is_complete_sdp(sdp: str) -> bool:
     )
 
 
+def _append_bounded(buffer: list[dict[str, Any]], msg: dict[str, Any]) -> None:
+    """Append an ICE candidate message, dropping the oldest when full."""
+    if len(buffer) >= MAX_PENDING_CANDIDATES:
+        _LOGGER.warning("Signaling relay: candidate buffer full -- dropping oldest")
+        buffer.pop(0)
+    buffer.append(msg)
+
+
+async def _close_ws(ws: ClientWebSocketResponse) -> None:
+    """Close a websocket, aborting the connection after ``WS_CLOSE_TIMEOUT``.
+
+    Cancelling aiohttp's close (as the timeout does) releases the underlying
+    connection instead of waiting for the server's close frame.
+    """
+    try:
+        # asyncio.wait_for can swallow a cancellation on 3.11
+        async with asyncio.timeout(WS_CLOSE_TIMEOUT):
+            await ws.close()
+    except asyncio.TimeoutError:
+        _LOGGER.debug("Signaling: websocket close timed out; connection aborted")
+
+
+async def _cancel_and_wait(*tasks: asyncio.Task[Any] | None) -> None:
+    """Cancel tasks and wait for their cleanup to finish.
+
+    Unlike ``cancel_task``, a cancellation of the caller still propagates, and
+    it doesn't interrupt the tasks' own cleanup.
+    """
+    pending = {task for task in tasks if task is not None and not task.done()}
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.wait(pending)
+
+
+async def _finish_before_cancelling(coro: Coroutine[Any, Any, _T]) -> _T:
+    """Await ``coro``; if the caller is cancelled, let it finish first.
+
+    The cancellation is raised once ``coro`` is done, even if further
+    cancellations (e.g. from overlapping stop() calls) arrive meanwhile.
+    """
+    task = asyncio.ensure_future(coro)
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        while not task.done():
+            try:
+                await asyncio.wait({task})
+            except asyncio.CancelledError:
+                pass
+        raise
+
+
+async def _wait_for_either(first: asyncio.Event, second: asyncio.Event) -> None:
+    """Wait until either event is set."""
+    waiters = {
+        asyncio.ensure_future(first.wait()),
+        asyncio.ensure_future(second.wait()),
+    }
+    try:
+        await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for waiter in waiters:
+            waiter.cancel()
+        await asyncio.gather(*waiters, return_exceptions=True)
+
+
 def _parse_signaling_message(data: dict[str, Any]) -> tuple[str, Any] | None:
     """Parse a signaling message into ``("answer", sdp)`` or ``("candidate", dict)``.
 
@@ -173,6 +250,17 @@ class CameraSession:
     def ws_url(self) -> str:
         """Return the signaling websocket URL with the URL-encoded session token."""
         return f"{self.signaling_url}?accessToken={quote(self.session_token, safe='')}"
+
+    @property
+    def is_expired(self) -> bool:
+        """Return `True` once the session is past its ``sessionExpiration``.
+
+        Sessions last about 60 seconds. The signaling server may still accept
+        an expired token, so this does not mean the session is unusable.
+        """
+        return (
+            self.session_expiration is not None and utcnow() >= self.session_expiration
+        )
 
     @classmethod
     def from_response(cls, data: dict[str, Any]) -> CameraSession:
@@ -362,6 +450,43 @@ class CameraClient:
             )
         return CameraSession.from_response(data)
 
+    async def validate_device_ownership(self) -> bool:
+        """Check that the account owns this camera.
+
+        The Whisker app makes this call immediately before generating a live
+        view session. A successful response has an empty body.
+
+        Returns:
+            ``True`` if the account owns the camera, ``False`` if the API
+            refuses it (HTTP 401 or 403).
+
+        Raises:
+            aiohttp.ClientResponseError: For any other HTTP error (e.g. 429),
+                so a failed check isn't mistaken for "not your camera".
+            InvalidCommandException: If the API returns HTTP 500.
+            aiohttp.ClientError: If the request couldn't be made.
+
+        """
+        url = f"{CAMERA_INVENTORY_API}/prod/v1/auth/validate-token"
+        payload = {
+            "device_id": self._device_id,
+            "validation_type": "device_ownership",
+        }
+        try:
+            await self._session.post(
+                url, json=payload, headers=self._settings_headers()
+            )
+        except ClientResponseError as err:
+            # the empty body can't be decoded as JSON unless the response is
+            # labelled application/json (ContentTypeError carries the 2xx)
+            if 200 <= err.status < 300:
+                return True
+            if err.status not in (401, 403):
+                raise
+            _LOGGER.debug("Camera ownership validation refused: %s", err)
+            return False
+        return True
+
     async def get_video_settings(
         self, settings_type: str = "videoSettings"
     ) -> dict[str, Any] | None:
@@ -374,7 +499,10 @@ class CameraClient:
         data = await self._get(url)
         if not isinstance(data, dict):
             return None
-        for item in data.get("reportedSettings", []):
+        items = data.get("reportedSettings")
+        if not isinstance(items, list):
+            return None
+        for item in items:
             if isinstance(item, dict) and item.get("settingsType") == settings_type:
                 inner = item.get("data")
                 return inner if isinstance(inner, dict) else None
@@ -393,6 +521,16 @@ class CameraClient:
             "timestamp": utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z"),
         }
         return await self._patch(url, payload)
+
+    async def get_camera_canvas(self) -> str | None:
+        """Return the reported live-view canvas (camera view selection)."""
+        settings = await self.get_video_settings()
+        if not settings:
+            return None
+        streams = settings.get("streams")
+        live_view = streams.get("live-view") if isinstance(streams, dict) else None
+        canvas = live_view.get("canvas") if isinstance(live_view, dict) else None
+        return canvas if isinstance(canvas, str) else None
 
     async def set_audio_enabled(self, enabled: bool) -> bool:
         """Enable or disable the camera microphone.
@@ -415,6 +553,16 @@ class CameraClient:
         """Fetch camera device information from the inventory API."""
         data = await self._get(self._inventory_base)
         return data if isinstance(data, dict) else None
+
+    async def get_camera_status(self) -> str | None:
+        """Return the camera's connection status from the inventory API.
+
+        The Whisker app polls this before offering live view; ``"ONLINE"``
+        indicates the camera can accept a streaming session.
+        """
+        info = await self.get_camera_info()
+        status = info.get("status") if info else None
+        return status if isinstance(status, str) else None
 
     async def get_videos(
         self,
@@ -636,11 +784,36 @@ class _SignalingMixin:
     """Shared signaling-websocket plumbing for relay and stream classes."""
 
     _ws: ClientWebSocketResponse | None
+    _setup_task: asyncio.Task[Any] | None
 
     @property
     def _finished(self) -> bool:
         """Return `True` once the owner has been closed/stopped."""
         raise NotImplementedError
+
+    async def _run_setup(
+        self, setup: Coroutine[Any, Any, _T], finished_message: str
+    ) -> _T:
+        """Run offer setup as a task that close()/stop() can cancel and wait for.
+
+        Cancelling it lets its own cleanup release a socket that isn't yet
+        tracked, so no setup socket outlives close()/stop().
+        """
+        self._setup_task = task = asyncio.ensure_future(setup)
+        try:
+            return await task
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if (
+                task.cancelled()
+                and self._finished
+                and not (current and current.cancelling())
+            ):
+                # cancelled by close()/stop(), not by our caller
+                raise CameraStreamException(finished_message) from None
+            raise
+        finally:
+            self._setup_task = None
 
     async def _ping_loop(self) -> None:
         """Send periodic pings to keep the signaling connection alive."""
@@ -680,7 +853,11 @@ class CameraSignalingRelay(_SignalingMixin):
         self._ping_task: asyncio.Task[None] | None = None
         self._receive_task: asyncio.Task[None] | None = None
         self._closed = False
-        self._started = False
+        self._closed_event = asyncio.Event()  # wakes start() on close()
+        self._setup_task: asyncio.Task[CameraSession] | None = None
+        self._starting = False
+        self._started = False  # set once the camera has answered
+        self._offer_candidates: list[dict[str, Any]] = []
         self._pending_candidates: list[dict[str, Any]] = []
         self._reconnect_task: asyncio.Task[None] | None = None
 
@@ -699,7 +876,17 @@ class CameraSignalingRelay(_SignalingMixin):
         on_answer: Callable[[str], None],
         on_candidate: Callable[[dict[str, Any]], None],
     ) -> CameraSession:
-        """Connect to signaling WS, send offer, relay answer and ICE candidates.
+        """Send the offer and wait for the camera's answer.
+
+        The answer and the camera's ICE candidates are delivered through the
+        callbacks; ICE candidates may continue to arrive after this returns.
+        If the camera does not answer within ``ANSWER_TIMEOUT`` seconds, the
+        offer is retried on a fresh session, up to ``ANSWER_ATTEMPTS`` times.
+        This usually returns in 1-3 seconds, but can take about 25 seconds
+        before raising.
+
+        If ``start()`` raises (other than because the relay was closed), it
+        can be called again with a new offer to retry.
 
         Args:
             offer_sdp: The browser's SDP offer (plain text, not base64).
@@ -710,54 +897,152 @@ class CameraSignalingRelay(_SignalingMixin):
             The ``CameraSession`` with TURN credentials.
 
         Raises:
-            CameraStreamException: If the relay is closed/started or the
-                camera session could not be generated.
+            CameraStreamException: If the relay is closed/started, the camera
+                session could not be generated, or the camera never answered.
 
         """
         if self._closed:
             raise CameraStreamException("Relay has been closed")
-        if self._session is not None:
+        # _session is only set once setup has awaited, so it can't guard alone
+        if self._starting or self._session is not None:
             raise CameraStreamException("Relay already started")
+        self._starting = True
 
-        self._session = await self._client.generate_session()
+        current_attempt = 0
+
+        def _attempt_handlers(
+            attempt: int, answered: asyncio.Event
+        ) -> tuple[Callable[[str], None], Callable[[dict[str, Any]], None]]:
+            """Return callbacks that only act while ``attempt`` is current."""
+
+            def _on_answer(sdp: str) -> None:
+                if attempt != current_attempt:
+                    _LOGGER.debug(
+                        "Signaling relay: ignoring answer from abandoned attempt %d",
+                        attempt,
+                    )
+                    return
+                self._started = True
+                answered.set()
+                on_answer(sdp)
+
+            def _on_candidate(candidate: dict[str, Any]) -> None:
+                if attempt == current_attempt:
+                    on_candidate(candidate)
+
+            return _on_answer, _on_candidate
 
         try:
-            websession = self._client.websession
-            self._ws = await websession.ws_connect(
-                self._session.ws_url, headers=_WS_HEADERS
-            )
-
-            _LOGGER.debug("Signaling relay: sending offer (%d bytes)", len(offer_sdp))
-            await self._ws.send_json({"type": "offer", "sdp": encode(offer_sdp)})
-
-            if self._pending_candidates:
-                _LOGGER.debug(
-                    "Signaling relay: flushing %d buffered ICE candidates",
-                    len(self._pending_candidates),
+            for attempt in range(1, ANSWER_ATTEMPTS + 1):
+                current_attempt = attempt
+                answered = asyncio.Event()
+                session = await self._run_setup(
+                    self._connect_and_offer(
+                        offer_sdp, *_attempt_handlers(attempt, answered)
+                    ),
+                    "Relay has been closed",
                 )
-                for msg in self._pending_candidates:
-                    await self._ws.send_json(msg)
+                try:
+                    # asyncio.wait_for can swallow a cancellation on 3.11
+                    async with asyncio.timeout(ANSWER_TIMEOUT):
+                        await _wait_for_either(answered, self._closed_event)
+                except asyncio.TimeoutError:
+                    pass
+                if self._closed:
+                    raise CameraStreamException("Relay has been closed")
+                if answered.is_set():
+                    # may have landed as the deadline passed; already forwarded
+                    self._schedule_flush()
+                    return session
+                # invalidate before _disconnect() yields to the receive loop
+                current_attempt = 0
+                # the next attempt replays these with its offer
                 self._pending_candidates.clear()
-
-            self._receive_task = asyncio.ensure_future(
-                self._receive_loop(on_answer, on_candidate)
+                _LOGGER.warning(
+                    "Signaling relay: camera did not answer within %ss (attempt %d of %d)",
+                    ANSWER_TIMEOUT,
+                    attempt,
+                    ANSWER_ATTEMPTS,
+                )
+                await self._disconnect()
+                if self._closed:
+                    raise CameraStreamException("Relay has been closed")
+            raise CameraStreamException(
+                f"Camera {self._client.device_id} did not answer the offer "
+                f"after {ANSWER_ATTEMPTS} attempts"
             )
-            self._ping_task = asyncio.ensure_future(self._ping_loop())
-            self._started = True
-        except Exception:
-            if self._ws is not None and not self._ws.closed:
-                await self._ws.close()
-            self._ws = None
+        except BaseException:
+            await self._disconnect()
             self._session = None
+            self._started = False
+            # a later start() is a new offer; don't replay this one's candidates
+            self._offer_candidates.clear()
+            self._pending_candidates.clear()
+            raise
+        finally:
+            self._starting = False
+
+    async def _connect_and_offer(
+        self,
+        offer_sdp: str,
+        on_answer: Callable[[str], None],
+        on_candidate: Callable[[dict[str, Any]], None],
+    ) -> CameraSession:
+        """Open a fresh session and send the offer plus early ICE candidates."""
+        self._session = session = await self._client.generate_session()
+        ws = await self._client.websession.ws_connect(
+            session.ws_url, headers=_WS_HEADERS
+        )
+        try:
+            _LOGGER.debug("Signaling relay: sending offer (%d bytes)", len(offer_sdp))
+            await ws.send_json({"type": "offer", "sdp": encode(offer_sdp)})
+        except BaseException:
+            # not yet in self._ws, so start()'s cleanup can't close it
+            await _close_ws(ws)
             raise
 
-        return self._session
+        # Publish the socket and snapshot the early candidates with no await in
+        # between, so each is sent exactly once and only after the offer.
+        self._ws = ws
+        early = list(self._offer_candidates)
+        if early:
+            _LOGGER.debug(
+                "Signaling relay: sending %d early ICE candidate(s)", len(early)
+            )
+        for index, msg in enumerate(early):
+            try:
+                await ws.send_json(msg)
+            except Exception:
+                # the server closes the socket right after answering, so keep
+                # receiving; start() flushes the rest once answered, or the
+                # next attempt replays them
+                _LOGGER.debug(
+                    "Signaling relay: early ICE candidate send failed", exc_info=True
+                )
+                for unsent in early[index:]:
+                    _append_bounded(self._pending_candidates, unsent)
+                break
+
+        self._receive_task = asyncio.ensure_future(
+            self._receive_loop(on_answer, on_candidate)
+        )
+        self._ping_task = asyncio.ensure_future(self._ping_loop())
+        return session
+
+    async def _disconnect(self) -> None:
+        """Stop the signaling tasks and close the websocket."""
+        await cancel_task(self._ping_task, self._receive_task)
+        self._ping_task = self._receive_task = None
+        if self._ws is not None and not self._ws.closed:
+            await _close_ws(self._ws)
+        self._ws = None
 
     async def send_candidate(self, candidate: dict[str, Any]) -> None:
         """Forward a browser ICE candidate to the camera.
 
-        If the signaling WebSocket is not yet connected, the candidate is
-        buffered and will be flushed once ``start()`` completes.
+        Until the camera answers, candidates are kept and sent with each offer
+        attempt. After that, candidates that arrive once the signaling
+        WebSocket has closed are delivered over a fresh connection.
 
         Args:
             candidate: ICE candidate dict with ``candidate``, ``sdpMid``,
@@ -770,27 +1055,41 @@ class CameraSignalingRelay(_SignalingMixin):
             "sdpMid": candidate.get("sdpMid", "0"),
             "sdpMLineIndex": candidate.get("sdpMLineIndex", 0),
         }
+        if not self._started:
+            _append_bounded(self._offer_candidates, msg)
         if self._ws and not self._ws.closed:
             try:
                 await self._ws.send_json(msg)
                 return
             except Exception:
                 _LOGGER.debug(
-                    "Signaling relay: send failed -- buffering ICE candidate for reconnect",
+                    "Signaling relay: send failed -- buffering ICE candidate",
                     exc_info=True,
                 )
+                if not self._started:
+                    # the socket may already hold the answer (the server closes
+                    # it right after), so start() flushes this once answered
+                    _append_bounded(self._pending_candidates, msg)
+                    return
+        if not self._started:
+            # the next offer attempt sends it
+            return
 
         _LOGGER.debug(
             "Signaling relay: WS closed -- buffering ICE candidate for reconnect"
         )
-        if len(self._pending_candidates) >= MAX_PENDING_CANDIDATES:
-            _LOGGER.warning("Signaling relay: candidate buffer full -- dropping oldest")
-            self._pending_candidates.pop(0)
-        self._pending_candidates.append(msg)
-        # Only reconnect once start() has completed; before that, start()'s own
-        # flush delivers the buffer (a parallel socket here would race the offer).
+        _append_bounded(self._pending_candidates, msg)
+        self._schedule_flush()
+
+    def _schedule_flush(self) -> None:
+        """Deliver pending ICE candidates over a fresh connection.
+
+        Only once the camera has answered; before that, each offer attempt
+        sends the early candidates (a parallel socket would race it).
+        """
         if (
-            self._started
+            self._pending_candidates
+            and self._started
             and not self._closed
             and (self._reconnect_task is None or self._reconnect_task.done())
         ):
@@ -799,11 +1098,11 @@ class CameraSignalingRelay(_SignalingMixin):
     async def close(self) -> None:
         """Cancel tasks and close the signaling WebSocket."""
         self._closed = True
+        self._closed_event.set()
 
-        await cancel_task(self._ping_task, self._receive_task, self._reconnect_task)
-
-        if self._ws and not self._ws.closed:
-            await self._ws.close()
+        # an in-flight offer setup closes its own socket when cancelled
+        await _cancel_and_wait(self._setup_task, self._reconnect_task)
+        await self._disconnect()
 
     async def _receive_loop(
         self,
@@ -852,8 +1151,10 @@ class CameraSignalingRelay(_SignalingMixin):
         allowing the camera to complete ICE negotiation.
 
         Loops until the pending queue is empty, so candidates arriving during an
-        in-flight flush are not stranded.
+        in-flight flush are not stranded. A failed reconnect or send is retried
+        up to ``RECONNECT_ATTEMPTS`` times, resending only unsent candidates.
         """
+        failures = 0
         while self._pending_candidates and not self._closed and self._session:
             _LOGGER.debug(
                 "Signaling relay: reconnecting to forward %d late ICE candidate(s)",
@@ -875,18 +1176,25 @@ class CameraSignalingRelay(_SignalingMixin):
                         )
                 finally:
                     if sent < len(pending):
+                        # unsent ones first, then new arrivals; keep the newest
                         self._pending_candidates = (
                             pending[sent:] + self._pending_candidates
-                        )
-                    await ws.close()
+                        )[-MAX_PENDING_CANDIDATES:]
+                    await _close_ws(ws)
             except Exception:
-                if not self._closed:
+                # close() cancels this task, so a closed relay never sleeps here
+                failures += 1
+                if failures >= RECONNECT_ATTEMPTS:
                     _LOGGER.warning(
                         "Signaling relay: failed to forward %d late ICE candidate(s)",
                         len(self._pending_candidates),
                         exc_info=True,
                     )
-                break
+                    break
+                _LOGGER.debug(
+                    "Signaling relay: reconnect failed, retrying", exc_info=True
+                )
+                await asyncio.sleep(RECONNECT_BACKOFF * failures)
 
 
 try:
@@ -942,13 +1250,20 @@ class CameraStream(_SignalingMixin):
         self._ping_task: asyncio.Task[None] | None = None
         self._receive_task: asyncio.Task[None] | None = None
         self._media_tasks: list[asyncio.Task[None]] = []
+        self._tracks: dict[str, Any] = {}
+        self._consuming: set[str] = set()
 
         self._video_callback: Callable | None = None
         self._audio_callback: Callable | None = None
         self._state_callback: Callable | None = None
 
+        self._answered = asyncio.Event()
         self._connected = asyncio.Event()
+        self._starting = False
         self._stopped = False
+        self._stopped_event = asyncio.Event()  # wakes start() on stop()
+        self._setup_task: asyncio.Task[None] | None = None
+        self._teardown_task: asyncio.Task[None] | None = None
 
     @property
     def _finished(self) -> bool:
@@ -957,101 +1272,195 @@ class CameraStream(_SignalingMixin):
     def on_video_frame(self, callback: Callable) -> None:
         """Register a callback for incoming video frames."""
         self._video_callback = callback
+        self._start_consumer("video")
 
     def on_audio_frame(self, callback: Callable) -> None:
         """Register a callback for incoming audio frames."""
         self._audio_callback = callback
+        self._start_consumer("audio")
 
     def on_connection_state_change(self, callback: Callable) -> None:
         """Register a callback for peer connection state changes."""
         self._state_callback = callback
 
     async def start(self) -> None:
-        """Start the WebRTC streaming session.
+        """Start the WebRTC streaming session and wait for the camera's answer.
+
+        If the camera does not answer within ``ANSWER_TIMEOUT`` seconds, the
+        offer is retried on a fresh session, up to ``ANSWER_ATTEMPTS`` times.
+
+        If ``start()`` raises (other than because the stream was stopped), it
+        can be called again to retry.
 
         Raises:
-            CameraStreamException: If the stream is stopped/started or the
-                camera session could not be generated.
+            CameraStreamException: If the stream is stopped/started, the
+                camera session could not be generated, or the camera never
+                answered.
 
         """
         if self._stopped:
             raise CameraStreamException("Stream has been stopped")
-        if self._pc is not None:
+        # _pc is cleared between attempts, so it can't serve as the guard alone
+        if self._starting or self._pc is not None:
             raise CameraStreamException("Stream already started")
 
+        self._starting = True
+        try:
+            # a cancelled earlier start() can leave its teardown running, which
+            # would clear this attempt's socket and tasks
+            await self._join_teardown()
+            self._check_stopped()
+            for attempt in range(1, ANSWER_ATTEMPTS + 1):
+                self._answered = asyncio.Event()
+                self._connected.clear()
+                await self._run_setup(
+                    self._connect_and_offer(), "Stream has been stopped"
+                )
+                self._check_stopped()
+                try:
+                    # asyncio.wait_for can swallow a cancellation on 3.11
+                    async with asyncio.timeout(ANSWER_TIMEOUT):
+                        await _wait_for_either(self._answered, self._stopped_event)
+                except asyncio.TimeoutError:
+                    pass
+                self._check_stopped()
+                if self._answered.is_set():
+                    # may have landed as the deadline passed
+                    return
+                _LOGGER.warning(
+                    "Camera did not answer within %ss (attempt %d of %d)",
+                    ANSWER_TIMEOUT,
+                    attempt,
+                    ANSWER_ATTEMPTS,
+                )
+                await self._disconnect()
+                self._check_stopped()
+            raise CameraStreamException(
+                f"Camera {self._client.device_id} did not answer the offer "
+                f"after {ANSWER_ATTEMPTS} attempts"
+            )
+        except BaseException:
+            await self._disconnect()
+            raise
+        finally:
+            self._starting = False
+
+    def _check_stopped(self) -> None:
+        """Raise if stop() was called, e.g. while start() was awaiting."""
+        if self._stopped:
+            raise CameraStreamException("Stream has been stopped")
+
+    async def _connect_and_offer(self) -> None:
+        """Open a fresh session and peer connection, then send the offer.
+
+        stop() can run at any await here and release the connection, so
+        each await is followed by a stopped check.
+        """
         self._session = await self._client.generate_session()
+        self._check_stopped()
 
         ice_servers = self._build_ice_servers(self._session.turn_servers)
 
         config = RTCConfiguration(iceServers=ice_servers)
-        self._pc = RTCPeerConnection(configuration=config)
+        self._pc = pc = RTCPeerConnection(configuration=config)
 
-        @self._pc.on("track")
+        # Events from a peer that teardown has detached (a timed-out attempt,
+        # or a stopped stream) must not reach the current one.
+        @pc.on("track")
         def on_track(track: Any) -> None:
+            if pc is not self._pc:
+                return
             _LOGGER.debug("Received %s track: %s", track.kind, track.id)
-            if track.kind == "video" and self._video_callback:
-                task = asyncio.ensure_future(
-                    self._consume_track(track, self._video_callback)
-                )
-                self._media_tasks.append(task)
-            elif track.kind == "audio" and self._audio_callback:
-                task = asyncio.ensure_future(
-                    self._consume_track(track, self._audio_callback)
-                )
-                self._media_tasks.append(task)
+            self._tracks[track.kind] = track
+            self._start_consumer(track.kind)
 
-        @self._pc.on("connectionstatechange")
+        @pc.on("connectionstatechange")
         async def on_state_change() -> None:
-            state = self._pc.connectionState  # type: ignore[union-attr]
+            state = pc.connectionState
             _LOGGER.debug("Connection state: %s", state)
-            if state in ("connected", "completed"):
-                self._connected.set()
+            if pc is self._pc:
+                if state in ("connected", "completed"):
+                    self._connected.set()
+            elif not self._stopped:
+                return  # a retry's abandoned peer
             if self._state_callback:
                 self._state_callback(state)
 
-        self._pc.addTransceiver("video", direction="recvonly")
-        self._pc.addTransceiver("audio", direction="recvonly")
+        pc.addTransceiver("video", direction="recvonly")
+        pc.addTransceiver("audio", direction="recvonly")
 
-        try:
-            websession = self._client.websession
-            self._ws = await websession.ws_connect(
-                self._session.ws_url, headers=_WS_HEADERS
-            )
+        websession = self._client.websession
+        self._ws = ws = await websession.ws_connect(
+            self._session.ws_url, headers=_WS_HEADERS
+        )
+        self._check_stopped()
 
-            # localDescription.sdp includes gathered ICE candidates; offer.sdp has none
-            offer = await self._pc.createOffer()
-            await self._pc.setLocalDescription(offer)
+        # localDescription.sdp includes gathered ICE candidates; offer.sdp has none
+        offer = await pc.createOffer()
+        self._check_stopped()
+        # Interrupting ICE gathering orphans aioice's TURN allocation task, so
+        # an allocation that then succeeds leaks its socket; aioice gives up on
+        # gathering after 5 seconds, so let it finish
+        await _finish_before_cancelling(pc.setLocalDescription(offer))
+        self._check_stopped()
 
-            await self._ws.send_json(
-                {
-                    "type": "offer",
-                    "sdp": encode(self._pc.localDescription.sdp),
-                }
-            )
-        except Exception:
-            if self._ws and not self._ws.closed:
-                await self._ws.close()
-            if self._pc:
-                await self._pc.close()
-            self._ws = None
-            self._pc = None
-            raise
+        await ws.send_json(
+            {
+                "type": "offer",
+                "sdp": encode(pc.localDescription.sdp),
+            }
+        )
+        self._check_stopped()
 
         self._receive_task = asyncio.ensure_future(self._receive_loop())
         self._ping_task = asyncio.ensure_future(self._ping_loop())
 
+    async def _disconnect(self) -> None:
+        """Stop the media and signaling tasks and close the connections.
+
+        Teardown runs as an owned task, so a cancelled caller can't interrupt
+        it. An overlapping call (e.g. stop() during a retry's teardown) waits
+        for the one in progress: by then the peer is detached and the socket
+        marked closed, so it would otherwise find nothing left and return early.
+        """
+        await self._join_teardown()
+        self._teardown_task = task = asyncio.ensure_future(self._teardown())
+        await asyncio.wait({task})
+
+    async def _join_teardown(self) -> None:
+        """Wait for a teardown in progress, if any."""
+        while (task := self._teardown_task) is not None and not task.done():
+            await asyncio.wait({task})
+
+    async def _teardown(self) -> None:
+        """Release the peer, socket and tasks; run only via ``_disconnect``."""
+        # detach the peer first, so its events are ignored while we await
+        pc, self._pc = self._pc, None
+        try:
+            await cancel_task(*self._media_tasks, self._ping_task, self._receive_task)
+            self._media_tasks.clear()
+            self._tracks.clear()
+            self._consuming.clear()
+            self._ping_task = self._receive_task = None
+
+            if self._ws and not self._ws.closed:
+                await _close_ws(self._ws)
+            self._ws = None
+        finally:
+            if pc:
+                await pc.close()
+
     async def stop(self) -> None:
-        """Stop the WebRTC streaming session and clean up resources."""
+        """Stop the WebRTC streaming session and clean up resources.
+
+        If ``start()`` is gathering ICE candidates, this waits for gathering
+        to finish (at most about 5 seconds) so no TURN socket is left open.
+        """
         self._stopped = True
-
-        await cancel_task(*self._media_tasks, self._ping_task, self._receive_task)
-        self._media_tasks.clear()
-
-        if self._ws and not self._ws.closed:
-            await self._ws.close()
-
-        if self._pc:
-            await self._pc.close()
+        self._stopped_event.set()
+        # setup closes a socket it hasn't published yet when cancelled
+        await _cancel_and_wait(self._setup_task)
+        await self._disconnect()
 
     async def wait_for_connection(self, timeout: float = 30) -> bool:
         """Wait until the WebRTC connection is established.
@@ -1114,11 +1523,35 @@ class CameraStream(_SignalingMixin):
             servers.append(RTCIceServer(urls=FALLBACK_STUN_URL))
         return servers
 
-    async def _consume_track(self, track: Any, callback: Callable) -> None:
+    def _frame_callback(self, kind: str) -> Callable | None:
+        """Return the registered callback for a track kind."""
+        if kind == "video":
+            return self._video_callback
+        if kind == "audio":
+            return self._audio_callback
+        return None
+
+    def _start_consumer(self, kind: str) -> None:
+        """Consume a track once both it and its callback exist.
+
+        Tracks arrive while ``start()`` is waiting for the answer, so a
+        callback registered after ``start()`` must still pick them up.
+        """
+        track = self._tracks.get(kind)
+        if track is None or self._frame_callback(kind) is None:
+            return
+        if kind in self._consuming:
+            return
+        self._consuming.add(kind)
+        self._media_tasks.append(asyncio.ensure_future(self._consume_track(track)))
+
+    async def _consume_track(self, track: Any) -> None:
         """Read frames from a media track and deliver via callback."""
         try:
             while not self._stopped:
                 frame = await track.recv()
+                if (callback := self._frame_callback(track.kind)) is None:
+                    continue
                 try:
                     callback(frame)
                 except Exception:
@@ -1155,12 +1588,16 @@ class CameraStream(_SignalingMixin):
         """Handle an incoming signaling message (answer or ICE candidate)."""
         if (parsed := _parse_signaling_message(data)) is None:
             return
+        if (pc := self._pc) is None:
+            return  # detached by teardown
         kind, payload = parsed
 
         if kind == "answer":
             answer = RTCSessionDescription(sdp=payload, type="answer")
-            await self._pc.setRemoteDescription(answer)  # type: ignore[union-attr]
+            await pc.setRemoteDescription(answer)
             _LOGGER.debug("Set remote description (answer)")
+            if pc is self._pc:
+                self._answered.set()
             return
 
         candidate_str = payload["candidate"]
@@ -1168,7 +1605,7 @@ class CameraStream(_SignalingMixin):
             candidate = candidate_from_sdp(candidate_str)
             candidate.sdpMid = payload["sdpMid"]
             candidate.sdpMLineIndex = payload["sdpMLineIndex"]
-            await self._pc.addIceCandidate(candidate)  # type: ignore[union-attr]
+            await pc.addIceCandidate(candidate)
         except Exception:
             _LOGGER.warning("Failed to add ICE candidate: %s", candidate_str[:80])
             return

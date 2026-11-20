@@ -21,7 +21,7 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-camera = ["aiortc>=1.9.0"]
+camera = ["aiortc>=1.9.0", "aioice>=0.11.0"]
 mcp = ["mcp[cli]>=2.0.0,<3"]
 
 [project.scripts]

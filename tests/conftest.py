@@ -168,6 +168,12 @@ async def mock_aiointercept() -> aiointercept:
             payload=CAMERA_INFO_RESPONSE,
             repeat=True,
         )
+        mock.post(
+            f"{CAMERA_INVENTORY_API}/prod/v1/auth/validate-token",
+            body="",
+            content_type="application/json",
+            repeat=True,
+        )
         mock.get(
             re.compile(
                 rf"{re.escape(CAMERA_INVENTORY_API)}/prod/v1/cameras/{CAMERA_DEVICE_ID}/videos"

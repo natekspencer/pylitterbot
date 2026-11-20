@@ -12,7 +12,7 @@
 
 Python package for controlling Whisker connected self-cleaning litter boxes and feeders.
 
-This is an unofficial API for controlling various Whisker automated robots. It currently supports Litter-Robot 3 (with connect), Litter-Robot 4 and Feeder-Robot.
+This is an unofficial API for controlling various Whisker automated robots. It currently supports Litter-Robot 3 (with connect), Litter-Robot 4, Litter-Robot 5 (including the Litter-Robot 5 Pro camera) and Feeder-Robot.
 
 ## Disclaimer
 
@@ -32,11 +32,19 @@ To include the MCP server for AI assistant integration:
 pip install pylitterbot[mcp]
 ```
 
+To include live video streaming for the Litter-Robot 5 Pro camera:
+
+```bash
+pip install 'pylitterbot[camera]'
+```
+
 Alternatively, clone the repository and run
 
 ```bash
 uv sync
 ```
+
+adding `--extra camera` (`uv sync --extra camera`) for live camera video.
 
 ## Usage
 
@@ -116,6 +124,58 @@ Currently the following methods are available in the Robot class:
 - get_activity_history()
 - get_insight()
 
+### Litter-Robot 5 Pro camera
+
+Litter-Robot 5 Pro robots expose their camera through the `LitterRobot5` class
+(`robot.has_camera` is `True`):
+
+```python
+from pylitterbot import LitterRobot5
+
+for robot in account.get_robots(LitterRobot5):
+    if not robot.has_camera:
+        continue
+
+    print(await robot.get_camera_status())  # e.g. "ONLINE"
+    print(await robot.get_camera_view())  # "front", "globe" or None if unknown
+    if not await robot.set_camera_view("globe"):
+        print("Could not switch the camera view")
+
+    # Recorded clips
+    for clip in await robot.get_camera_videos(limit=5):
+        print(clip.id, clip.event_type, clip.created_at)
+```
+
+Clip listings depend on the timezone sent with the request.
+`get_camera_videos()` uses the robot's timezone by default; pass `timezone=`
+to override it. Listing all clips can take many requests, so avoid calling it
+on a polling interval.
+
+Live video uses WebRTC. With the `camera` extra installed, `CameraStream`
+receives the video and audio frames in Python:
+
+```python
+robot = next((r for r in account.get_robots(LitterRobot5) if r.has_camera), None)
+
+if robot is None:
+    print("No Litter-Robot 5 Pro camera on this account")
+else:
+    async with robot.create_camera_stream() as stream:
+        stream.on_video_frame(lambda frame: print(frame.width, frame.height))
+        if await stream.wait_for_connection():
+            await asyncio.sleep(10)
+```
+
+To show the stream in a browser instead (for example, Home Assistant's camera
+platform), use `CameraSignalingRelay` from `pylitterbot.camera` to pass the
+browser's WebRTC offer and ICE candidates to the camera. Its `start()`
+returns once the camera has answered (usually within a few seconds), so keep
+accepting the browser's ICE candidates while it runs.
+
+Camera sessions are short-lived. If the camera does not answer an offer
+within 10 seconds, the offer is retried once on a fresh session before a
+`CameraStreamException` is raised.
+
 ## MCP Server
 
 pylitterbot includes an optional [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that lets AI assistants like Claude monitor and control your robots through natural language.
@@ -185,12 +245,6 @@ Add this to your Claude Desktop config (`claude_desktop_config.json`):
 ## Contributing
 
 Thank you for your interest in contributing! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started.
-
----
-
-## TODO
-
-- Add support for Litter-Robot 5 cameras
 
 ---
 
