@@ -395,10 +395,8 @@ class CameraClient:
 
         The API returns clips 10 per page; pages are fetched one after another
         until one comes back empty (or repeats clips already seen), ``limit``
-        is reached, or ``max_pages`` have been read.  Without ``limit`` this
-        always costs one request past the last clip, and 30 days of clips
-        (Whisker+) can take dozens of requests, so avoid calling it on a
-        polling interval.
+        is reached, or ``max_pages`` have been read.  This can take many
+        requests, so avoid calling it on a polling interval.
 
         If a later page fails (an API or connection error, or a timeout),
         paging stops and the clips gathered so far are returned (the error is
