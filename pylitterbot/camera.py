@@ -316,6 +316,11 @@ class VideoPlayback:
     CDN with HTTP 403.  :meth:`CameraClient.get_video_playback` exchanges a clip
     id for short-lived CloudFront signed cookies; send them (see
     :attr:`cookie_header`) when fetching the HLS playlist and its segments.
+
+    The segments may not share a format (a clip can mix front and globe
+    camera footage at different resolutions), so the stream can change
+    resolution partway through; see :meth:`CameraClient.fetch_video_chunks`
+    before saving it as a single file.
     """
 
     clip_id: str
@@ -643,6 +648,11 @@ class CameraClient:
         ``CloudFront-Signature`` and ``CloudFront-Key-Pair-Id``) required to
         stream it; pass them as a ``Cookie`` header when fetching the ``.m3u8``
         playlist and its segments.
+
+        The playlist's segments may change resolution partway through, so
+        saving the stream as one file with a stream copy (e.g. ``ffmpeg -i
+        <playlist> -c copy``) can produce a broken file; re-encode to a common
+        format if the segments differ.
 
         Args:
             clip_id: The :attr:`VideoClip.id` of the clip to play.
