@@ -316,6 +316,11 @@ class VideoPlayback:
     CDN with HTTP 403.  :meth:`CameraClient.get_video_playback` exchanges a clip
     id for short-lived CloudFront signed cookies; send them (see
     :attr:`cookie_header`) when fetching the HLS playlist and its segments.
+
+    The segments may not share a format (a clip can mix front and globe
+    camera footage at different resolutions), so the stream can change
+    resolution partway through; see :meth:`CameraClient.fetch_video_chunks`
+    before saving it as a single file.
     """
 
     clip_id: str
@@ -644,6 +649,11 @@ class CameraClient:
         stream it; pass them as a ``Cookie`` header when fetching the ``.m3u8``
         playlist and its segments.
 
+        The playlist's segments may change resolution partway through, so
+        saving the stream as one file with a stream copy (e.g. ``ffmpeg -i
+        <playlist> -c copy``) can produce a broken file; re-encode to a common
+        format if the segments differ.
+
         Args:
             clip_id: The :attr:`VideoClip.id` of the clip to play.
 
@@ -687,8 +697,15 @@ class CameraClient:
         Uses the presigned ``chunks[].downloadUrl`` values from the clip-detail
         endpoint rather than the CloudFront HLS stream, so no cookies or
         playlist parsing are needed.  Chunks are separate MP4 files in playback
-        order; concatenate them (e.g. ``ffmpeg -f concat -c copy``) for a
-        single file.
+        order.
+
+        A clip can combine footage from the front and globe cameras, and the
+        chunks are not guaranteed to share a format: one clip may mix 1080p
+        and 720p chunks.  A stream-copy join (e.g. ``ffmpeg -f concat -c
+        copy``) only works when every chunk has the same codec parameters
+        (resolution, profile, frame rate and audio layout); otherwise it
+        produces a broken file.  Check each chunk (e.g. with ``ffprobe``)
+        before joining, and re-encode to a common format if they differ.
 
         Args:
             clip_id: The :attr:`VideoClip.id` of the clip to download.
@@ -728,6 +745,9 @@ class CameraClient:
         existing files with those names are overwritten.  All chunks are
         fetched before anything is written, so a failed download leaves no
         partial files behind.  The directory is created if needed.
+
+        The chunks may not share a format; see :meth:`fetch_video_chunks`
+        before joining them into a single file.
 
         Args:
             clip_id: The :attr:`VideoClip.id` of the clip to download.
