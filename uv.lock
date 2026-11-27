@@ -182,15 +182,15 @@ wheels = [
 
 [[package]]
 name = "aioice"
-version = "0.13.0"
+version = "0.14.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dnspython" },
     { name = "ifaddr" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4a/16/fd4e7d1ccab77b6ae655bf6e796161586eeab18f5047c584bbedea846d66/aioice-0.13.0.tar.gz", hash = "sha256:02c2dee812f1a68602689a444bd5125a144b6ee43bca74229a1e0f7842d1897c", size = 68714, upload-time = "2026-11-05T17:01:35.933Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/ed/cbaed11422ca98d669e5cffd517cd48fecd551dbae5bb0b6c7232cdc88c6/aioice-0.14.1.tar.gz", hash = "sha256:80ab4d9876167e1cc15f8e20b43cbc7ed27273419f6b6f2727d9fae770e7b771", size = 71077, upload-time = "2026-11-24T08:51:28.444Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/06/64a79f0b7d730fc10b35fe31a396816030c0ab635be221c6c8587b00fc7f/aioice-0.13.0-py3-none-any.whl", hash = "sha256:15937b43f5f7a3587148049f1c93ff95fe4add1b7e0f5931eeec6408bc188d06", size = 29732, upload-time = "2026-11-05T17:01:34.897Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/11/aa78cfda5096074b948de5091585c314b88b5f2f50b0bcc29acb864bab8f/aioice-0.14.1-py3-none-any.whl", hash = "sha256:5e4c925b8154937c3bd96f2e79ad2a3291501caf5be9b31cbe444af1ffeab31b", size = 30279, upload-time = "2026-11-24T08:51:27.394Z" },
 ]
 
 [[package]]
